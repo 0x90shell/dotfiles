@@ -1,0 +1,118 @@
+set -g default-terminal "screen-256color"
+
+# remap prefix from 'C-b' to 'C-a'
+#unbind C-b
+#set-option -g prefix C-a
+#bind-key C-a send-prefix
+
+#control key twice to switch to last pane (screen like behavior)
+bind-key C-b last-window
+
+# split panes using | and -
+bind \\ split-window -h
+bind - split-window -v
+unbind '"'
+unbind %
+
+# switch panes using Alt-arrow without prefix
+bind -n M-Left select-pane -L
+bind -n M-Right select-pane -R
+bind -n M-Up select-pane -U
+bind -n M-Down select-pane -D
+
+#Switch window order
+#Prefix then Shift-{Left/Right}
+bind-key S-Left swap-window -t -1
+bind-key S-Right swap-window -t +1
+
+# Enable mouse mode (tmux 2.1 and above)
+set -g mouse on
+
+# To copy, left click and drag to highlight text in yellow,
+# once you release left click yellow text will disappear and will automatically be available in clibboard
+# # Use vim keybindings in copy mode
+setw -g mode-keys vi
+# Update default binding of `Enter` to also use copy-pipe
+unbind -T copy-mode-vi Enter
+bind-key -T copy-mode-vi Enter send-keys -X copy-pipe-and-cancel "xclip -selection c"
+bind-key -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "xclip -in -selection clipboard"
+
+# Toggle mouse on
+#bind m \
+#	set -g mouse on \;\
+#	display 'Mouse: ON'
+
+# Toggle mouse off
+#bind M \
+#	set mouse off \;\
+#	display 'Mouse: OFF'
+
+# reload config
+bind r source-file ~/.tmux.conf \; display-message "Config reloaded..."
+
+#pane/window/session count starts @ 1
+set -g base-index 1
+
+#increase history
+set-option -g history-limit 500000
+
+# status
+setw -g window-status-format '#I:#W#F'
+set  -g status-interval 1
+set  -g status-justify centre
+set  -g status-position bottom
+#set  -g status-bg colour234
+#set  -g status-fg colour137
+#set  -g status-attr dim
+set -g status-style dim,fg=colour137,bg=colour234
+#set  -g status-left '#[fg=colour015,bg=colour022,bold] #S@#H #[bg=colour234] '
+set  -g status-left '#[fg=colour22,bg=colour245,bold] #S@#H #[bg=colour234] '
+set  -g status-right '#[fg=colour22,bg=colour245,bold] %m/%d %I:%M:%S %p'
+#set  -g status-right '#[fg=colour015,bg=colour023,bold] %d/%m #[fg=colour015,bg=colour022,bold] %H:%M:%S '
+set  -g status-right-length 50
+set  -g status-left-length 20
+
+# window
+#setw -g window-status-current-fg colour81
+#setw -g window-status-current-fg colour40
+#setw -g window-status-current-bg colour238
+#setw -g window-status-current-attr bold
+setw -g window-status-current-style bold,fg=colour40,bg=colour238
+#setw -g window-status-current-format ' #I#[fg=colour250]:#[fg=colour255]#W#[fg=colour50]#F '
+setw -g window-status-current-format ' #I#[fg=colour250]:#[fg=colour255]#W#[fg=colour040]#F '
+
+#setw -g window-status-fg colour138
+#setw -g window-status-fg colour028
+#setw -g window-status-bg colour235
+#setw -g window-status-attr none
+setw -g window-status-style none,fg=colour028,bg=colour235
+setw -g window-status-format ' #I#[fg=colour237]:#[fg=colour250]#W#[fg=colour244]#F '
+
+#setw -g window-status-bell-attr bold
+#setw -g window-status-bell-fg colour255
+#setw -g window-status-bell-bg colour1
+setw -g window-status-bell-style bold,fg=colour255,bg=colour1
+
+# pane
+#set  -g pane-border-bg colour235
+#set  -g pane-border-fg colour238
+set -g pane-border-style fg=colour238,bg=colour235
+
+#set  -g pane-active-border-bg colour236
+#set  -g pane-active-border-fg colour34
+#set  -g pane-active-border-fg colour9
+set -g pane-active-border-style fg=colour9,bg=colour236
+
+#Plugins
+# List of plugins
+# Other examples:
+# set -g @plugin 'github_username/plugin_name'
+# set -g @plugin 'git@github.com/user/plugin'
+# set -g @plugin 'git@bitbucket.com/user/plugin'
+set -g @plugin 'tmux-plugins/tmux-sensible'
+set -g @plugin 'tmux-plugins/tmux-copycat'
+set -g @plugin 'tmux-plugins/tmux-open'
+run-shell /usr/share/tmux-resurrect/resurrect.tmux
+
+# Initialize TMUX plugin manager (keep this line at the very bottom of tmux.conf)
+run '/usr/share/tmux-plugin-manager/tpm'

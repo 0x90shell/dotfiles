@@ -1,0 +1,9 @@
+{{ if ne .chezmoi.osRelease.id "endeavouros" }}
+.zshrc_endeavouros
+{{ end }}
+{{ if ne .chezmoi.osRelease.id "kali" }}
+.zshrc_kali
+{{ end }}
+{{ if ne .chezmoi.os "linux" }}
+.zshrc_linux
+{{ end }}
