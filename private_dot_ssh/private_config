@@ -1,0 +1,6 @@
+AddKeysToAgent yes
+
+Host 90git
+    HostName github.com
+    IdentityFile ~/.ssh/0x90shell
+    User git

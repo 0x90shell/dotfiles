@@ -1,0 +1,143 @@
+#Variables
+dns=$(ip r | grep dhcp | awk '{print $3}')
+extip=$(curl -s http://ifconfig.me)
+ip=$(hostname -i | awk '{print $1}')
+mac=$(ip a | grep ether | awk '{print $2}')
+
+#Functions
+### Extract file, example. "ext package.tar.bz2"
+ext() {
+    if [[ -f $1 ]]; then
+        case $1 in
+            *.tar.bz2) tar xjf $1 ;;
+            *.tar.gz) tar xzf $1 ;;
+            *.bz2) bunzip2 $1 ;;
+            *.rar) rar x $1 ;;
+            *.gz) gunzip $1 ;;
+            *.tar) tar xf $1 ;;
+            *.tbz2) tar xjf $1 ;;
+            *.tgz) tar xzf $1 ;;
+            *.zip) unzip $1 ;;
+            *.Z) uncompress $1 ;;
+            *.7z) 7z x $1 ;;
+            *) echo $1 cannot be extracted ;;
+        esac
+    else
+        echo $1 is not a valid file
+    fi
+}
+
+#run in background
+bgrun () {
+nohup "$@" &>/dev/null &
+}
+
+#Timers
+countdown(){
+    date1=$((`date +%s` + $1));
+    while [ "$date1" -ge `date +%s` ]; do 
+    ## Is this more than 24h away?
+    days=$(($(($(( $date1 - $(date +%s))) * 1 ))/86400))
+    echo -ne "$days day(s) and $(date -u --date @$(($date1 - `date +%s`)) +%H:%M:%S)\r"; 
+    sleep 0.1
+    done
+}
+
+stopwatch(){
+    date1=`date +%s`; 
+    while true; do 
+    days=$(( $(($(date +%s) - date1)) / 86400 ))
+    echo -ne "$days day(s) and $(date -u --date @$((`date +%s` - $date1)) +%H:%M:%S)\r";
+    sleep 0.1
+    done
+}
+
+#SSH
+
+ssh_ky () {
+    USER=${1}
+    IP=${2}
+    pushd ~/.ssh/ 1>/dev/null
+    for x in $(ls *.pub); do ssh-copy-id -i $x ${USER}@${IP}; done
+    popd 1>/dev/null
+}
+
+ssh_px () {
+    USER=${1}
+    IP=${2}
+    echo "Setting up SOCKS Proxy on ${IP} ..."
+    ssh -i ~/.ssh/rta_ed25519 -f -N -D 9050 ${USER}@${IP}
+}
+
+ssh_pl () {
+    USER=${1}
+    IP=${2}
+    FILE=${3}
+    scp -i ~/.ssh/rta_ed25519 ${USER}@${IP}:${FILE} .
+}
+
+ssh_ph () {
+    USER=${1}
+    IP=${2}
+    FILE=${3}
+    scp -i ~/.ssh/rta_ed25519 ${FILE} ${USER}@${IP}:~
+}
+
+ssh_rs () {
+    USER=${1}
+    IP=${2}
+    FOLDER=${3}
+    rsync -rzLe "ssh -i ~/.ssh/rta_ed25519" ${USER}@${IP}:~/${FOLDER} .
+}
+
+#Aliases
+alias c='clear'
+alias ..="cd .."
+alias cd..="cd .."
+alias du1="du -h --max-depth 1"
+alias du2="du -h --max-depth 2"
+alias du3="du -h --max-depth 3"
+alias cl='clear ; ls -l'
+alias clip='xclip -selection clipboard'
+alias e='exit'
+alias gip='grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b"'
+alias header="curl -I"
+alias hs='history | grep'
+alias i='echo ; echo ; echo "DNS      " $dns ; echo ; ifconfig ; ping google.com -c3 ; echo ; echo'
+alias ins='sudo pacman -S'
+alias koj='kill -9 `jobs -p`'
+alias ko='kill -9'
+alias mkdir="mkdir -pv"
+alias myip='dig +short -x `curl -s ifconfig.me`'
+alias n='echo;
+echo -n "External IP:  "$extip ; echo ;
+echo -n "Internal IP:  "$ip ; echo ;
+echo -n "MAC address:  "$mac ; echo ;
+echo -n "DNS:          "$dns ; echo ;
+echo ; netstat -antp; echo ;
+ping -c3 google.com'
+alias pbcopy='xclip -selection clipboard'
+alias pbpaste='xclip -selection clipboard -o'
+alias ports="netstat -tulanp"
+#alias psg="ps aux | grep -i"
+#alias psg='_psg(){ ps up $(pgrep "$1");}; _psg'
+alias psg='ps aux | grep -v grep | grep -i' 
+alias rem='sudo pacman -R'
+alias sip='sort -V'
+alias strings='strings -a'
+alias srtu='sort -u'
+alias srtuc='LC_ALL=C sort -u'
+alias t2='tmux new-session \; send-keys clear C-m \; split-pane -v \; send-keys clear C-m'
+alias t3='tmux new-session \; send-keys clear C-m \; split-pane -v \; send-keys clear C-m \;  split-pane -h \; send-keys clear C-m'
+alias t4='tmux new-session \; send-keys clear C-m \; split-pane -v \; send-keys clear C-m \;  split-pane -h \; send-keys clear C-m \; select-pane -t 0 \; split-pane -h \; send-keys clear C-m'
+alias ta='tmux attach -t'
+alias tkss='tmux kill-session -t'
+alias tksv='tmux kill-server'
+alias tl='tmux list-sessions'
+alias ts='tmux new-session -s'
+#breaks other commands but good if only wanting 1 tmux alias
+#alias tmux="tmux attach || tmux new"
+alias urldecode='python3 -c "import sys, urllib.parse as ul; print(ul.unquote_plus(sys.argv[1]))"'
+alias urlencode='python3 -c "import sys, urllib.parse as ul; print (ul.quote_plus(sys.argv[1]))"'
+alias upd='sudo pacman -Syu'
+alias whatip='ip=$(curl -s ifconfig.me); echo $ip && whois $ip | grep Org'
