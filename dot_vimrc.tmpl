@@ -6,7 +6,11 @@ set expandtab
 set autoindent
 set smartindent
 syntax on
-set pastetoggle=<F3>
 map <leader>at :ALEToggle<CR>
 map <leader>nt :NERDTree<CR>
 map <leader>ex :exit<CR>
+set pastetoggle=<F3>
+{{ if ne .chezmoi.osRelease.id "endeavouros" }}
+source ~/.vim/plugins/ale.vim
+{{ end }}
+
