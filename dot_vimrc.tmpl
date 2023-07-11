@@ -10,6 +10,7 @@ map <leader>at :ALEToggle<CR>
 map <leader>nt :NERDTree<CR>
 map <leader>ex :exit<CR>
 set pastetoggle=<F3>
-{{ if (and (ne .chezmoi.osRelease.idLike "arch" ) (ne .chezmoi.osRelease.id "arch")) }}
+set clipboard=unnamedplus
+{{- if (and (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) }}
 source ~/.vim/plugins/ale.vim
 {{ end }}
