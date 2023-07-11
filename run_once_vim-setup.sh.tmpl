@@ -1,5 +1,5 @@
 {{- if ne .chezmoi.osRelease.id "endeavouros" }}
-{{- if ne .chezmoi.osRelease.id "arch" }}
+{{- else if ne .chezmoi.osRelease.id "arch" }}
 {{- else }}
 #!/bin/bash
 vim1="$HOME/.vim/pack/git-plugins/start"
