@@ -1,6 +1,8 @@
 {{ if eq .chezmoi.osRelease.id "arch" }}
+.vim/
 .vim/plugins/ale.vim
 {{ end }}
 {{ if eq .chezmoi.osRelease.id "endeavouros"}}
+.vim/
 .vim/plugins/ale.vim
 {{ end }}
