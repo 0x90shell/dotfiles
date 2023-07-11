@@ -1,3 +1,6 @@
-{{- if ne .chezmoi.osRelease.id "kali" }}
-.vim
-{{- end }}
+{{ if eq .chezmoi.osRelease.id "arch" }}
+.vim/plugins/ale.vim
+{{ end }}
+{{ if eq .chezmoi.osRelease.id "endeavouros"}}
+.vim/plugins/ale.vim
+{{ end }}
