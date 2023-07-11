@@ -1,0 +1,8 @@
+{{- if (and (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) }}
+mkdir -p ~/.vim/pack/git-plugins/start
+mkdir -p ~/.vim/plugins
+cd ~/.vim/pack/git-plugins/start/
+git clone https://github.com/dense-analysis/ale.git
+git clone https://github.com/preservim/nerdtree
+cd ~/.vim/plugins
+{{ end }}
