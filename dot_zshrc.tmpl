@@ -135,7 +135,7 @@ if [[ "$?" == 1 ]]; then
 {{- end }}
 fi
 
-{{- if eq .chezmoi.osRelease.id "kali" }}
+{{ if eq .chezmoi.osRelease.id "kali" }}
 #Named Directories
 hash -d host=/media/sf_Host_Share/
 
@@ -157,7 +157,7 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$ORACLE_HOME/lib
 JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64/
 PATH_TO_FX=/usr/share/openjfx/lib/
 unset _JAVA_OPTIONS
-{{ end }}
+{{- end }}
 
 #Enable Parallel to read ENV
 . `which env_parallel.sh`
