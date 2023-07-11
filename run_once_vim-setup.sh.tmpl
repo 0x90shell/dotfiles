@@ -2,20 +2,19 @@
 #!/bin/bash
 mkdir -p ~/.vim/pack/git-plugins/start
 mkdir -p ~/.vim/plugins
-cd ~/.vim/pack/git-plugins/start/
+cd ~/.vim/pack/git-plugins/start/ || exit
 if [ -d "ale" ]; then
-    cd ale
+    cd ale || exit
     git pull
-    cd ..
+    cd .. 
 else
     git clone https://github.com/dense-analysis/ale.git
 fi
-if [ -d "nerdtree" ]
-    cd nerdtree
+if [ -d "nerdtree" ]; then
+    cd nerdtree || exit
     git pull
     cd ..
 else
     git clone https://github.com/preservim/nerdtree
 fi
-cd ~/.vim/plugins
 {{ end }}
