@@ -1,6 +1,4 @@
-{{- if ne .chezmoi.osRelease.id "endeavouros" }}
-{{- else if ne .chezmoi.osRelease.id "arch" }}
-{{- else }}
+{{- if (and (ne .chezmoi.osRelease.id "endeavouros") (ne .chezmoi.osRelease.id "arch")) -}}
 #!/bin/bash
 vim1="$HOME/.vim/pack/git-plugins/start"
 vim2="$HOME/.vim/plugins"
