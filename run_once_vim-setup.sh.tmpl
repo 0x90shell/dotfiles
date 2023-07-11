@@ -1,4 +1,4 @@
-{{- if ne .chezmoi.osRelease.id "endeavouros" }}
+{{- if ne .chezmoi.osRelease.id "endeavouros" -}}
 #!/bin/bash
 vim1="$HOME/.vim/pack/git-plugins/start"
 vim2="$HOME/.vim/plugins"
@@ -28,5 +28,5 @@ if [ -d "nerdtree" ]; then
 else
     git clone https://github.com/preservim/nerdtree
 fi
-{{ end }}
+{{ end -}}
 
