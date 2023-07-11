@@ -3,7 +3,19 @@
 mkdir -p ~/.vim/pack/git-plugins/start
 mkdir -p ~/.vim/plugins
 cd ~/.vim/pack/git-plugins/start/
-git clone https://github.com/dense-analysis/ale.git
-git clone https://github.com/preservim/nerdtree
+if [ -d "ale" ]; then
+    cd ale
+    git pull
+    cd ..
+else
+    git clone https://github.com/dense-analysis/ale.git
+fi
+if [ -d "nerdtree" ]
+    cd nerdtree
+    git pull
+    cd ..
+else
+    git clone https://github.com/preservim/nerdtree
+fi
 cd ~/.vim/plugins
 {{ end }}
