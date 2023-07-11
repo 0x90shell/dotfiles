@@ -1,20 +1,32 @@
 {{- if (and (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) }}
 #!/bin/bash
-mkdir -p ~/.vim/pack/git-plugins/start
-mkdir -p ~/.vim/plugins
-cd ~/.vim/pack/git-plugins/start/ || exit
+vim1="$HOME/.vim/pack/git-plugins/start"
+vim2="$HOME/.vim/plugins"
+
+if [ -d "$vim1" ]; then
+mkdir -p "$vim1"
+fi
+
+if [ -d "$vim2" ]; then
+mkdir -p "$vim2"
+fi
+
+cd "$vim1" || exit
+
 if [ -d "ale" ]; then
     cd ale || exit
     git pull
-    cd .. 
+    cd "$vim1" || exit 
 else
     git clone https://github.com/dense-analysis/ale.git
 fi
+
 if [ -d "nerdtree" ]; then
     cd nerdtree || exit
     git pull
-    cd ..
+    cd "$vim1" || exit
 else
     git clone https://github.com/preservim/nerdtree
 fi
 {{ end }}
+
