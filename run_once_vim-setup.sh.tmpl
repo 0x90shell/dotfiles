@@ -1,4 +1,3 @@
-#{{- if ne .chezmoi.osRelease.id "endeavouros" -}}
 {{- if (or (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) }}
 #!/bin/bash
 vim1="$HOME/.vim/pack/git-plugins/start"
