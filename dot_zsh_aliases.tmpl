@@ -53,7 +53,6 @@ stopwatch(){
 }
 
 #SSH
-
 ssh_ky () {
     USER=${1}
     IP=${2}
@@ -90,7 +89,7 @@ ssh_rs () {
     rsync -rzLe "ssh -i ~/.ssh/rta_ed25519" ${USER}@${IP}:~/${FOLDER} .
 }
 
-{{- if eq .chezmoi.osRelease.id "kali" }}
+{{ if eq .chezmoi.osRelease.id "kali" }}
 #Kali Commands
 #srv only available on localhost, a function so other functions can call
 
@@ -227,14 +226,14 @@ alias urlencode='python3 -c "import sys, urllib.parse as ul; print (ul.quote_plu
 alias whatip='ip=$(curl -s ifconfig.me); echo $ip && whois $ip | grep Org'
 
 #Package Management
-{{- if eq .chezmoi.osRelease.id "arch" "endeavouros" -}}
+{{- if eq .chezmoi.osRelease.id "arch" "endeavouros" }}
 alias ins='sudo pacman -S'
 alias rem='sudo pacman -R'
 alias upd='sudo pacman -Sy'
 alias upg='sudo pacman -Syu'
 alias upg-all='yay'
 alias search='yay '
-{{- else -}}
+{{- else }}
 alias fix='apt install -f'
 alias ins="apt install"
 alias rem="apt purge"
@@ -244,7 +243,7 @@ alias upg-all='httrack-update & apt update & pipx upgrade-all; apt upgrade -y; a
 alias upg-more='apt update & pipx upgrade-all; apt upgrade -y; apt dist-upgrade -y; git-update; service nessusd stop; nessuscli update --all & openvas-update;bleachbit -c --preset; runuser -u overflow -- bleachbit -c --preset'
 alias upg-dist='apt update; apt upgrade -y; apt dist-upgrade -y; bleachbit -c --preset'
 alias upg="apt update; apt upgrade -y; bleachbit -c --preset"
-{{- end -}}
+{{- end }}
 
 {{- if eq .chezmoi.osRelease.id "kali" }}
 #Kali Aliases
