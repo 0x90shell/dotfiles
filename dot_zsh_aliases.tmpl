@@ -90,6 +90,91 @@ ssh_rs () {
     rsync -rzLe "ssh -i ~/.ssh/rta_ed25519" ${USER}@${IP}:~/${FOLDER} .
 }
 
+{{- if eq .chezmoi.osRelease.id "kali" }}
+#Kali Commands
+#srv only available on localhost, a function so other functions can call
+
+srvhttp_local () {
+#    python -c "import BaseHTTPServer as bhs, SimpleHTTPServer as shs; bhs.HTTPServer(('127.0.0.1', ${PORT}), shs.SimpleHTTPRequestHandler).serve_forever()"
+    python3 -m http.server ${1} --bind 127.0.0.1
+}
+
+srvsmb_v1 () {
+echo "Serving SMBv1 share 'test' w/ anon access on 0.0.0.0 ..."
+impacket-smbserver test .
+}
+
+srvsmb_v2 () {
+echo "Serving SMBv2 share 'test'  w/ test:test creds on 0.0.0.0 ..."
+impacket-smbserver -user test -pass test -smb2support test . 
+}
+
+#HTTrack Child Process Monitor
+httrack-jobs(){
+#    watch -t "echo -n 'HTTrack Jobs Running: '
+#    ps aux | grep httrack | awk '{print \$2}' |
+#        while read line; do
+#        IFS=$'\n'; pstree -p \$line | awk -F'---' '{print \$NF}' | grep httrack
+#        done | grep -oP '\(\K[^)]+' | sort -u | wc -l"
+    ps aux | grep httrack | awk '{print $2}' |
+    while read line; do
+        IFS=$'\n'; pstree -p $line | awk -F'---' '{print $NF}' | grep httrack; done |
+    grep -oP '\(\K[^)]+' | sort -u |
+    tee >(echo Running HTTrack Jobs: $(wc -l)) |
+    xargs pwdx | awk -F '/' '{print $NF}' | sort
+}
+alias httrack-watcher="watch -t -x zsh -ic httrack-jobs"
+
+#Documents Page
+pentest_info () {
+: ' Not accurate for MD/YAML
+SITES=( $(find /opt/documents -type d -maxdepth 1 2>/dev/null| tail -n +2) )
+COUNTER=$(find /opt/documents -type d -maxdepth 1 2>/dev/null| tail -n +2 |wc -l)
+for x in $SITES;do
+ pushd $x
+ srvhttp_local $((9100+$COUNTER)) &>/dev/null &
+ popd &>/dev/null
+ let COUNTER-=1
+done
+'
+pushd /home/overflow/Documents/Websites/ &>/dev/null
+srvhttp_local 9100 &>/dev/null &
+pushd /opt/documents/post-exploitation-wiki/ &>/dev/null
+srvhttp_local 9101 &>/dev/null &
+#pushd /opt/documents/LOLBAS-Project.github.io &>/dev/null
+#nohup bundle exec jekyll serve -q -P 9102 &>/dev/null &
+#pushd /opt/documents/GTFOBins.github.io &>/dev/null
+#nohup bundle exec jekyll serve -q -P 9103 &>/dev/null &
+nohup grip /opt/documents/RedTeaming-Tactics-and-Techniques/SUMMARY.md 9104 --quiet &>/dev/null &
+nohup grip /opt/documents/hacktricks/SUMMARY.md 9105 --quiet &>/dev/null &
+nohup grip /opt/documents/PayloadsAllTheThings/README_edited.md 9106 --quiet &>/dev/null &
+nohup grip /opt/documents/atomic-red-team/atomics/index_edit.md 9107 --quiet &>/dev/null &
+nohup grip /opt/documents/hacktricks-cloud/SUMMARY.md 9109 --quiet &>/dev/null &
+
+pushd /opt/documents/Regex101 &>/dev/null
+srvhttp_local 9108 &>/dev/null &
+#cd ~5
+cd ~3
+dirs -c #popd all the stack
+nohup gksu -u overflow google-chrome http://127.0.0.1:9100 &>/dev/null &
+}
+
+vpnc_monitor(){
+while :
+do
+if [ "$(pidof vpnc)" ]; then
+        echo Running
+else
+        echo Restarting
+        nmcli connection up Pen-VPNC
+        echo $(pidof vpnc)
+fi
+sleep 5
+clear
+done
+}
+
+{{- end -}}
 #Aliases
 alias c='clear'
 alias ..="cd .."
