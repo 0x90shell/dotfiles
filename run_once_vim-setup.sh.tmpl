@@ -8,11 +8,11 @@ sudo -E bash -c "$vimins"
 vim1="$HOME/.vim/pack/git-plugins/start"
 vim2="$HOME/.vim/plugins"
 
-if [ -d "$vim1" ]; then
+if [ ! -d "$vim1" ]; then
 mkdir -p "$vim1"
 fi
 
-if [ -d "$vim2" ]; then
+if [ ! -d "$vim2" ]; then
 mkdir -p "$vim2"
 fi
 

@@ -8,11 +8,11 @@ sudo -E bash -c "$tmuxins"
 tmux1="$HOME/.tmux/plugins"
 tmux2="$HOME/.tmux/resurrect"
 
-if [ -d "$tmux1" ]; then
+if [ ! -d "$tmux1" ]; then
 mkdir -p "$tmux1"
 fi
 
-if [ -d "$tmux2" ]; then
+if [ ! -d "$tmux2" ]; then
 mkdir -p "$tmux2"
 fi
 
@@ -31,11 +31,11 @@ fi
 tmux1="$HOME/.tmux/plugins"
 tmux2="$HOME/.tmux/resurrect"
 
-if [ -d "$tmux1" ]; then
+if [ ! -d "$tmux1" ]; then
 mkdir -p "$tmux1"
 fi
 
-if [ -d "$tmux2" ]; then
+if [ ! -d "$tmux2" ]; then
 mkdir -p "$tmux2"
 fi
 

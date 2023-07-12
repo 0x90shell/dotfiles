@@ -1,0 +1,37 @@
+{{- if (and (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) -}}
+#!/bin/bash
+zshins="apt install zsh"
+echo "running $zshins w/ sudo"
+sleep 1
+sudo -E bash -c "$zshins"
+
+zsh1="$HOME/.oh-my-zsh/"
+
+if [ -d "$zsh1" ]; then
+    cd "$zsh1" || exit
+    git pull
+    cd "$zsh1" || exit 
+else
+    cd "$HOME" || exit
+    git clone https://github.com/ohmyzsh/ohmyzsh "$zsh1"
+    cd "$HOME" || exit
+fi
+{{- else -}}
+#!/bin/bash
+zshins="pacman -S --needed git base-devel zsh"
+echo "running $zshins w/ sudo"
+sleep 1
+sudo -E bash -c "$zshins"
+
+if ! command -v "yay" &> /dev/null; then
+    cd "$HOME" || exit
+    git clone https://aur.archlinux.org/yay.git
+    cd yay || exit
+    makepkg -si
+    cd "$HOME" || exit
+    rm -rf "$HOME/yay/"
+fi
+
+yay -S oh-my-zsh-git oh-my-zsh-plugin-autosuggestions oh-my-zsh-plugin-syntax-highlighting --noconfirm
+
+{{- end -}}
