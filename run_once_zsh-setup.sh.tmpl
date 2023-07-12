@@ -16,6 +16,8 @@ else
     git clone https://github.com/ohmyzsh/ohmyzsh "$zsh1"
     cd "$HOME" || exit
 fi
+
+chsh -s /bin/zsh
 {{- else -}}
 #!/bin/bash
 zshins="pacman -S --needed git base-devel zsh"
@@ -34,4 +36,5 @@ fi
 
 yay -S oh-my-zsh-git oh-my-zsh-plugin-autosuggestions oh-my-zsh-plugin-syntax-highlighting --noconfirm
 
+chsh -s /bin/zsh
 {{- end -}}
