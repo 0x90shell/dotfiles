@@ -123,6 +123,7 @@ httrack-jobs(){
     tee >(echo Running HTTrack Jobs: $(wc -l)) |
     xargs pwdx | awk -F '/' '{print $NF}' | sort
 }
+
 alias httrack-watcher="watch -t -x zsh -ic httrack-jobs"
 
 #Documents Page
@@ -190,7 +191,6 @@ alias gip='grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b"'
 alias header="curl -I"
 alias hs='history | grep'
 alias i='echo ; echo ; echo "DNS      " $dns ; echo ; ifconfig ; ping google.com -c3 ; echo ; echo'
-alias ins='sudo pacman -S'
 alias koj='kill -9 `jobs -p`'
 alias ko='kill -9'
 alias mkdir="mkdir -pv"
@@ -208,7 +208,6 @@ alias ports="netstat -tulanp"
 #alias psg="ps aux | grep -i"
 #alias psg='_psg(){ ps up $(pgrep "$1");}; _psg'
 alias psg='ps aux | grep -v grep | grep -i' 
-alias rem='sudo pacman -R'
 alias sip='sort -V'
 alias strings='strings -a'
 alias srtu='sort -u'
@@ -225,5 +224,77 @@ alias ts='tmux new-session -s'
 #alias tmux="tmux attach || tmux new"
 alias urldecode='python3 -c "import sys, urllib.parse as ul; print(ul.unquote_plus(sys.argv[1]))"'
 alias urlencode='python3 -c "import sys, urllib.parse as ul; print (ul.quote_plus(sys.argv[1]))"'
-alias upd='sudo pacman -Syu'
 alias whatip='ip=$(curl -s ifconfig.me); echo $ip && whois $ip | grep Org'
+
+#Package Management
+{{- if eq .chezmoi.osRelease.id "arch" "endeavouros" -}}
+alias ins='sudo pacman -S'
+alias rem='sudo pacman -R'
+alias upd='sudo pacman -Sy'
+alias upg='sudo pacman -Syu'
+alias upg-all='yay'
+alias search='yay '
+{{- else -}}
+alias fix='apt install -f'
+alias ins="apt install"
+alias rem="apt purge"
+alias search="apt search"
+alias upd="apt update"
+alias upg-all='httrack-update & apt update & pipx upgrade-all; apt upgrade -y; apt dist-upgrade -y; git-update; service nessusd stop; nessuscli update --all & openvas-update; bleachbit -c --preset; runuser -u overflow -- bleachbit -c --preset'
+alias upg-more='apt update & pipx upgrade-all; apt upgrade -y; apt dist-upgrade -y; git-update; service nessusd stop; nessuscli update --all & openvas-update;bleachbit -c --preset; runuser -u overflow -- bleachbit -c --preset'
+alias upg-dist='apt update; apt upgrade -y; apt dist-upgrade -y; bleachbit -c --preset'
+alias upg="apt update; apt upgrade -y; bleachbit -c --preset"
+{{- end -}}
+
+{{- if eq .chezmoi.osRelease.id "kali" }}
+#Kali Aliases
+alias aircrack-ng="aircrack-ng -z"
+alias airodump-ng="airodump-ng --manufacturer --wps --uptime"
+alias axel="axel -a"
+function chrome-browse() { nohup gksu -u overflow google-chrome "$@" &>/dev/null & }
+function chrome-test() { nohup gksu -u overflow "chromium --args --disable-web-security --allow-file-access-from-file" "$@" &>/dev/null & }
+alias citrix-config='/opt/Citrix/ICAClient/util/configmgr'
+alias cjtool='nohup gksu -u overflow google-chrome /opt/cjtool/cjtool.html &>/dev/null &'
+alias d='cd /root/Desktop/ ; clear'
+alias edb="cd /usr/share/exploitdb/exploitdb/"
+alias faraday='service couchdb start;python-faraday'
+alias fix='apt install -f'
+alias ftproot="cd /var/ftp/"
+alias fwoff='ufw disable'
+alias fwon='ufw enable'
+alias horizon='nohup vmware-view &>/dev/null &'
+alias host_share='cd /media/sf_Host_Share/'
+alias msfc="systemctl start postgresql; msfdb start; msfconsole -q \"$@\""
+alias msf='service postgresql start;msfconsole -p pentest \"$@\"'
+alias nessus-start='service nessusd start; nohup gksu -u overflow google-chrome https://localhost:8834 &>/dev/null &'
+alias nessus-stop='service nessusd stop'
+alias nexpose='service postgresql start ; cd /opt/nexpose/nsc ; ./nsc.sh'
+alias nmap="nmap --reason --open"
+alias openvas-start='gvm-start &>/dev/null &'
+alias openvas-stop='gvm-stop &>/dev/null '
+alias pentest_info_killsrv="echo This may kill python3 and ruby services other than servers.;killall python3 ruby2.7 grip"
+alias pia="nohup /opt/piavpn/bin/pia-client &>/dev/null &"
+alias pyinstall_pe32='wine32 "C:\Python27\python.exe" /usr/share/pyinstaller/pyinstaller.py'
+alias r='cd /root/ ; clear'
+alias rem="apt purge"
+alias sambaroot="cd /var/samba/"
+alias s='cd /opt/discover/ ; clear'
+alias sqlm='sqlmap -o --batch --exclude-sysdbs --random-agent'
+alias suof='su overflow'
+alias srvftp='python3 -m pyftpdlib'
+alias srvhttp='python3 -m http.server'
+alias srvhttp_debug='serv'
+alias srvtftp=ptftpd
+alias tcpdump='sudo -u overflow tcpdump'
+alias tftproot="cd /var/tftp/"
+alias torbrowser='nohup gksu -u overflow /opt/tor-browser_en-US/Browser/start-tor-browser &>/dev/null &'
+alias torservice='service tor start; service privoxy start'
+alias vmroot="cd /mnt/hgfs/"
+alias webhttrack='nohup gksu -u overflow webhttrack &>/dev/null &'
+alias whatip='ip=$(curl -s ifconfig.me); echo $ip && whois $ip | grep Org'
+alias wireshark='nohup gksu -u overflow wireshark &>/dev/null &'
+alias wordlist="cd /usr/share/wordlist/"
+alias wwwroot="cd /var/www/"
+alias x11-sudo-fix="su - $SUDO_USER -c 'xauth list' | grep `echo $DISPLAY | cut -d ':' -f 2 | cut -d '.' -f 1 | sed -e s/^/:/`  | xargs -n 3 xauth add"
+alias xssvalidator='phantomjs /opt/Burpsuite/bapps/98275a25394a417c9480f58740c1d981/xss-detector/xss.js'
+{{- end -}}
