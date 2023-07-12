@@ -1,6 +1,6 @@
 {{- if (and (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) -}}
 #!/bin/bash
-vimins="apt install vim"
+vimins="apt install git vim"
 echo "running $vimins w/ sudo"
 sleep 1
 sudo -E bash -c "$vimins"
