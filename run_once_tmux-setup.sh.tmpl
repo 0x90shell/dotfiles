@@ -1,0 +1,59 @@
+{{- if (and (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) -}}
+#!/bin/bash
+tmuxins="apt install tmux"
+echo "running $tmuxins w/ sudo"
+sleep 1
+sudo -E bash -c "$tmuxins"
+
+tmux1="$HOME/.tmux/plugins"
+tmux2="$HOME/.tmux/resurrect"
+
+if [ -d "$tmux1" ]; then
+mkdir -p "$tmux1"
+fi
+
+if [ -d "$tmux2" ]; then
+mkdir -p "$tmux2"
+fi
+
+cd "$tmux1" || exit
+
+if [ -d "tpm" ]; then
+    cd tpm || exit
+    git pull
+    cd "$tmux1" || exit 
+else
+    git clone https://github.com/tmux-plugins/tpm $tmux1/tpm
+fi
+
+{{- else -}}
+#! /bin/bash
+tmux1="$HOME/.tmux/plugins"
+tmux2="$HOME/.tmux/resurrect"
+
+if [ -d "$tmux1" ]; then
+mkdir -p "$tmux1"
+fi
+
+if [ -d "$tmux2" ]; then
+mkdir -p "$tmux2"
+fi
+
+tmuxins="pacman -S --needed git base-devel tmux"
+
+echo "running $tmuxins w/ sudo"
+sleep 1
+sudo -E bash -c "$tmuxins"
+
+if ! command -v "yay" &> /dev/null; then
+    cd "$HOME" || exit
+    git clone https://aur.archlinux.org/yay.git
+    cd yay || exit
+    makepkg -si
+    cd "$HOME" || exit
+    rm -rf "$HOME/yay/"
+fi
+
+yay -S tmux-resurrect tmux-plugin-manager --noconfirm
+
+{{- end -}}
