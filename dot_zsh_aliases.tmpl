@@ -214,6 +214,9 @@ alias srtuc='LC_ALL=C sort -u'
 alias t2='tmux new-session \; send-keys clear C-m \; split-pane -v \; send-keys clear C-m'
 alias t3='tmux new-session \; send-keys clear C-m \; split-pane -v \; send-keys clear C-m \;  split-pane -h \; send-keys clear C-m'
 alias t4='tmux new-session \; send-keys clear C-m \; split-pane -v \; send-keys clear C-m \;  split-pane -h \; send-keys clear C-m \; select-pane -t 0 \; split-pane -h \; send-keys clear C-m'
+{{- if eq .chezmoi.osRelease.id "arch" "endeavouros" }}
+alias terminator="terminator --profile=endeavoros"
+{{ end -}}
 alias ta='tmux attach -t'
 alias tkss='tmux kill-session -t'
 alias tksv='tmux kill-server'
