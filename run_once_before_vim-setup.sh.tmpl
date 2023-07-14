@@ -41,9 +41,17 @@ if [ -d "chezmoi.vim" ]; then
 else
     git clone https://github.com/alker0/chezmoi.vim
 fi
+
+if [ -d "vim-fugitive" ]; then
+    cd "vim-fugitive" || exit
+    git pull
+    cd "$folder1" || exit 
+else
+    git clone https://github.com/tpope/vim-fugitive
+fi
 {{- else -}}
 #! /bin/bash
-cmd1="pacman -S --needed git base-devel vim-ale vim-nerdtree"
+cmd1="pacman -S --needed git base-devel vim-ale vim-nerdtree vim-fugitive"
 echo "running $cmd1 w/ sudo"
 sleep 1
 sudo -E bash -c "$cmd1"
