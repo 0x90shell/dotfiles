@@ -22,6 +22,10 @@
     title_hide_sizetext = True
     title_transmit_fg_color = "#000000"
     title_transmit_bg_color = "#7f3fbf"
+{{- if eq .chezmoi.osRelease.id "kali" }}
+    title_transmit_bg_color = "#aa0000"
+    title_receive_bg_color = "#2ec27e"
+{{- end }}
     title_receive_bg_color = "#7f7fff"
     title_inactive_bg_color = "#77767b"
   [[endeavoros]]
