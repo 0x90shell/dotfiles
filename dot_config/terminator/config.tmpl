@@ -1,0 +1,282 @@
+[global_config]
+  geometry_hinting = True
+  suppress_multiple_term_dialog = True
+[keybindings]
+  zoom_in = <Primary>equal
+  go_up = <Primary><Alt>Up
+  go_down = <Primary><Alt>Down
+  go_left = <Primary><Alt>Left
+  go_right = <Primary><Alt>Right
+  split_horiz = <Primary>underscore
+  split_vert = <Primary>bar
+[profiles]
+  [[default]]
+    background_darkness = 0.95
+    background_type = transparent
+    cursor_fg_color = "#08052b"
+    cursor_bg_color = "#00ff00"
+    foreground_color = "#00ff00"
+    scrollback_lines = 495
+    scrollback_infinite = True
+    bold_is_bright = True
+    title_hide_sizetext = True
+    title_transmit_fg_color = "#000000"
+    title_transmit_bg_color = "#7f3fbf"
+    title_receive_bg_color = "#7f7fff"
+    title_inactive_bg_color = "#77767b"
+  [[endeavoros]]
+    background_color = "#08052b"
+    background_darkness = 0.95
+    background_type = transparent
+    cursor_fg_color = "#08052b"
+    cursor_bg_color = "#00ff00"
+    foreground_color = "#00ff00"
+    scrollback_lines = 495
+    scrollback_infinite = True
+    palette = "#08052b:#ff7f7f:#7f3fbf:#cc3980:#7fbaff:#7f3fbf:#7f7fff:#e3e3ea:#7fbaff:#ff7f7f:#9999cc:#ff7f7f:#7f7fff:#7f3fbf:#7f7fff:#e3e3ea"
+    bold_is_bright = True
+    title_hide_sizetext = True
+    title_transmit_fg_color = "#000000"
+    title_transmit_bg_color = "#7f3fbf"
+    title_receive_bg_color = "#7f7fff"
+    title_inactive_bg_color = "#77767b"
+[layouts]
+  [[default]]
+    [[[window0]]]
+      type = Window
+      parent = ""
+    [[[child1]]]
+      type = Terminal
+      parent = window0
+      profile = default
+  [[2L-1R Split]]
+    [[[child0]]]
+      type = Window
+      parent = ""
+      order = 0
+      position = 1280:0
+      maximised = False
+      fullscreen = False
+      size = 1272, 1391
+      title = root@bang:~
+      last_active_term = 5c8e6afe-b9b1-4a02-888f-cc4fb768de74
+      last_active_window = True
+    [[[child1]]]
+      type = HPaned
+      parent = child0
+      order = 0
+      position = 634
+      ratio = 0.500394632991318
+    [[[child2]]]
+      type = VPaned
+      parent = child1
+      order = 0
+      position = 693
+      ratio = 0.5
+    [[[terminal3]]]
+      type = Terminal
+      parent = child2
+      order = 0
+      profile = default
+      uuid = c35b5f36-deb3-4586-828d-35282945d44d
+    [[[terminal4]]]
+      type = Terminal
+      parent = child2
+      order = 1
+      profile = default
+      uuid = 5c8e6afe-b9b1-4a02-888f-cc4fb768de74
+    [[[terminal5]]]
+      type = Terminal
+      parent = child1
+      order = 1
+      profile = default
+      uuid = 1af8e489-cb36-4aac-9d02-41e039f9ca29
+  [[1L-2R Split]]
+    [[[child0]]]
+      type = Window
+      parent = ""
+      order = 0
+      position = 1280:0
+      maximised = False
+      fullscreen = False
+      size = 1272, 1391
+      title = root@bang:~/Host_Share/Automate_The_Boring_Stuff
+      last_active_term = 6db35722-410e-499a-a288-87a7b5726615
+      last_active_window = False
+    [[[child1]]]
+      type = HPaned
+      parent = child0
+      order = 0
+      position = 634
+      ratio = 0.500394632991318
+    [[[terminal2]]]
+      type = Terminal
+      parent = child1
+      order = 0
+      profile = default
+      uuid = 6db35722-410e-499a-a288-87a7b5726615
+    [[[child3]]]
+      type = VPaned
+      parent = child1
+      order = 1
+      position = 693
+      ratio = 0.5
+    [[[terminal4]]]
+      type = Terminal
+      parent = child3
+      order = 0
+      profile = default
+      uuid = b2fdceaf-b8d9-4623-940c-7b8581e44a2b
+    [[[terminal5]]]
+      type = Terminal
+      parent = child3
+      order = 1
+      profile = default
+      uuid = 93925259-c42d-43b1-b5b9-31a64f2c3338
+  [[2x2 Split]]
+    [[[child0]]]
+      type = Window
+      parent = ""
+      order = 0
+      position = 1280:0
+      maximised = False
+      fullscreen = False
+      size = 1272, 1391
+      title = root@bang:~
+      last_active_term = c35b5f36-deb3-4586-828d-35282945d44d
+      last_active_window = True
+    [[[child1]]]
+      type = HPaned
+      parent = child0
+      order = 0
+      position = 634
+      ratio = 0.500394632991318
+    [[[child2]]]
+      type = VPaned
+      parent = child1
+      order = 0
+      position = 693
+      ratio = 0.5
+    [[[terminal3]]]
+      type = Terminal
+      parent = child2
+      order = 0
+      profile = default
+      uuid = c35b5f36-deb3-4586-828d-35282945d44d
+    [[[terminal4]]]
+      type = Terminal
+      parent = child2
+      order = 1
+      profile = default
+      uuid = a1643bc4-2860-4daa-8c1b-81c13959d0c4
+    [[[child5]]]
+      type = VPaned
+      parent = child1
+      order = 1
+      position = 693
+      ratio = 0.5
+    [[[terminal6]]]
+      type = Terminal
+      parent = child5
+      order = 0
+      profile = default
+      uuid = 1af8e489-cb36-4aac-9d02-41e039f9ca29
+    [[[terminal7]]]
+      type = Terminal
+      parent = child5
+      order = 1
+      profile = default
+      uuid = 2268da32-d066-411a-a023-c4ab9a0caf56
+  [[1T-2B Split]]
+    [[[child0]]]
+      type = Window
+      parent = ""
+      order = 0
+      position = 1280:0
+      maximised = False
+      fullscreen = False
+      size = 1272, 1391
+      title = root@bang:~
+      last_active_term = f7510305-e813-4315-b770-b018020a6b2d
+      last_active_window = True
+    [[[child1]]]
+      type = VPaned
+      parent = child0
+      order = 0
+      position = 693
+      ratio = 0.5
+    [[[terminal2]]]
+      type = Terminal
+      parent = child1
+      order = 0
+      profile = default
+      uuid = f7510305-e813-4315-b770-b018020a6b2d
+    [[[child3]]]
+      type = HPaned
+      parent = child1
+      order = 1
+      position = 634
+      ratio = 0.500394632991318
+    [[[terminal4]]]
+      type = Terminal
+      parent = child3
+      order = 0
+      profile = default
+      uuid = f2b9e779-983c-4eac-8864-b9423b62954d
+      command = ""
+    [[[terminal5]]]
+      type = Terminal
+      parent = child3
+      order = 1
+      profile = default
+      uuid = a2faa835-8a87-4ada-8c67-5a034362da35
+{{- if eq .chezmoi.osRelease.id "kali" }}
+  [[PyDev]]
+    [[[child0]]]
+      type = Window
+      parent = ""
+      order = 0
+      position = 1280:0
+      maximised = False 
+      fullscreen = False
+      size = 1272, 1391
+      title = root@bang:~/Host_Share/Automate_The_Boring_Stuff
+      last_active_term = b2fdceaf-b8d9-4623-940c-7b8581e44a2b
+      last_active_window = True
+    [[[child1]]]
+      type = HPaned
+      parent = child0
+      order = 0
+      position = 1276
+      ratio = 0.499412915851272
+    [[[terminal2]]]
+      type = Terminal
+      parent = child1
+      order = 0
+      profile = default
+      uuid = 6db35722-410e-499a-a288-87a7b5726615
+      directory = /root/Host_Share/Automate_The_Boring_Stuff
+    [[[child3]]]
+      type = VPaned
+      parent = child1
+      order = 1
+      position = 695
+      ratio = 0.5
+    [[[terminal4]]]
+      type = Terminal
+      parent = child3
+      order = 0
+      profile = default
+      uuid = b2fdceaf-b8d9-4623-940c-7b8581e44a2b
+      directory = /root/Host_Share/Automate_The_Boring_Stuff
+      command = ""
+    [[[terminal5]]]
+      type = Terminal
+      parent = child3
+      order = 1
+      profile = default
+      uuid = 93925259-c42d-43b1-b5b9-31a64f2c3338
+      directory = /root/Host_Share/Automate_The_Boring_Stuff
+      command = jupyter console
+{{- end }}
+[plugins]
