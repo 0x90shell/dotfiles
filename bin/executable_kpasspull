@@ -1,14 +1,14 @@
 #!/bin/bash
 
-if [[ -n $(pidof keepassx) ]]; then
-    echo "KeePassX is already running, bringing window to focus now..."
-    kp_xwid=$(wmctrl -lp | grep KeePassX | egrep -v '(Chrome|Firefox)' | awk '{print $1}')
+if [[ -n $(pidof keepassxc) ]]; then
+    echo "KeePassXC is already running, bringing window to focus now..."
+    kp_xwid=$(wmctrl -lp | grep KeePassXC | grep -Ev '(Chrome|Firefox)' | awk '{print $1}')
     if [[ -z $kp_xwid ]]; then
         echo "No X window ID found. This happens if KeePassX is set to minimize to the system tray. Please change your settings."
         exit
     fi
-    wmctrl -i -a $kp_xwid
+    wmctrl -i -a "$kp_xwid"
 else
    echo "KeePassXC is not running, starting now..."
-   nohup keepassxc > /dev/null &2>/dev/null &
+   nohup keepassxc &>/dev/null &
 fi
