@@ -215,7 +215,7 @@ alias t2='tmux new-session \; send-keys clear C-m \; split-pane -v \; send-keys 
 alias t3='tmux new-session \; send-keys clear C-m \; split-pane -v \; send-keys clear C-m \;  split-pane -h \; send-keys clear C-m'
 alias t4='tmux new-session \; send-keys clear C-m \; split-pane -v \; send-keys clear C-m \;  split-pane -h \; send-keys clear C-m \; select-pane -t 0 \; split-pane -h \; send-keys clear C-m'
 {{- if eq .chezmoi.osRelease.id "endeavouros" }}
-alias terminator="terminator --profile=endeavoros"
+alias terminator="terminator --profile=endeavouros"
 {{- end }}
 alias ta='tmux attach -t'
 alias tkss='tmux kill-session -t'
