@@ -1,6 +1,10 @@
 {{ if eq .chezmoi.osRelease.id "arch" }}
 .vim/plugins/
+bin/bash*
+bin/apt*
 {{ end }}
 {{ if eq .chezmoi.osRelease.id "endeavouros"}}
 .vim/plugins/
+bin/bash*
+bin/apt*
 {{ end }}
