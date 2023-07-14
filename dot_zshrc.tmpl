@@ -11,10 +11,13 @@ export ZSH_CUSTOM=$HOME/.zsh
 export ZSH_COMPDUMP=$HOME/.cache/zsh/zcompdump
 
 # Set name of the theme to load. Optionally, if you set this to "random"
-# it'll load a random theme each time that oh-my-zsh is loaded.
-# See https://github.com/robbyrussell/oh-my-zsh/wiki/Themes
-#ZSH_THEME="agnoster"
+{{- if eq .chezmoi.osRelease.id "kali" }}
 ZSH_THEME="themes/kali"
+{{- else if eq .chezmoi.hostname "Glamdring" }}
+ZSH_THEME="themes/glamdring"
+{{- else }}
+ZSH_THEME="dst"
+{{- end }}
 local ret_status="%(?:%{$fg_bold[green]%}➜ :%{$fg_bold[red]%}➜ )"
 PROMPT='${ret_status} %{$fg[cyan]%}%c%{$reset_color%} $(git_prompt_info)'
 RPROMPT="[%D{%y/%m/%f}|%@]"
