@@ -1,0 +1,111 @@
+#!/usr/bin/env python
+import xml.etree.cElementTree as ET
+from libnmap.parser import NmapParser
+import os
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-ah", "--allhosts", action="store_true",
+                    help="add all hosts even when no open ports are detected")
+parser.add_argument("-ap", "--allports", action="store_true",
+                    help="add ports closed or filtered")
+parser.add_argument("-a", "--all", action="store_true",
+                    help="same as '-ah -ap'")
+#parser.add_argument("-o", "--output",
+#                    help="folder where cherry file will be written")
+parser.add_argument("folder",
+                    help="folder where nmap's output files (.gnmap,.nmap,.xml) are stored")
+args = parser.parse_args()
+
+path=args.folder+"/"
+uid=1
+root = ET.Element("cherrytree")
+
+Status = ET.SubElement(root, "node", custom_icon_id="24", foreground="", is_bold="False", name="Status", prog_lang="custom-colors", readonly="False", tags="", unique_id=str(uid))
+uid=uid+1
+Vulns = ET.SubElement(root, "node", custom_icon_id="43", foreground="", is_bold="False", name="Vulns", prog_lang="custom-colors", readonly="False", tags="", unique_id=str(uid))
+MLoot = ET.SubElement(root, "node", custom_icon_id="41", foreground="", is_bold="False", name="Loot", prog_lang="custom-colors", readonly="False", tags="", unique_id=str(uid))
+uid=uid+1
+Recon = ET.SubElement(root, "node", custom_icon_id="11", foreground="", is_bold="False", name="Recon", prog_lang="custom-colors", readonly="False", tags="", unique_id=str(uid))
+uid=uid+1
+Business = ET.SubElement(Recon, "node", custom_icon_id="14", foreground="", is_bold="False", name="Business", prog_lang="custom-colors", readonly="False", tags="", unique_id=str(uid))
+uid=uid+1
+Network = ET.SubElement(Recon, "node", custom_icon_id="17", foreground="", is_bold="False", name="Network", prog_lang="custom-colors", readonly="False", tags="", unique_id=str(uid))
+uid=uid+1
+Users = ET.SubElement(Recon, "node", custom_icon_id="42", foreground="", is_bold="False", name="Users", prog_lang="custom-colors", readonly="False", tags="", unique_id=str(uid))
+uid=uid+1
+
+for filename in os.listdir(path):
+	if not filename.endswith('.xml'): continue
+	try:
+		rep = NmapParser.parse_fromfile(path+filename)
+	except:
+		continue
+	
+	node = ET.SubElement(root, "node", custom_icon_id="17", foreground="", is_bold="True", name=filename.split(".")[0].upper(), prog_lang="custom-colors", readonly="False", tags="", unique_id=str(uid))
+	uid=uid+1
+
+	try:
+		with open(path+filename.split(".")[0]+".nmap") as f: s = f.read()
+		ET.SubElement(node, "rich_text").text=s
+	except EnvironmentError:
+		print "Nmap file not found it won't be added"
+
+	for _host in rep.hosts:
+		if (_host.is_up() and len(_host.services)>0) or args.allhosts or args.all:
+			host = ET.SubElement(node, "node",custom_icon_id="4", foreground="", is_bold="False", name=_host.address, prog_lang="custom-colors", readonly="False", tags="", unique_id=str(uid))
+			uid=uid+1
+			fing = ET.SubElement(host, "rich_text")
+			fp = str(_host.hostnames)+_host.os_fingerprint+"\n"
+			if _host.os_fingerprinted:
+				for os in _host.os_match_probabilities():
+					fp = fp + os.name + "\n"
+			fing.text=fp
+			ENUM = ET.SubElement(host, "node", custom_icon_id="39", foreground="", is_bold="False", name="Enum", prog_lang="custom-colors", readonly="False", tags="", unique_id=str(uid))
+			ET.SubElement(ENUM, "rich_text")
+			uid=uid+1
+			Exploit = ET.SubElement(host, "node", custom_icon_id="22", foreground="", is_bold="False", name="Exploit", prog_lang="custom-colors", readonly="False", tags="", unique_id=str(uid))
+			ET.SubElement(Exploit, "rich_text", underline="single", weight="heavy").text="Vulnerability:\n\n\n\n"
+			ET.SubElement(Exploit, "rich_text", underline="single", weight="heavy").text="Exploit:\n\n\n\n\n"
+			ET.SubElement(Exploit, "rich_text", underline="single", weight="heavy").text="Proof:\n"
+			uid=uid+1
+			Logs = ET.SubElement(Exploit, "node", custom_icon_id="18", foreground="", is_bold="False", name="Logs", prog_lang="custom-colors", readonly="False", tags="", unique_id=str(uid))
+			uuid=uid+1
+			PostExploit = ET.SubElement(host, "node", custom_icon_id="21", foreground="", is_bold="False", name="Post Exploit", prog_lang="custom-colors", readonly="False", tags="", unique_id=str(uid))
+			uid=uid+1
+			Logs = ET.SubElement(PostExploit, "node", custom_icon_id="18", foreground="", is_bold="False", name="Logs", prog_lang="custom-colors", readonly="False", tags="", unique_id=str(uid))
+			uid=uid+1
+			PrivEsc = ET.SubElement(host, "node", custom_icon_id="10", foreground="", is_bold="False", name="Priv Esc", prog_lang="custom-colors", readonly="False", tags="", unique_id=str(uid))
+			ET.SubElement(PrivEsc, "rich_text", underline="single", weight="heavy").text="Vulnerability:\n\n\n\n"
+			ET.SubElement(PrivEsc, "rich_text", underline="single", weight="heavy").text="Exploit:\n\n\n\n\n"
+			ET.SubElement(PrivEsc, "rich_text", underline="single", weight="heavy").text="Proof:\n"
+			uid=uid+1
+			Logs = ET.SubElement(PrivEsc, "node", custom_icon_id="18", foreground="", is_bold="False", name="Logs", prog_lang="custom-colors", readonly="False", tags="", unique_id=str(uid))
+			uuid=uid+1
+			Loot = ET.SubElement(host, "node", custom_icon_id="41", foreground="", is_bold="False", name="Loot", prog_lang="custom-colors", readonly="False", tags="", unique_id=str(uid))
+			uid=uid+1
+			for  _service in _host.services:
+				if _service.open() or args.allports or args.all:
+					color=""
+					if not _service.open():
+						color="#ff0000"
+					if _service.protocol == 'tcp':
+						service = ET.SubElement(ENUM, "node", custom_icon_id="38", foreground="", is_bold="False", name=str(_service.port) + "/" + _service.protocol + " - " + _service.service, prog_lang="custom-colors", readonly="False", tags="", unique_id=str(uid))
+					else:
+						service = ET.SubElement(ENUM, "node", custom_icon_id="38", foreground="", is_bold="False", name=str(_service.port) + "/" + _service.protocol + " - " + _service.service, prog_lang="custom-colors", readonly="False", tags="", unique_id=str(uid))
+					uid=uid+1
+					ET.SubElement(service, "rich_text", style="italic", weight="heavy").text="Banner:\n"
+					ET.SubElement(service, "rich_text").text=_service.banner+"\n\n\n"
+					ET.SubElement(service, "rich_text", style="italic", weight="heavy").text="Scripts:\n"
+					for scr in _service.scripts_results:
+						ET.SubElement(service, "rich_text", weight="heavy").text=scr['id']+"\n"
+						ET.SubElement(service, "rich_text").text=scr['output']+"\n"
+#if args.output:
+#    workDir=args.output+"/"
+#else:
+#    workDir=os.getcwd()
+
+outFile = "cherrymap.ctd"
+
+tree = ET.ElementTree(root)
+tree.write(outFile)

@@ -1,0 +1,221 @@
+#!/usr/bin/env bash
+#requires bash 4.2+, sqlite3, gnu utils, trash-cli, and 7z
+#add report template autocopy evenutally
+
+
+#Global Variables
+#Edit {inbound|test}Root to your relevant folders.
+inRoot=~/Inbound/
+testRoot=~/Tests/
+script=$(realpath $0)
+scriptRoot=$(dirname $script)
+
+#Functions
+createTest(){
+assignVariables
+if [ ! -d $fidir ]; then
+	pushd $pidir 1>/dev/null
+	mkdir -p $dir/0 $dir/data/ $dir/report/drafts/ $dir/report/screens
+	testLower=${test,,}
+	typeLower=${type,,}
+	if [[ -v project ]]; then
+		projectLower=${project,,}
+		filename=$projectLower-$testLower-$typeLower
+		touch $dir/0/$filename\_vulns.txt  
+		echo "$project-$dir Scoping Notes" > $dir/0/$filename\_notes.txt
+		cp $scriptRoot/test-setup.ctb $dir/0/$filename.ctb
+		sqlite3 $dir/0/$filename.ctb "UPDATE node SET name = '$project/$test - $type' WHERE node_id = 1;"
+	else
+		filename=$testLower-$typeLower
+		touch $dir/0/$filename\_vulns.txt  
+		echo "$dir Scoping Notes" > $dir/0/$filename\_notes.txt
+		cp $scriptRoot/test-setup.ctb $dir/0/$filename.ctb
+		sqlite3 $dir/0/$filename.ctb "UPDATE node SET name = '$test - $type' WHERE node_id = 1;"
+	fi
+	echo "$dir folder created"
+	popd 1>/dev/nulL
+else
+	echo "Inbound directory already exists"
+fi
+}
+
+moveTest(){
+assignVariables
+if [ -d $fidir ]; then
+        if [ ! -d $ftdir ]; then
+		mv $fidir $ptdir
+	else
+		echo "Test Directory already exists"
+	fi
+else
+        echo "Inbound directory doesn't exist"
+fi
+}
+
+deleteTest(){
+assignVariables
+if [ -d $fidir ]; then
+	trash-put $fidir
+else
+        echo "Inbound directory doesn't exist"
+fi
+}
+
+closeTest(){
+assignVariables
+if [ -d $ftdir ]; then
+	pushd $ftdir 1>/dev/null
+	if 7z a -t7z -m0=lzma -mx=9 -mfb=64 -md=32m -ms=on -sdel $test-data.7z 0/ data/ &>/dev/null; then 
+		echo "$test 0 and data folders compressed"
+	else
+		echo "Compression failed on $test 0 and data folders"
+	fi
+	
+	pushd report 1>/dev/null
+	if 7z a -t7z -m0=lzma -mx=9 -mfb=64 -md=32m -ms=on -sdel $test-drafts.7z drafts/ screens/ &>/dev/null; then 
+		echo "$test drafts and screens folder compressed"
+	else
+		echo "Compression failed on $test drafts and screens folder"
+	fi
+
+	popd 1>/dev/null
+	echo $(date +%Y%m%d) > .closedate 
+	mv report/* .
+	trash-put report
+	popd 1>/dev/null
+else
+	echo "Directory doesn't exist"
+fi
+exit 0
+}
+
+cleanTest(){	
+echo "Cleaning artifacts older than 6 months..."
+echo "Cutoff = $(date -d '6 months ago' +%Y%m%d)"
+for file in $(find $testRoot -type f -name .closedate); do
+	cutoff=$(date -d '6 months ago' +%Y%m%d)
+	cleanPath=$(dirname $file)
+	cleanDate=$(cat $file)
+	if (($cutoff > $cleanDate)); then 
+		pushd $cleanPath 1>/dev/null
+		trash-put *.7z
+		mv * $testRoot
+		popd 1>/dev/null
+		trash-put $cleanPath
+		echo "$cleanPath was scrubbed." 
+	else 
+		echo "$cleanPath not old enough." 
+	fi
+done
+exit 0
+}
+
+help(){
+echo '1st variable is function (help, create, delete, move, close, or clean).
+	2nd variable is test name.
+	3rd variable is test type (IPT, EPT, WASA, MASA, RT, SCR, & SE)
+	4th variable is year (optional, defaults to current)
+	$ ./test-setup create Test IPT 2018 
+	$ ./test-setup delete Test IPT 2018
+	$ ./test-setup move Test IPT 2018
+	$ ./test-setup close Test IPT 2018
+	$ ./test-setup clean
+
+	The anticipated workflow consists of:
+		1. Creating tests in the inbound folder
+		2. Moving them to testing folder when signed
+		3. Deleting from inbound if the not signed
+		4. Closing and archiving when test is completed
+		5. Clean out archived files for tests older than 6 months.  
+
+	Tests can be created, moved, deleted, or closed within a larger project by 
+	using a forward slash between project and test.
+	$ test-setup create Project/Test ept 
+	$ test-setup move Project/Test ept
+	$ test-setup delete Project/Test ept
+	$ test-setup close Project/Test ept'
+	exit 0
+}
+
+assignVariables(){ 
+#Parent Dir and Client Name
+
+if [[ -z $var2 ]] ; then
+	echo "Enter test name."
+	exit 0
+elif [[ -z $var3 ]] ; then
+	echo "Enter test type."
+	exit 0
+elif [[ "$var2" =~ \/\/ || "$var2" =~ \\ ]]; then 
+	echo "Only use a single forward slash to separate project group and underlying test."
+	exit 0
+elif [[ "$var2" == *\/* ]]; then
+	project=$(echo ${var2^^} | awk -F \/ '{print $1}')
+	pidir=$inRoot$project/
+	ptdir=$testRoot$project/
+	test=$(echo $var2 | awk -F \/ '{print $2}')
+	if [ ! -d "$pidir" ]; then
+		  mkdir $pidir
+	fi
+	if [ ! -d "$ptdir" ]; then
+		  mkdir $ptdir
+	fi
+else
+	pidir=$inRoot
+	ptdir=$testRoot
+	test=$var2
+fi
+
+#Test Type
+if [[ ! $var3 =~ ^[0-9]+$ ]]; then #check if test doesn't contain letters
+	type=${var3^^} #uppercase
+else
+	echo "Enter a valid test type"
+	exit 0
+fi
+
+#Test Year
+if [[ -z $var4 ]]; then #check if only 3 arguments
+	year=$(date +%Y)
+elif [[ $var4 =~ ^[0-9]{4}$ ]] #check if year is 4 digits
+then
+	year=$var4
+else
+	echo "Enter a 4 digit year"
+	exit 0
+fi
+
+#Directories
+dir=$test-$type-$year #child
+fidir=$pidir$dir/ #full
+ftdir=$ptdir$dir/ #full
+}
+
+#Main
+#check if argument count is 0 or 5+
+if [[ $# -eq 0 || $# -gt 4 ]] ; then 	
+	help
+fi
+
+var2=$2
+var3=$3
+var4=$4
+
+case "${1,,}" in #lowercase
+
+	create)
+		createTest;;	
+	close)
+		closeTest;;
+	delete)
+		deleteTest;;
+	move)
+		moveTest;;
+	clean)
+		cleanTest;;
+	help)
+		help;;
+	*)
+		echo "Enter help, create, close, move, clean, or delete as first argument"
+		exit 0;;
+esac
