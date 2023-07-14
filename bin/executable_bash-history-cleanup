@@ -1,0 +1,7 @@
+#!/bin/bash
+
+cat ~/.bash_history | nl | sort -k2 -k 1,1nr | uniq -f1 | sort -n | cut -f2 > ~/.temp.txt
+
+history -c
+
+mv ~/.temp.txt ~/.bash_history

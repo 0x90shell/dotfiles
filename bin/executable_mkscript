@@ -1,0 +1,4 @@
+#!/bin/bash
+
+mkdir -p ./sessions
+script -f -t ./sessions/$1.typescript 2> ./sessions/$1.timing
