@@ -1,0 +1,28 @@
+{{- if (and (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) -}}
+#!/bin/bash
+cmd1="apt install adwaita-icon-theme"
+folder1="$HOME/bin"
+
+echo "running $cmd1 w/ sudo"
+sleep 1
+sudo -E bash -c "$cmd1"
+
+{{- else if eq .chezmoi.osRelease.id "endeavouros" -}}
+#! /bin/bash
+cmd1="yay -S arc-gtk-theme-eos eos-qogir-icons --noconfirm"
+folder1="$HOME/bin"
+
+echo "running $cmd1 w/ sudo"
+sleep 1
+sudo -E bash -c "$cmd1"
+
+{{- else -}}
+#! /bin/bash
+cmd1="yay -S arc-gtk-theme qogir-icon-theme --noconfirm"
+folder1="$HOME/bin"
+
+echo "running $cmd1 w/ sudo"
+sleep 1
+sudo -E bash -c "$cmd1"
+
+{{- end -}}

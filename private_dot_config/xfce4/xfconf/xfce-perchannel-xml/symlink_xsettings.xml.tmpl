@@ -1,0 +1,5 @@
+{{- if eq .chezmoi.osRelease.id "kali" }}
+{{ .chezmoi.sourceDir }}/ignore-xfce4/kali/xfce-perchannel-xml/xsettings.xml
+{{- else }}
+{{ .chezmoi.sourceDir }}/ignore-xfce4/glamdring/xfce-perchannel-xml/xsettings.xml
+{{- end }}

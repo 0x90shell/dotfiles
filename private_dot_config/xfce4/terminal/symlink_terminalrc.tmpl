@@ -1,0 +1,5 @@
+{{- if eq .chezmoi.osRelease.id "kali" }}
+{{ .chezmoi.sourceDir }}/ignore-xfce4/kali/terminal/terminalrc 
+{{- else }}
+{{ .chezmoi.sourceDir }}/ignore-xfce4/glamdring/terminal/terminalrc
+{{- end }}
