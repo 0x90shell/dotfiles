@@ -1,0 +1,1203 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<channel name="xfce4-desktop" version="1.0">
+  <property name="backdrop" type="empty">
+    <property name="screen0" type="empty">
+      <property name="monitor0" type="empty">
+        <property name="brightness" type="empty"/>
+        <property name="color1" type="array">
+          <value type="uint" value="17381"/>
+          <value type="uint" value="799"/>
+          <value type="uint" value="0"/>
+          <value type="uint" value="65535"/>
+        </property>
+        <property name="color2" type="array">
+          <value type="uint" value="65535"/>
+          <value type="uint" value="7189"/>
+          <value type="uint" value="0"/>
+          <value type="uint" value="65535"/>
+        </property>
+        <property name="color-style" type="int" value="2"/>
+        <property name="image-path" type="empty"/>
+        <property name="image-show" type="bool" value="false"/>
+        <property name="last-image" type="empty"/>
+        <property name="last-single-image" type="empty"/>
+        <property name="image-style" type="empty"/>
+        <property name="workspace0" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17476"/>
+            <value type="uint" value="771"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7196"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace1" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace2" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace3" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace4" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace5" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace6" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace7" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+      </property>
+      <property name="monitor1" type="empty">
+        <property name="brightness" type="empty"/>
+        <property name="color1" type="array">
+          <value type="uint" value="7936"/>
+          <value type="uint" value="16128"/>
+          <value type="uint" value="28416"/>
+          <value type="uint" value="65535"/>
+        </property>
+        <property name="color2" type="array">
+          <value type="uint" value="26880"/>
+          <value type="uint" value="34048"/>
+          <value type="uint" value="46848"/>
+          <value type="uint" value="65535"/>
+        </property>
+        <property name="color-style" type="empty"/>
+        <property name="image-path" type="empty"/>
+        <property name="image-show" type="empty"/>
+        <property name="last-image" type="empty"/>
+        <property name="last-single-image" type="empty"/>
+        <property name="image-style" type="empty"/>
+        <property name="workspace0" type="empty">
+          <property name="backdrop-cycle-enable" type="bool" value="false"/>
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17476"/>
+            <value type="uint" value="771"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7196"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/xfce/xfce-teal.jpg"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace1" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="0"/>
+          <property name="color1" type="array">
+            <value type="uint" value="7936"/>
+            <value type="uint" value="16128"/>
+            <value type="uint" value="28416"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="26880"/>
+            <value type="uint" value="34048"/>
+            <value type="uint" value="46848"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/xfce/xfce-teal.jpg"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace2" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="0"/>
+          <property name="color1" type="array">
+            <value type="uint" value="7936"/>
+            <value type="uint" value="16128"/>
+            <value type="uint" value="28416"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="26880"/>
+            <value type="uint" value="34048"/>
+            <value type="uint" value="46848"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/xfce/xfce-teal.jpg"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace3" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="0"/>
+          <property name="color1" type="array">
+            <value type="uint" value="7936"/>
+            <value type="uint" value="16128"/>
+            <value type="uint" value="28416"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="26880"/>
+            <value type="uint" value="34048"/>
+            <value type="uint" value="46848"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/xfce/xfce-teal.jpg"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace4" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="0"/>
+          <property name="color1" type="array">
+            <value type="uint" value="7936"/>
+            <value type="uint" value="16128"/>
+            <value type="uint" value="28416"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="26880"/>
+            <value type="uint" value="34048"/>
+            <value type="uint" value="46848"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/xfce/xfce-teal.jpg"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace5" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="0"/>
+          <property name="color1" type="array">
+            <value type="uint" value="7936"/>
+            <value type="uint" value="16128"/>
+            <value type="uint" value="28416"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="26880"/>
+            <value type="uint" value="34048"/>
+            <value type="uint" value="46848"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/xfce/xfce-teal.jpg"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace6" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="0"/>
+          <property name="color1" type="array">
+            <value type="uint" value="7936"/>
+            <value type="uint" value="16128"/>
+            <value type="uint" value="28416"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="26880"/>
+            <value type="uint" value="34048"/>
+            <value type="uint" value="46848"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/xfce/xfce-teal.jpg"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace7" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="0"/>
+          <property name="color1" type="array">
+            <value type="uint" value="7936"/>
+            <value type="uint" value="16128"/>
+            <value type="uint" value="28416"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="26880"/>
+            <value type="uint" value="34048"/>
+            <value type="uint" value="46848"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/xfce/xfce-teal.jpg"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+      </property>
+      <property name="monitor2" type="empty">
+        <property name="image-path" type="empty"/>
+        <property name="image-style" type="empty"/>
+        <property name="image-show" type="empty"/>
+        <property name="workspace0" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="1"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17476"/>
+            <value type="uint" value="771"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7196"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/xfce/xfce-teal.jpg"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace1" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="0"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/xfce/xfce-teal.jpg"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace2" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="0"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/xfce/xfce-teal.jpg"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace3" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="0"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/xfce/xfce-teal.jpg"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace4" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="0"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/xfce/xfce-teal.jpg"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace5" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="0"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/xfce/xfce-teal.jpg"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace6" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="0"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/xfce/xfce-teal.jpg"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace7" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="0"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/xfce/xfce-teal.jpg"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+      </property>
+      <property name="monitor3" type="empty">
+        <property name="image-path" type="empty"/>
+        <property name="image-style" type="empty"/>
+        <property name="image-show" type="empty"/>
+      </property>
+      <property name="monitor4" type="empty">
+        <property name="image-path" type="empty"/>
+        <property name="image-style" type="empty"/>
+        <property name="image-show" type="empty"/>
+      </property>
+      <property name="monitorVGA-0" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace1" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace2" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace3" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace4" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace5" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace6" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace7" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+      </property>
+      <property name="monitorVGA-1" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace1" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace2" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace3" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+      </property>
+      <property name="monitorVGA-2" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="1"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/kali/kali-logo-16x9.png"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace1" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="1"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/kali/kali-logo-16x9.png"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace2" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="1"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/kali/kali-logo-16x9.png"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace3" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="1"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/kali/kali-logo-16x9.png"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+      </property>
+      <property name="monitorVirtual1" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="rgba1" type="array">
+            <value type="double" value="0.666667"/>
+            <value type="double" value="0.000000"/>
+            <value type="double" value="0.000000"/>
+            <value type="double" value="1.000000"/>
+          </property>
+        </property>
+        <property name="workspace1" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace2" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace3" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace4" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace5" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace6" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace7" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+      </property>
+      <property name="monitorVirtual2" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="2"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/kali-16x9/kali-grid.png"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+          <property name="rgba1" type="array">
+            <value type="double" value="0.800000"/>
+            <value type="double" value="0.000000"/>
+            <value type="double" value="0.000000"/>
+            <value type="double" value="1.000000"/>
+          </property>
+          <property name="rgba2" type="array">
+            <value type="double" value="0.333333"/>
+            <value type="double" value="0.341176"/>
+            <value type="double" value="0.325490"/>
+            <value type="double" value="1.000000"/>
+          </property>
+        </property>
+        <property name="workspace1" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="1"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace2" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="1"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+        <property name="workspace3" type="empty">
+          <property name="brightness" type="int" value="0"/>
+          <property name="color-style" type="int" value="1"/>
+          <property name="color1" type="array">
+            <value type="uint" value="17381"/>
+            <value type="uint" value="799"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="color2" type="array">
+            <value type="uint" value="65535"/>
+            <value type="uint" value="7189"/>
+            <value type="uint" value="0"/>
+            <value type="uint" value="65535"/>
+          </property>
+          <property name="image-path" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="image-show" type="bool" value="false"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/kali-16x9/default"/>
+          <property name="last-single-image" type="string" value="/usr/share/images/desktop-base/default"/>
+        </property>
+      </property>
+    </property>
+    <property name="single-workspace-mode" type="bool" value="true"/>
+    <property name="single-workspace-number" type="int" value="0"/>
+  </property>
+  <property name="desktop-icons" type="empty">
+    <property name="style" type="empty"/>
+    <property name="file-icons" type="empty">
+      <property name="show-home" type="empty"/>
+      <property name="show-filesystem" type="empty"/>
+      <property name="show-removable" type="empty"/>
+      <property name="show-trash" type="empty"/>
+    </property>
+    <property name="icon-size" type="uint" value="32"/>
+    <property name="tooltip-size" type="empty"/>
+  </property>
+  <property name="last" type="empty">
+    <property name="window-height" type="int" value="591"/>
+    <property name="window-width" type="int" value="753"/>
+  </property>
+</channel>

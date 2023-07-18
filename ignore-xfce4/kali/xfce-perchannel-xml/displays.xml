@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<channel name="displays" version="1.0">
+  <property name="Default" type="empty">
+    <property name="VGA-1" type="string" value="VirtualBox ">
+      <property name="Active" type="bool" value="true"/>
+      <property name="Resolution" type="string" value="640x480"/>
+      <property name="RefreshRate" type="double" value="59.9375"/>
+      <property name="Rotation" type="int" value="0"/>
+      <property name="Reflection" type="string" value="0"/>
+      <property name="Primary" type="bool" value="true"/>
+      <property name="Position" type="empty">
+        <property name="X" type="int" value="0"/>
+        <property name="Y" type="int" value="4"/>
+      </property>
+      <property name="EDID" type="string" value="e6cd057b3cd10b3e094d5c445e9173bf828c7ad4"/>
+    </property>
+    <property name="VGA-2" type="string" value="VirtualBox ">
+      <property name="Active" type="bool" value="true"/>
+      <property name="Resolution" type="string" value="1920x1080"/>
+      <property name="RefreshRate" type="double" value="60"/>
+      <property name="Rotation" type="int" value="0"/>
+      <property name="Reflection" type="string" value="0"/>
+      <property name="Primary" type="bool" value="false"/>
+      <property name="Position" type="empty">
+        <property name="X" type="int" value="640"/>
+        <property name="Y" type="int" value="0"/>
+      </property>
+      <property name="EDID" type="string" value="e6cd057b3cd10b3e094d5c445e9173bf828c7ad4"/>
+    </property>
+    <property name="VGA-3" type="string" value="3. VBX ">
+      <property name="Active" type="bool" value="true"/>
+      <property name="Resolution" type="string" value="1280x1024"/>
+      <property name="RefreshRate" type="double" value="59.894849000000001"/>
+      <property name="Rotation" type="int" value="0"/>
+      <property name="Reflection" type="string" value="0"/>
+      <property name="Primary" type="bool" value="false"/>
+      <property name="Position" type="empty">
+        <property name="X" type="int" value="3840"/>
+        <property name="Y" type="int" value="0"/>
+      </property>
+    </property>
+    <property name="Virtual1" type="string" value="Virtual1">
+      <property name="Active" type="bool" value="true"/>
+      <property name="EDID" type="string" value=""/>
+      <property name="Resolution" type="string" value="2560x1345"/>
+      <property name="RefreshRate" type="double" value="59.999259524367822"/>
+      <property name="Rotation" type="int" value="0"/>
+      <property name="Reflection" type="string" value="0"/>
+      <property name="Primary" type="bool" value="true"/>
+      <property name="Position" type="empty">
+        <property name="X" type="int" value="0"/>
+        <property name="Y" type="int" value="0"/>
+      </property>
+      <property name="Scale" type="empty">
+        <property name="X" type="double" value="1"/>
+        <property name="Y" type="double" value="1"/>
+      </property>
+    </property>
+    <property name="Virtual2" type="string" value="Virtual2">
+      <property name="Active" type="bool" value="true"/>
+      <property name="EDID" type="string" value=""/>
+      <property name="Resolution" type="string" value="1920x1015"/>
+      <property name="RefreshRate" type="double" value="59.998755986813457"/>
+      <property name="Rotation" type="int" value="0"/>
+      <property name="Reflection" type="string" value="0"/>
+      <property name="Primary" type="bool" value="false"/>
+      <property name="Position" type="empty">
+        <property name="X" type="int" value="2560"/>
+        <property name="Y" type="int" value="0"/>
+      </property>
+      <property name="Scale" type="empty">
+        <property name="X" type="double" value="1"/>
+        <property name="Y" type="double" value="1"/>
+      </property>
+    </property>
+  </property>
+  <property name="ActiveProfile" type="string" value="Default"/>
+  <property name="4d05cd82470501a7188201a016fdaeebd5be092d" type="string" value="1-2k, 2-1080">
+    <property name="VGA-1" type="string" value="VirtualBox ">
+      <property name="Active" type="bool" value="true"/>
+      <property name="EDID" type="string" value="ef5f4d473fc27a8a7d2af7169f06cbb1f2e17930"/>
+      <property name="Resolution" type="string" value="2560x1346"/>
+      <property name="RefreshRate" type="double" value="59.959001000000001"/>
+      <property name="Rotation" type="int" value="0"/>
+      <property name="Reflection" type="string" value="0"/>
+      <property name="Primary" type="bool" value="false"/>
+      <property name="Position" type="empty">
+        <property name="X" type="int" value="0"/>
+        <property name="Y" type="int" value="0"/>
+      </property>
+    </property>
+    <property name="VGA-2" type="string" value="VirtualBox ">
+      <property name="Active" type="bool" value="true"/>
+      <property name="EDID" type="string" value="0ca7798d7399eca738db27e8f6f2bfd4163ba255"/>
+      <property name="Resolution" type="string" value="1920x1012"/>
+      <property name="RefreshRate" type="double" value="59.981026999999997"/>
+      <property name="Rotation" type="int" value="0"/>
+      <property name="Reflection" type="string" value="0"/>
+      <property name="Primary" type="bool" value="false"/>
+      <property name="Position" type="empty">
+        <property name="X" type="int" value="2560"/>
+        <property name="Y" type="int" value="140"/>
+      </property>
+    </property>
+  </property>
+  <property name="Fallback" type="empty">
+    <property name="Virtual1" type="string" value="Virtual1">
+      <property name="Active" type="bool" value="true"/>
+      <property name="EDID" type="string" value=""/>
+      <property name="Resolution" type="string" value="2560x1345"/>
+      <property name="RefreshRate" type="double" value="59.999259524367822"/>
+      <property name="Rotation" type="int" value="0"/>
+      <property name="Reflection" type="string" value="0"/>
+      <property name="Primary" type="bool" value="true"/>
+      <property name="Scale" type="empty">
+        <property name="X" type="double" value="1"/>
+        <property name="Y" type="double" value="1"/>
+      </property>
+      <property name="Position" type="empty">
+        <property name="X" type="int" value="0"/>
+        <property name="Y" type="int" value="0"/>
+      </property>
+    </property>
+    <property name="Virtual2" type="string" value="Virtual2">
+      <property name="Active" type="bool" value="true"/>
+      <property name="EDID" type="string" value=""/>
+      <property name="Resolution" type="string" value="1920x1015"/>
+      <property name="RefreshRate" type="double" value="59.998755986813457"/>
+      <property name="Rotation" type="int" value="0"/>
+      <property name="Reflection" type="string" value="0"/>
+      <property name="Primary" type="bool" value="false"/>
+      <property name="Scale" type="empty">
+        <property name="X" type="double" value="1"/>
+        <property name="Y" type="double" value="1"/>
+      </property>
+      <property name="Position" type="empty">
+        <property name="X" type="int" value="2560"/>
+        <property name="Y" type="int" value="0"/>
+      </property>
+    </property>
+  </property>
+</channel>

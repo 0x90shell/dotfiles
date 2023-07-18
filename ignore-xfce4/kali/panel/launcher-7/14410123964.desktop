@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Tor Browser
+Comment=Privacy
+Exec=gksu -u overflow /opt/tor-browser_en-US/Browser/start-tor-browser
+Icon=/opt/tor-browser_en-US/Browser/browser/chrome/icons/default/default64.png
+Path=
+Terminal=false
+StartupNotify=false

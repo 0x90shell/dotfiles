@@ -4,6 +4,9 @@
 	<icon>utilities-terminal</icon>
 	<name>Open Terminal Here</name>
 	<unique-id>1561037580080073-1</unique-id>
+{{- if eq .chezmoi.osRelease.id "kali" }}
+    <unique-id>1439871868518807-1</unique-id>
+{{- end }}
 	<command>exo-open --working-directory %f --launch TerminalEmulator</command>
 	<description>Example for a custom action</description>
 	<patterns>*</patterns>
