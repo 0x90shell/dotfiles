@@ -1,3 +1,4 @@
+ignore-xfce4/
 {{ if ne .chezmoi.osRelease.id "kali" }}
 bin/cherrymap
 bin/test-setup*
@@ -11,4 +12,5 @@ bin/apt*
 .vim/plugins/
 bin/bash*
 bin/apt*
+{{ else }}
 {{ end }}
