@@ -13,7 +13,7 @@ fi
 
 {{- else -}}
 #! /bin/bash
-cmd1="pacman -S --needed terminator"
+cmd1="pacman -S --noconfirm --needed terminator"
 folder1="$HOME/.config/terminator"
 
 echo "running $cmd1 w/ sudo"

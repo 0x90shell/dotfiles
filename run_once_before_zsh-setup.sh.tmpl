@@ -20,7 +20,7 @@ fi
 chsh -s /bin/zsh
 {{- else -}}
 #!/bin/bash
-zshins="pacman -S --needed git base-devel zsh"
+zshins="pacman -S --noconfirm --needed git base-devel zsh"
 echo "running $zshins w/ sudo"
 sleep 1
 sudo -E bash -c "$zshins"

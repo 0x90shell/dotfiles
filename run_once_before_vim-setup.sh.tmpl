@@ -51,7 +51,7 @@ else
 fi
 {{- else -}}
 #! /bin/bash
-cmd1="pacman -S --needed git base-devel vim-ale vim-nerdtree vim-fugitive"
+cmd1="pacman -S --nonconfirm --needed git base-devel vim-ale vim-nerdtree vim-fugitive"
 echo "running $cmd1 w/ sudo"
 sleep 1
 sudo -E bash -c "$cmd1"

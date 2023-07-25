@@ -9,7 +9,7 @@ sudo -E bash -c "$cmd1"
 
 {{- else -}}
 #! /bin/bash
-cmd1="pacman -S --needed xfce4-whiskermenu-plugin xcape"
+cmd1="pacman -S --noconfirm --needed xfce4-whiskermenu-plugin xcape"
 folder1="$HOME/bin"
 
 echo "running $cmd1 w/ sudo"

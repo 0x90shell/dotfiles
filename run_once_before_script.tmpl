@@ -13,7 +13,7 @@ fi
 
 {{- else -}}
 #! /bin/bash
-cmd1="pacman -S --needed util-linux"
+cmd1="pacman -S --noconfirm --needed util-linux"
 folder1="$HOME/bin"
 
 echo "running $cmd1 w/ sudo"
