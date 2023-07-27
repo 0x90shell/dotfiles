@@ -3,19 +3,14 @@ ignore-xfce4/
 bin/cherrymap
 bin/test-setup*
 {{ end }}
-{{ if ne .chezmoi.osRelease.id "arch" }}
-bin/yaycache
-{{ end }}
-{{ if ne .chezmoi.osRelease.id "endeavouros" }}
-bin/yaycache
-{{ end }}
 {{ if eq .chezmoi.osRelease.id "arch" }}
 .vim/plugins/
 bin/bash*
 bin/apt*
-{{ end }}
-{{ if eq .chezmoi.osRelease.id "endeavouros"}}
+{{ else if eq .chezmoi.osRelease.id "endeavouros"}}
 .vim/plugins/
 bin/bash*
 bin/apt*
+{{ else }}
+bin/yaycache
 {{ end }}
