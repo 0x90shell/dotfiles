@@ -1,4 +1,4 @@
-##!/usr/bin/env bash
+#!/usr/bin/env bash
 
 ## Assuming yay is run by user with UID 1000
 admin="$(id -nu 1000)"
@@ -32,4 +32,3 @@ done
 /usr/bin/paccache -qruk0 $pkgcache
 /usr/bin/paccache -qruk1
 /usr/bin/paccache -qrk2 -c /var/cache/pacman/pkg $pkgcache
-
