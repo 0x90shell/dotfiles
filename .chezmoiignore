@@ -7,10 +7,12 @@ bin/test-setup*
 .vim/plugins/
 bin/bash*
 bin/apt*
+bin/yaycache
 {{ end }}
 {{ if eq .chezmoi.osRelease.id "endeavouros"}}
 .vim/plugins/
 bin/bash*
 bin/apt*
+bin/yaycache
 {{ else }}
 {{ end }}
