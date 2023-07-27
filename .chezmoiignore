@@ -2,17 +2,16 @@ ignore-xfce4/
 {{ if ne .chezmoi.osRelease.id "kali" }}
 bin/cherrymap
 bin/test-setup*
+bin/yaycache
 {{ end }}
 {{ if eq .chezmoi.osRelease.id "arch" }}
 .vim/plugins/
 bin/bash*
 bin/apt*
-bin/yaycache
 {{ end }}
 {{ if eq .chezmoi.osRelease.id "endeavouros"}}
 .vim/plugins/
 bin/bash*
 bin/apt*
-bin/yaycache
 {{ else }}
 {{ end }}
