@@ -76,6 +76,7 @@
       <property name="&lt;Primary&gt;&lt;Alt&gt;n" type="string" value="vscodium"/>
       <property name="&lt;Super&gt;space" type="string" value="xfce4-appfinder"/>
       <property name="&lt;Primary&gt;&lt;Alt&gt;t" type="string" value="terminator --profile=endeavouros"/>
+      <property name="&lt;Primary&gt;&lt;Shift&gt;&lt;Alt&gt;n" type="string" value="joplin-desktop"/>
     </property>
   </property>
   <property name="xfwm4" type="empty">
