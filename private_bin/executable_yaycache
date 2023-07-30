@@ -3,7 +3,7 @@
 ## Assuming yay is run by user with UID 1000
 admin="$(id -nu 1000)"
 cachedir="/home/$admin/.cache/yay"
-removed="$(comm -23 <(basename -a $(find $cachedir -mindepth 1 -maxdepth 1 -type d) | sort) <(pacman -Qqm) | xargs -r printf "$cachedir/%s\n")"
+removed="$(comm -23 <(basename -a $(find $cachedir -mindepth 1 -maxdepth 1 -type d) | sort) <(pacman -Qqm | sort) | xargs -r printf "$cachedir/%s\n")"
 
 ## Remove yay cache for foreign packages that are not installed anymore
 rm -rf $removed
