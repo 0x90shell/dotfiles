@@ -1,0 +1,8 @@
+[Unit]
+Description="A script to update system"
+
+[Service]
+ExecStart=/opt/updater
+
+[Install]
+WantedBy=multi-user.target

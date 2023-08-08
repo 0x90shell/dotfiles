@@ -1,0 +1,5 @@
+#!/bin/bash
+#update system packages
+sudo pacman -S --needed --noconfirm
+sudo pacman --needed --noconfirm -Sy archlinux-keyring
+sudo pacman -Syu --needed --noconfirm

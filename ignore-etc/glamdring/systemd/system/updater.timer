@@ -1,0 +1,10 @@
+[Unit]
+Description="A timer to update system every Monday at 12AM"
+
+[Timer]
+OnCalendar=weekly
+Persistent=true
+Unit=updater.service
+
+[Install]
+WantedBy=timers.target
