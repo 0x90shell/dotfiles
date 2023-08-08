@@ -1,8 +1,8 @@
-#!/bin/bash
+#!/bin/sh
 
 # Ensure programs in ~/bin are available for the X session.
 p="$HOME/bin";
-[[ ":$PATH:" != *":$p:"* ]] && export PATH="$p:$PATH"
+export PATH="$p:$PATH"
 
 # fix broken $UID on some system...
 if test "x$UID" = "x"; then
