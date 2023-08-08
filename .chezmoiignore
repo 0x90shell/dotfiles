@@ -1,6 +1,4 @@
-ignore-etc/
-ignore-opt/
-ignore-xfce4/
+ignore-*/
 {{ if ne .chezmoi.osRelease.id "kali" }}
 bin/cherrymap
 bin/test-setup*
