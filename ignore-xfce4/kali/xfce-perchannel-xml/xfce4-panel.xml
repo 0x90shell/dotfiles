@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<channel name="xfce4-panel" version="1.0">
+  <property name="configver" type="int" value="2"/>
+  <property name="panels" type="array">
+    <value type="int" value="1"/>
+    <property name="panel-1" type="empty">
+      <property name="background-alpha" type="uint" value="100"/>
+      <property name="background-color" type="array">
+        <value type="uint" value="20046"/>
+        <value type="uint" value="31354"/>
+        <value type="uint" value="43433"/>
+        <value type="uint" value="65535"/>
+      </property>
+      <property name="background-style" type="uint" value="0"/>
+      <property name="enter-opacity" type="uint" value="100"/>
+      <property name="leave-opacity" type="uint" value="100"/>
+      <property name="length" type="uint" value="100"/>
+      <property name="mode" type="uint" value="0"/>
+      <property name="output-name" type="string" value="Automatic"/>
+      <property name="plugin-ids" type="array">
+        <value type="int" value="1"/>
+        <value type="int" value="8"/>
+        <value type="int" value="7"/>
+        <value type="int" value="3"/>
+        <value type="int" value="15"/>
+        <value type="int" value="4"/>
+        <value type="int" value="5"/>
+        <value type="int" value="6"/>
+        <value type="int" value="9"/>
+        <value type="int" value="2"/>
+      </property>
+      <property name="position" type="string" value="p=8;x=489;y=892"/>
+      <property name="position-locked" type="bool" value="true"/>
+      <property name="size" type="uint" value="26"/>
+      <property name="enable-struts" type="bool" value="true"/>
+    </property>
+    <property name="dark-mode" type="bool" value="false"/>
+  </property>
+  <property name="plugins" type="empty">
+    <property name="plugin-1" type="string" value="whiskermenu"/>
+    <property name="plugin-15" type="string" value="separator">
+      <property name="expand" type="bool" value="true"/>
+      <property name="style" type="uint" value="0"/>
+    </property>
+    <property name="plugin-2" type="string" value="actions"/>
+    <property name="plugin-3" type="string" value="tasklist">
+      <property name="flat-buttons" type="bool" value="false"/>
+      <property name="grouping" type="uint" value="1"/>
+      <property name="show-labels" type="bool" value="false"/>
+      <property name="show-only-minimized" type="bool" value="false"/>
+      <property name="show-wireframes" type="bool" value="true"/>
+      <property name="switch-workspace-on-unminimize" type="bool" value="true"/>
+      <property name="window-scrolling" type="bool" value="false"/>
+    </property>
+    <property name="plugin-4" type="string" value="pager">
+      <property name="rows" type="uint" value="2"/>
+      <property name="workspace-scrolling" type="bool" value="false"/>
+    </property>
+    <property name="plugin-5" type="string" value="clock">
+      <property name="digital-format" type="string" value="%r"/>
+      <property name="flash-separators" type="bool" value="true"/>
+      <property name="mode" type="uint" value="4"/>
+      <property name="show-meridiem" type="bool" value="false"/>
+      <property name="show-military" type="bool" value="true"/>
+    </property>
+    <property name="plugin-6" type="string" value="systray">
+      <property name="known-items" type="array">
+        <value type="string" value="PanGPUI"/>
+        <value type="string" value="kazam"/>
+        <value type="string" value="blueman"/>
+        <value type="string" value="privateinternetaccess"/>
+        <value type="string" value="remmina-icon"/>
+        <value type="string" value="flameshot"/>
+      </property>
+      <property name="known-legacy-items" type="array">
+        <value type="string" value="xfce terminal"/>
+        <value type="string" value="joplin"/>
+        <value type="string" value="ethernet network connection “auto ethernet” active"/>
+        <value type="string" value="clipman"/>
+        <value type="string" value="florence"/>
+        <value type="string" value="kazam"/>
+        <value type="string" value="com.cisco.anyconnect.gui"/>
+        <value type="string" value="thunar"/>
+        <value type="string" value="cherrytree"/>
+        <value type="string" value="cisco anyconnect secure mobility client"/>
+        <value type="string" value="networkmanager applet"/>
+      </property>
+      <property name="names-ordered" type="array">
+        <value type="string" value="cherrytree"/>
+        <value type="string" value="cisco anyconnect secure mobility client"/>
+        <value type="string" value="f5 vpn"/>
+        <value type="string" value="blueman-tray"/>
+        <value type="string" value="pidgin"/>
+        <value type="string" value="thunar"/>
+        <value type="string" value="remmina"/>
+        <value type="string" value="flameshot"/>
+        <value type="string" value="private internet access"/>
+        <value type="string" value="networkmanager applet"/>
+      </property>
+      <property name="names-visible" type="array">
+        <value type="string" value="google-chrome"/>
+        <value type="string" value="smb4k"/>
+        <value type="string" value="networkmanager applet"/>
+        <value type="string" value="flameshot"/>
+        <value type="string" value="shutter"/>
+        <value type="string" value="remmina"/>
+        <value type="string" value="keepnote"/>
+        <value type="string" value="remmina remote desktop client"/>
+        <value type="string" value="thunar"/>
+        <value type="string" value="kazam"/>
+        <value type="string" value="veracrypt"/>
+        <value type="string" value="private internet access"/>
+      </property>
+    </property>
+    <property name="plugin-7" type="string" value="launcher">
+      <property name="arrow-position" type="uint" value="5"/>
+      <property name="items" type="array">
+        <value type="string" value="15523339191.desktop"/>
+        <value type="string" value="14410336086.desktop"/>
+        <value type="string" value="14410119802.desktop"/>
+        <value type="string" value="15523337281.desktop"/>
+        <value type="string" value="14410119701.desktop"/>
+        <value type="string" value="14507380251.desktop"/>
+        <value type="string" value="15397531011.desktop"/>
+        <value type="string" value="14410123964.desktop"/>
+        <value type="string" value="16482617871.desktop"/>
+      </property>
+      <property name="move-first" type="bool" value="true"/>
+    </property>
+    <property name="plugin-8" type="string" value="separator">
+      <property name="style" type="uint" value="1"/>
+    </property>
+    <property name="clipman" type="empty">
+      <property name="tweaks" type="empty">
+        <property name="paste-on-activate" type="uint" value="1"/>
+        <property name="never-confirm-history-clear" type="bool" value="false"/>
+      </property>
+      <property name="settings" type="empty">
+        <property name="show-qr-code" type="bool" value="true"/>
+      </property>
+    </property>
+    <property name="plugin-9" type="string" value="pulseaudio">
+      <property name="enable-keyboard-shortcuts" type="bool" value="true"/>
+      <property name="mpris-players" type="string" value="firefox.instance3187;firefox.instance3233;firefox.instance3601"/>
+    </property>
+  </property>
+</channel>
