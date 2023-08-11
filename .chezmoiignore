@@ -3,6 +3,9 @@ ignore-*/
 bin/cherrymap
 bin/test-setup*
 {{ end }}
+{{ if ne .chezmoi.hostname "Glamdring" }} 
+bin/emucloser
+{{ end }}
 {{ if eq .chezmoi.osRelease.id "arch" }}
 .vim/plugins/
 bin/bash*
