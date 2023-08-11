@@ -1,0 +1,14 @@
+[Generic]
+program=
+button1=
+button2=
+button3=
+button4=
+
+[Emulator Closer]
+program=~/bin/emucloser
+button1=6
+button2=4
+button3=
+button4=
+
