@@ -1,6 +1,6 @@
 {{- if (and (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) -}}
 #!/bin/bash
-cmd1="apt install keepassxc wmctrl grep gawk"
+cmd1="apt install keepassxc wmctrl grep gawk xdotool"
 folder1="$HOME/bin"
 
 echo "running $cmd1 w/ sudo"
@@ -13,7 +13,7 @@ fi
 
 {{- else -}}
 #! /bin/bash
-cmd1="pacman -S --noconfirm --needed keepassxc wmctrl grep gawk"
+cmd1="pacman -S --noconfirm --needed xdotool keepassxc wmctrl grep gawk"
 folder1="$HOME/bin"
 
 echo "running $cmd1 w/ sudo"
