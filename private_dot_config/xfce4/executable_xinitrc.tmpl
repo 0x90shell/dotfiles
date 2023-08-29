@@ -4,6 +4,12 @@
 p="$HOME/bin";
 export PATH="$p:$PATH"
 
+{{- if eq .chezmoi.hostname "Glamdring" }}
+#Scale QT apps for HDPI scrren
+export QT_QPA_PLATFORMTHEME=qt5ct
+export QT_SCALE_FACTOR=1.5
+{{- end }}
+
 # fix broken $UID on some system...
 if test "x$UID" = "x"; then
   if test -x /usr/xpg4/bin/id; then
