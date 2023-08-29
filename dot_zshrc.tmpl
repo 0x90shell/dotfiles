@@ -27,6 +27,13 @@ RPROMPT="[%D{%y/%m/%f}|%@]"
 DISABLE_AUTO_UPDATE="true"
 {{- end }}
 
+{{- if eq .chezmoi.hostname "Glamdring" }}
+
+#Scale QT apps for HDPI scrren
+export QT_QPA_PLATFORMTHEME=qt5ct
+export QT_SCALE_FACTOR=1.5
+{{- end }}i
+
 #Oh My ZSH Plugins
 plugins=(
   git
