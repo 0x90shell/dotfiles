@@ -1,3 +1,4 @@
 #!/bin/bash
+export DISPLAY=:0
 #Close Cemu
 xdotool search --classname 'Cemu' search --name 'Cemu 2.0' windowquit
