@@ -2,3 +2,5 @@
 export DISPLAY=:0
 #Close Cemu
 xdotool search --classname 'Cemu' search --name 'Cemu 2.0' windowquit
+#Simple64 Close
+xdotool search --class 'simple64-gui' search --name 'simple64    build: ......' windowquit
