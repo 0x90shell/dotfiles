@@ -78,6 +78,8 @@
       <property name="&lt;Primary&gt;&lt;Alt&gt;t" type="string" value="terminator --profile=endeavouros"/>
       <property name="&lt;Primary&gt;&lt;Shift&gt;&lt;Alt&gt;n" type="string" value="joplin-desktop"/>
       <property name="&lt;Primary&gt;&lt;Alt&gt;Return" type="string" value="move-to-next-monitor"/>
+      <property name="&lt;Primary&gt;&lt;Alt&gt;s" type="string" value="steam-runtime"/>
+      <property name="&lt;Primary&gt;&lt;Shift&gt;&lt;Alt&gt;s" type="string" value="emulationstation"/>
     </property>
   </property>
   <property name="xfwm4" type="empty">
