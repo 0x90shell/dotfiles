@@ -1,6 +1,7 @@
 {{- if (and (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) -}}
 #!/bin/bash
-zshins="apt install git zsh"
+zshins="apt -f install git zsh"
+pt -f/
 echo "running $zshins w/ sudo"
 sleep 1
 sudo -E bash -c "$zshins"

@@ -1,6 +1,7 @@
 {{- if (and (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) -}}
 #!/bin/bash
-cmd1="apt install terminator"
+cmd1="apt -f install terminator"
+pt -f/
 folder1="$HOME/.config/terminator"
 
 echo "running $cmd1 w/ sudo"

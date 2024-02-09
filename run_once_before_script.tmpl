@@ -1,6 +1,7 @@
 {{- if (and (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) -}}
 #!/bin/bash
-cmd1="apt install bsdutils"
+cmd1="apt -f install bsdutils"
+pt -f/
 folder1="$HOME/bin"
 
 echo "running $cmd1 w/ sudo"

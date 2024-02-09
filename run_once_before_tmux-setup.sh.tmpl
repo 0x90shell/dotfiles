@@ -1,6 +1,7 @@
 {{- if (and (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) -}}
 #!/bin/bash
-tmuxins="apt install git tmux"
+tmuxins="apt -f install git tmux"
+pt -f/
 echo "running $tmuxins w/ sudo"
 sleep 1
 sudo -E bash -c "$tmuxins"
