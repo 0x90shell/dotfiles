@@ -110,3 +110,10 @@ then
 else
    echo "Directory isn't empty, manually inspect and then delete ~/ROMs/$1/0merge/"
 fi
+
+#Backup emulationstation dir
+tar -cJvf ~/ESDE-backup.tar.xz ~/.emulationstation
+
+#sync gamelist & media back to NAS
+
+
