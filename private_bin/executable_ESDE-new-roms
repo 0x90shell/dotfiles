@@ -14,8 +14,8 @@ then
   echo "The rom folder on localhost doesn't exist. Ensure folder names allign."
   exit 1
 fi
-
-pushd ~/ROMs/"$1" || exit
+workingDir=~/ROMs/"$1" 
+pushd "workingDir" || exit
 
 #Handle 0merge folder
 if [ ! -d ~/mnt/Games/Roms/"$1"/0merge ]
@@ -23,7 +23,7 @@ then
   echo "The 0merge directory doesn't exist. Ensure main roms are in 0merge directory."
 else
   echo "The 0merge directory was detected."
-  rsync -avz --info=progress2 ~/mnt/Games/Roms/"$1"/0merge ~/ROMs/"$1"
+  rsync -avz --info=progress2 ~/mnt/Games/Roms/"$1"/0merge "$workingDir"
 fi
 
 #Handle hacks folder
@@ -32,22 +32,23 @@ then
   echo "The hacks directory doesn't exist. Ensure hack roms are in hacks directory."
 else
   echo "The hacks directory was detected."
-  rsync -avz --info=progress2 ~/mnt/Games/Roms/"$1"/hacks ~/ROMs/"$1" --delete
+  rsync -avz --info=progress2 ~/mnt/Games/Roms/"$1"/hacks "$workingDir" --delete
   rm -f ~/ROMs/"$1"/hacks/gamelist.xml
 fi
 
-pushd ~/ROMs/"$1"/0merge || exit
-Skyscraper -p "$1" -s esgamelist -i ~/ROMs/"$1"/0merge --flags videos,relative,nosubdirs,unattend --refresh
+workingDir=~/ROMs/"$1"/0merge 
+pushd i"$workingDir" || exit
+Skyscraper -p "$1" -s esgamelist -i "$workingDir" --flags videos,relative,nosubdirs,unattend --refresh
 
 #Creds are in config and 0merge was originally scanned via screenscraper so there should be no additions
-Skyscraper -p "$1" -s screenscraper -i ~/ROMs/"$1"/0merge --flags noscreenshots,nocovers,nowheels,nomarquees,nosubdirs,unattend
-Skyscraper -p "$1" -s thegamesdb -i ~/ROMs/"$1"/0merge --flags nosubdirs,unattend
+Skyscraper -p "$1" -s screenscraper -i "$workingDir" --flags noscreenshots,nocovers,nowheels,nomarquees,nosubdirs,unattend
+Skyscraper -p "$1" -s thegamesdb -i "$workingDir" --flags nosubdirs,unattend
 
 #May need to add additional Skyscraper commands for retro systems
 #Skycraper blah blah retro
 
 #Generate new gamelist with ratings and any additional stuff
-Skyscraper -p "$1" -i ~/ROMs/"$1"/0merge --flags unattend
+Skyscraper -p "$1" -i "$workingDir" --flags unattend
 
 #Create ES gamelist folder if it doesn't exist
 if [ ! -d ~/.emulationstation/gamelists/"$1" ]
@@ -57,10 +58,10 @@ then
 fi
 
 #Merge new entires into ES gamelist and backup old list
-sed -i '/gameList/d;/xml version/d' ~/ROMs/"$1"/0merge/gamelist.xml
+sed -i '/gameList/d;/xml version/d' "$workingDir"/gamelist.xml
 pushd ~/.emulationstation/gamelists/"$1" || exit
 cp gamelist.xml gamelist-backup.xml
-cat gamelist.xml ~/ROMs/"$1"/0merge/gamelist.xml > gamelist-merge.xml
+cat gamelist.xml "$workingDir"/gamelist.xml > gamelist-merge.xml
 sed -i '/\/gameList/d' gamelist-merge.xml
 echo "</gameList>" >> gamelist-merge.xml
 mv -f gamelist-merge.xml gamelist.xml
@@ -77,43 +78,69 @@ then
 fi
 
 #ESDE-media-move.sh
-cp -r media/box2dback ~/.emulationstation/downloaded_media/"$1"/backcovers
-cp -r media/box2dfront ~/.emulationstation/downloaded_media/"$1"/covers
-cp -r media/box3d ~/.emulationstation/downloaded_media/"$1"/3dboxes
-cp -r media/fanart ~/.emulationstation/downloaded_media/"$1"/fanart
-cp -r media/images ~/.emulationstation/downloaded_media/"$1"/miximages
-cp -r media/manual ~/.emulationstation/downloaded_media/"$1"/manuals
-cp -r media/screenshot ~/.emulationstation/downloaded_media/"$1"/screenshots
-cp -r media/screenshottitle ~/.emulationstation/downloaded_media/"$1"/titlescreens
-cp -r media/support ~/.emulationstation/downloaded_media/"$1"/physicalmedia
-cp -r media/videos ~/.emulationstation/downloaded_media/"$1"/videos
-cp -r media/wheel ~/.emulationstation/downloaded_media/"$1"/marquees
+cp -r "$workingDir"/media/box2dback ~/.emulationstation/downloaded_media/"$1"/backcovers
+cp -r "$workingDir"/media/box2dfront ~/.emulationstation/downloaded_media/"$1"/covers
+cp -r "$workingDir"/media/box3d ~/.emulationstation/downloaded_media/"$1"/3dboxes
+cp -r "$workingDir"/media/fanart ~/.emulationstation/downloaded_media/"$1"/fanart
+cp -r "$workingDir"/media/images ~/.emulationstation/downloaded_media/"$1"/miximages
+cp -r "$workingDir"/media/manual ~/.emulationstation/downloaded_media/"$1"/manuals
+cp -r "$workingDir"/media/screenshot ~/.emulationstation/downloaded_media/"$1"/screenshots
+cp -r "$workingDir"/media/screenshottitle ~/.emulationstation/downloaded_media/"$1"/titlescreens
+cp -r "$workingDir"/media/support ~/.emulationstation/downloaded_media/"$1"/physicalmedia
+cp -r "$workingDir"/media/videos ~/.emulationstation/downloaded_media/"$1"/videos
+cp -r "$workingDir"/media/wheel ~/.emulationstation/downloaded_media/"$1"/marquees
 
 #Clean up 0merge
+#not using $workDir to avoid accidental rm -rf
 rm -rf ~/ROMs/"$1"/0merge/media
 rm -f ~/ROMs/"$1"/0merge/gamelist.*
 
 #Move roms
-mv ~/ROMs/"$1"/0merge/*  ~/ROMs/"$1"/
+mv "$workingDir"/*  ~/ROMs/"$1"/
 
 #Move hidden folders like .multidisc
-mv ~/ROMs/"$1"/0merge/.*  ~/ROMs/"$1"/
+mv "$workingDir"/.*  ~/ROMs/"$1"/
 
 #Return to main rom folder
-pushd || exit
+popd || exit
 
-#Delete 0merge if it doesn't exist
-if [ -z "$(ls -A ~/ROMs/"$1"/0merge/)" ]
+#Delete 0merge if it doesn't contain any remaining files
+#not using $workDir to avoid accidental rm -rf
+if [ -z "$(ls -A ~/ROMs/"$1"/0merge)" ]
 then
    echo "Deleted 0merge" 
-   rm -rf ~/ROMs/"$1"/0merge/
+   rm -rf ~/ROMs/"$1"/0merge
 else
-   echo "Directory isn't empty, manually inspect and then delete ~/ROMs/$1/0merge/"
+   echo "Directory isn't empty, manually inspect and then delete $workingDir"
 fi
 
 #Backup emulationstation dir
 tar -cJvf ~/ESDE-backup.tar.xz ~/.emulationstation
 
-#sync gamelist & media back to NAS
+#remount share ase RW
+sudo umount  ~/mnt/Games
+sudo mount -v -t cifs '//192.168.1.77/gamer'  ~/mnt/Games -o user=gamer,vers=2.0
 
+#sync gamelist & media back to NAS
+workingDir=~/mnt/Games/"$1"
+pushd "$workingDir" || exit
+
+#Clean up 0merge
+sudo rm -f "$workingDir"/0merge/gamelist.*
+sudo mv "$workingDir"/0merge/* "$workingDir" 
+sudo mv "$workingDir"/0merge/.* "$workingDir"
+
+#Delete 0merge if it doesn't contain any remaining files
+#not using $workDir to avoid accidental rm -rf
+if [ -z "$(ls -A ~/mnt/Games/"$1"/0merge/)" ]
+then
+   echo "Deleted 0merge" 
+   sudo rm -rf ~/mnt/Games/"$1"/0merge/
+else
+   echo "Directory isn't empty, manually inspect and then delete $workingDir/0merge/"
+fi
+sudo rsync -avz --info=progress2 ~/ESDE-backup.tar.xz ~/mnt/Games/Roms/
+
+#unmount NAS
+sudo umount  ~/mnt/Games
 
