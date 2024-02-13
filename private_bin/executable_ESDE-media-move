@@ -1,13 +1,13 @@
 #!/bin/bash
 mkdir ~/.emulationstation/downloaded_media/"$1"
-cp -r media/box2dback ~/.emulationstation/downloaded_media/"$1"/backcovers
-cp -r media/box2dfront ~/.emulationstation/downloaded_media/"$1"/covers
-cp -r media/box3d ~/.emulationstation/downloaded_media/"$1"/3dboxes
-cp -r media/fanart ~/.emulationstation/downloaded_media/"$1"/fanart
-cp -r media/images ~/.emulationstation/downloaded_media/"$1"/miximages
-cp -r media/manual ~/.emulationstation/downloaded_media/"$1"/manuals
-cp -r media/screenshot ~/.emulationstation/downloaded_media/"$1"/screenshots
-cp -r media/screenshottitle ~/.emulationstation/downloaded_media/"$1"/titlescreens
-cp -r media/support ~/.emulationstation/downloaded_media/"$1"/physicalmedia
-cp -r media/videos ~/.emulationstation/downloaded_media/"$1"/videos
-cp -r media/wheel ~/.emulationstation/downloaded_media/"$1"/marquees
+cp -r media/box2dback/* ~/.emulationstation/downloaded_media/"$1"/backcovers
+cp -r media/box2dfront/* ~/.emulationstation/downloaded_media/"$1"/covers
+cp -r media/box3d/* ~/.emulationstation/downloaded_media/"$1"/3dboxes
+cp -r media/fanart/* ~/.emulationstation/downloaded_media/"$1"/fanart
+cp -r media/images/* ~/.emulationstation/downloaded_media/"$1"/miximages
+cp -r media/manual/* ~/.emulationstation/downloaded_media/"$1"/manuals
+cp -r media/screenshot/* ~/.emulationstation/downloaded_media/"$1"/screenshots
+cp -r media/screenshottitle/* ~/.emulationstation/downloaded_media/"$1"/titlescreens
+cp -r media/support/* ~/.emulationstation/downloaded_media/"$1"/physicalmedia
+cp -r media/videos/* ~/.emulationstation/downloaded_media/"$1"/videos
+cp -r media/wheel/* ~/.emulationstation/downloaded_media/"$1"/marquees

@@ -78,17 +78,17 @@ then
 fi
 
 #ESDE-media-move.sh
-cp -r "$workingDir"/media/box2dback ~/.emulationstation/downloaded_media/"$1"/backcovers
-cp -r "$workingDir"/media/box2dfront ~/.emulationstation/downloaded_media/"$1"/covers
-cp -r "$workingDir"/media/box3d ~/.emulationstation/downloaded_media/"$1"/3dboxes
-cp -r "$workingDir"/media/fanart ~/.emulationstation/downloaded_media/"$1"/fanart
-cp -r "$workingDir"/media/images ~/.emulationstation/downloaded_media/"$1"/miximages
-cp -r "$workingDir"/media/manual ~/.emulationstation/downloaded_media/"$1"/manuals
-cp -r "$workingDir"/media/screenshot ~/.emulationstation/downloaded_media/"$1"/screenshots
-cp -r "$workingDir"/media/screenshottitle ~/.emulationstation/downloaded_media/"$1"/titlescreens
-cp -r "$workingDir"/media/support ~/.emulationstation/downloaded_media/"$1"/physicalmedia
-cp -r "$workingDir"/media/videos ~/.emulationstation/downloaded_media/"$1"/videos
-cp -r "$workingDir"/media/wheel ~/.emulationstation/downloaded_media/"$1"/marquees
+cp -r "$workingDir"/media/box2dback/* ~/.emulationstation/downloaded_media/"$1"/backcovers
+cp -r "$workingDir"/media/box2dfront/* ~/.emulationstation/downloaded_media/"$1"/covers
+cp -r "$workingDir"/media/box3d/* ~/.emulationstation/downloaded_media/"$1"/3dboxes
+cp -r "$workingDir"/media/fanart/* ~/.emulationstation/downloaded_media/"$1"/fanart
+cp -r "$workingDir"/media/images/* ~/.emulationstation/downloaded_media/"$1"/miximages
+cp -r "$workingDir"/media/manual/* ~/.emulationstation/downloaded_media/"$1"/manuals
+cp -r "$workingDir"/media/screenshot/* ~/.emulationstation/downloaded_media/"$1"/screenshots
+cp -r "$workingDir"/media/screenshottitle/* ~/.emulationstation/downloaded_media/"$1"/titlescreens
+cp -r "$workingDir"/media/support/* ~/.emulationstation/downloaded_media/"$1"/physicalmedia
+cp -r "$workingDir"/media/videos/* ~/.emulationstation/downloaded_media/"$1"/videos
+cp -r "$workingDir"/media/wheel/* ~/.emulationstation/downloaded_media/"$1"/marquees
 
 #Clean up 0merge
 #not using $workDir to avoid accidental rm -rf
