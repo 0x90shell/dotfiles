@@ -62,7 +62,7 @@ sed -i '/gameList/d;/xml version/d' "$workingDir"/gamelist.xml
 pushd ~/.emulationstation/gamelists/"$1" || exit
 cp gamelist.xml gamelist-backup.xml
 cat gamelist.xml "$workingDir"/gamelist.xml > gamelist-merge.xml
-sed -i '/\/gameList/d' gamelist-merge.xml
+sed -i '/\/gameList/d;s/\/0merge//' gamelist-merge.xml
 echo "</gameList>" >> gamelist-merge.xml
 mv -f gamelist-merge.xml gamelist.xml
 
