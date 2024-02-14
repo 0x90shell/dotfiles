@@ -122,7 +122,7 @@ sudo umount  ~/mnt/Games
 sudo mount -v -t cifs '//192.168.1.77/gamer'  ~/mnt/Games -o user=gamer,vers=2.0
 
 #sync gamelist & media back to NAS
-workingDir=~/mnt/Games/"$1"
+workingDir=~/mnt/Games/Roms/"$1"
 pushd "$workingDir" || exit
 
 #Clean up 0merge
@@ -132,10 +132,10 @@ sudo mv "$workingDir"/0merge/.* "$workingDir"
 
 #Delete 0merge if it doesn't contain any remaining files
 #not using $workDir to avoid accidental rm -rf
-if [ -z "$(ls -A ~/mnt/Games/"$1"/0merge/)" ]
+if [ -z "$(ls -A ~/mnt/Games/Roms/"$1"/0merge/)" ]
 then
    echo "Deleted 0merge" 
-   sudo rm -rf ~/mnt/Games/"$1"/0merge/
+   sudo rm -rf ~/mnt/Games/Roms/"$1"/0merge/
 else
    echo "Directory isn't empty, manually inspect and then delete $workingDir/0merge/"
 fi
