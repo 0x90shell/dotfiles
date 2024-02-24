@@ -43,6 +43,7 @@ else
 
   #Generate new gamelist with ratings and any additional stuff
   Skyscraper -p "$1" -i "$workingDir" --flags unattend
+  #Skyscraper -p "$1" -i "$workingDir" --flags unattend --addext "*.wua"
 
   #Create ES gamelist folder if it doesn't exist
   if [ ! -d ~/ES-DE/gamelists/"$1" ]
