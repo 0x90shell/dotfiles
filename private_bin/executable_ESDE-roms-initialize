@@ -87,5 +87,6 @@ else
   rm -f ~/ROMs/"$1"/gamelist.*
   
   #Backup emulationstation dir
-  nohup tar -cJvf ~/ESDE-backup.tar.xz ~/ES-DE &>/dev/null &
+  echo "Run tar backup and temporarily disable suspending/hibernating mid process"
+  sudo systemd-inhibit nohup tar -cJvf ~/ESDE-backup.tar.xz ~/ES-DE &>/dev/null &
 fi
