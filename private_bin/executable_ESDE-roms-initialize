@@ -29,11 +29,14 @@ else
 
   pushd "$workingDir" || exit
   Skyscraper -p "$1" -s esgamelist -i "$workingDir" --flags videos,relative,nosubdirs,unattend --refresh
+  #Skyscraper -p "$1" -s esgamelist -i "$workingDir" --flags videos,relative,nosubdirs,unattend --refresh --addext "*.wua"
 
   #Creds are in config and NAS folder was originally scanned via screenscraper so there should be no additions
   #This helps get age ratings and stuff
   Skyscraper -p "$1" -s screenscraper -i "$workingDir" --flags noscreenshots,nocovers,nowheels,nomarquees,nosubdirs,unattend
+  #Skyscraper -p "$1" -s screenscraper -i "$workingDir" --flags noscreenshots,nocovers,nowheels,nomarquees,nosubdirs,unattend --addext "*.wua"
   Skyscraper -p "$1" -s thegamesdb -i "$workingDir" --flags nosubdirs,unattend
+  #Skyscraper -p "$1" -s thegamesdb -i "$workingDir" --flags nosubdirs,unattend --addext "*.wua"
 
   #May need to add additional Skyscraper commands for retro systems
   #Skycraper blah blah retro
@@ -69,17 +72,17 @@ else
   fi
   
   #ESDE-media-move.sh
-  cp -r "$workingDir"/media/box2dback/* ~/ES-DE/downloaded_media/"$1"/backcovers
-  cp -r "$workingDir"/media/box2dfront/* ~/ES-DE/downloaded_media/"$1"/covers
-  cp -r "$workingDir"/media/box3d/* ~/ES-DE/downloaded_media/"$1"/3dboxes
-  cp -r "$workingDir"/media/fanart/* ~/ES-DE/downloaded_media/"$1"/fanart
-  cp -r "$workingDir"/media/images/* ~/ES-DE/downloaded_media/"$1"/miximages
-  cp -r "$workingDir"/media/manual/* ~/ES-DE/downloaded_media/"$1"/manuals
-  cp -r "$workingDir"/media/screenshot/* ~/ES-DE/downloaded_media/"$1"/screenshots
-  cp -r "$workingDir"/media/screenshottitle/* ~/ES-DE/downloaded_media/"$1"/titlescreens
-  cp -r "$workingDir"/media/support/* ~/ES-DE/downloaded_media/"$1"/physicalmedia
-  cp -r "$workingDir"/media/videos/* ~/ES-DE/downloaded_media/"$1"/videos
-  cp -r "$workingDir"/media/wheel/* ~/ES-DE/downloaded_media/"$1"/marquees
+  rsync "$workingDir"/media/box2dback/ ~/ES-DE/downloaded_media/"$1"/backcovers
+  rsync -avz --info=progress2 "$workingDir"/media/box2dfront/ ~/ES-DE/downloaded_media/"$1"/covers
+  rsync -avz --info=progress2 "$workingDir"/media/box3d/ ~/ES-DE/downloaded_media/"$1"/3dboxes
+  rsync -avz --info=progress2 "$workingDir"/media/fanart/ ~/ES-DE/downloaded_media/"$1"/fanart
+  rsync -avz --info=progress2 "$workingDir"/media/images/ ~/ES-DE/downloaded_media/"$1"/miximages
+  rsync -avz --info=progress2 "$workingDir"/media/manual/ ~/ES-DE/downloaded_media/"$1"/manuals
+  rsync -avz --info=progress2 "$workingDir"/media/screenshot/ ~/ES-DE/downloaded_media/"$1"/screenshots
+  rsync -avz --info=progress2 "$workingDir"/media/screenshottitle/ ~/ES-DE/downloaded_media/"$1"/titlescreens
+  rsync -avz --info=progress2 "$workingDir"/media/support/ ~/ES-DE/downloaded_media/"$1"/physicalmedia
+  rsync -avz --info=progress2 "$workingDir"/media/videos/ ~/ES-DE/downloaded_media/"$1"/videos
+  rsync -avz --info=progress2 "$workingDir"/media/wheel/ ~/ES-DE/downloaded_media/"$1"/marquees
   
   #Clean up unneeded files
   #not using $workDir to avoid accidental rm -rf
