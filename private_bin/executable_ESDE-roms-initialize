@@ -25,7 +25,7 @@ then
   exit 1
 else
   echo "The rom folder on NAS was detected."
-  rsync -avz --info=progress2 ~/mnt/Games/Roms/"$1" "$workingDir" --delete
+  rsync -avz --info=progress2 ~/mnt/Games/Roms/"$1"/ "$workingDir" --delete
 
   pushd "$workingDir" || exit
   Skyscraper -p "$1" -s esgamelist -i "$workingDir" --flags videos,relative,nosubdirs,unattend --refresh
