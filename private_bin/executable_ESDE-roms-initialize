@@ -53,13 +53,9 @@ else
   fi
 
   #Merge new entires into ES gamelist and backup old list
-  sed -i '/gameList/d;/xml version/d' "$workingDir"/gamelist.xml
   pushd ~/ES-DE/gamelists/"$1" || exit
   cp gamelist.xml gamelist-backup.xml
-  cat gamelist.xml "$workingDir"/gamelist.xml > gamelist-merge.xml
-  sed -i '/\/gameList/d;s/\/0merge//' gamelist-merge.xml
-  echo "</gameList>" >> gamelist-merge.xml
-  mv -f gamelist-merge.xml gamelist.xml
+  rsync "$workingDir"/gamelist.xml gamelist.xml
 
   #Return to 0merge
   popd || exit
