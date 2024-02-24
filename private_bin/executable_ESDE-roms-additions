@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script to automate adding new roms to from NAS to Glamdring
+# Script to automate adding new roms to existing rom folders
 # $1 = console, such as psx, n64, etc
 if grep -qs "$HOME/mnt/Games" /proc/mounts
 then
@@ -15,6 +15,7 @@ then
   echo "The rom folder on NAS doesn't exist. Ensure folder names allign."
   exit 1
 fi
+
 if [ ! -d ~/ROMs/"$1" ]
 then
   echo "The rom folder on localhost doesn't exist. Ensure folder names allign."
