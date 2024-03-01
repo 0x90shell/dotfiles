@@ -26,6 +26,7 @@
         <value type="int" value="8"/>
         <value type="int" value="9"/>
         <value type="int" value="10"/>
+        <value type="int" value="15"/>
         <value type="int" value="11"/>
         <value type="int" value="12"/>
         <value type="int" value="13"/>
@@ -63,6 +64,7 @@
     <property name="plugin-6" type="string" value="systray">
       <property name="square-icons" type="bool" value="true"/>
       <property name="known-legacy-items" type="array">
+        <value type="string" value="psensor"/>
         <value type="string" value="ethernet network connection “wired connection 2” active"/>
         <value type="string" value="xfce4-power-manager"/>
         <value type="string" value="networkmanager applet"/>
@@ -70,6 +72,11 @@
         <value type="string" value="ethernet network connection “wired connection 1” active"/>
       </property>
       <property name="known-items" type="array">
+        <value type="string" value="dropbox-client-1427"/>
+        <value type="string" value="dropbox-client-1499"/>
+        <value type="string" value="dropbox-client-1400"/>
+        <value type="string" value="dropbox-client-1352"/>
+        <value type="string" value="dropbox-client-1401"/>
         <value type="string" value="dropbox-client-1179"/>
         <value type="string" value="chrome_status_icon_1"/>
         <value type="string" value="dropbox-client-1524"/>
@@ -113,7 +120,7 @@
     <property name="plugin-8" type="string" value="pulseaudio">
       <property name="enable-keyboard-shortcuts" type="bool" value="true"/>
       <property name="show-notifications" type="bool" value="true"/>
-      <property name="known-players" type="string" value="Firefox Web Browser;Spotify;VLC media player"/>
+      <property name="known-players" type="string" value="firefox;Firefox Web Browser;spotify;Spotify;VLC media player"/>
     </property>
     <property name="plugin-9" type="string" value="power-manager-plugin"/>
     <property name="plugin-10" type="string" value="notification-plugin"/>
@@ -164,10 +171,58 @@
         <value type="string" value="16904872927.desktop"/>
       </property>
     </property>
-    <property name="plugin-26" type="string" value="whiskermenu"/>
+    <property name="plugin-26" type="string" value="whiskermenu">
+      <property name="recent" type="array">
+        <value type="string" value="spotify.desktop"/>
+        <value type="string" value="xfce4-sensors.desktop"/>
+        <value type="string" value="psensor.desktop"/>
+        <value type="string" value="pavucontrol.desktop"/>
+        <value type="string" value="org.rnd2.cpupower_gui.desktop"/>
+        <value type="string" value="xfce-wmtweaks-settings.desktop"/>
+        <value type="string" value="xfce-wm-settings.desktop"/>
+        <value type="string" value="xfce-display-settings.desktop"/>
+        <value type="string" value="org.es_de.frontend.desktop"/>
+        <value type="string" value="xfce-keyboard-settings.desktop"/>
+      </property>
+    </property>
     <property name="plugin-16" type="string" value="separator">
       <property name="style" type="uint" value="0"/>
     </property>
     <property name="plugin-12" type="string" value="datetime"/>
+    <property name="plugin-15" type="string" value="weather">
+      <property name="location" type="empty">
+        <property name="name" type="string" value="Nashville, Tennessee"/>
+        <property name="latitude" type="string" value="36.176900"/>
+        <property name="longitude" type="string" value="-86.733900"/>
+      </property>
+      <property name="msl" type="int" value="138"/>
+      <property name="timezone" type="string" value="America/Chicago"/>
+      <property name="offset" type="string" value="-06:00"/>
+      <property name="cache-max-age" type="int" value="172800"/>
+      <property name="power-saving" type="bool" value="true"/>
+      <property name="units" type="empty">
+        <property name="temperature" type="int" value="1"/>
+        <property name="pressure" type="int" value="2"/>
+        <property name="windspeed" type="int" value="1"/>
+        <property name="precipitation" type="int" value="1"/>
+        <property name="altitude" type="int" value="1"/>
+        <property name="apparent-temperature" type="int" value="0"/>
+      </property>
+      <property name="round" type="bool" value="true"/>
+      <property name="single-row" type="bool" value="true"/>
+      <property name="tooltip-style" type="int" value="1"/>
+      <property name="forecast" type="empty">
+        <property name="layout" type="int" value="0"/>
+        <property name="days" type="int" value="5"/>
+      </property>
+      <property name="theme-dir" type="string" value="/usr/share/xfce4/weather/icons/simplistic"/>
+      <property name="scrollbox" type="empty">
+        <property name="show" type="bool" value="true"/>
+        <property name="animate" type="bool" value="true"/>
+        <property name="lines" type="int" value="1"/>
+        <property name="color" type="string" value="rgba(0,0,0,0)"/>
+        <property name="use-color" type="bool" value="false"/>
+      </property>
+    </property>
   </property>
 </channel>
