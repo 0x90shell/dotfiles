@@ -6,6 +6,7 @@ bin/test-setup*
 {{ if ne .chezmoi.hostname "Glamdring" }} 
 bin/emucloser
 .jslisten
+.kodi/
 {{ end }}
 {{ if eq .chezmoi.osRelease.id "arch" }}
 .vim/plugins/
