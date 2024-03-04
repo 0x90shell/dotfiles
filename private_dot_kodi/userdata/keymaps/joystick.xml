@@ -174,13 +174,24 @@
       <b>Stop</b>
       <b holdtime="500">FullScreen</b>
       <x>OSD</x>
-      <back>OSD</back>
+      <y>FullScreen</y>
+      <back>Fullscreen</back>
       <guide>OSD</guide>
       <start>Info</start>
       <up>ChannelUp</up>
       <down>ChannelDown</down>
       <left>StepBack</left>
       <right>StepForward</right>
+      <leftthumb>ShowSubtitles</leftthumb>
+      <rightthumb>Mute</rightthumb>
+      <lefttrigger>AnalogRewind</lefttrigger>
+      <righttrigger>AnalogFastForward</righttrigger>
+      <leftbumper>NextSubtitle</leftbumper>
+      <rightbumper>AudioNextLanguage</rightbumper>
+      <leftstick direction="left">AnalogSeekBack</leftstick>
+      <leftstick direction="right">AnalogSeekForward</leftstick>
+      <leftstick direction="up">noop</leftstick>
+      <leftstick direction="down">noop</leftstick>
     </joystick>
   </FullscreenLiveTV>
   <TVGuide>
@@ -194,13 +205,15 @@
       <b>Stop</b>
       <b holdtime="500">FullScreen</b>
       <x>OSD</x>
-      <back>OSD</back>
+      <y>FullScreen</y>
+      <back>Fullscreen</back>
       <guide>OSD</guide>
       <start>Info</start>
       <up>ChannelUp</up>
       <down>ChannelDown</down>
       <left>StepBack</left>
       <right>StepForward</right>
+      <rightthumb>Mute</rightthumb>
     </joystick>
   </FullscreenRadio>
   <RadioGuide>
@@ -217,6 +230,7 @@
       <righttrigger>AnalogFastForward</righttrigger>
       <leftbumper>AnalogRewind</leftbumper>
       <rightbumper>AnalogFastForward</rightbumper>
+      <rightthumb>Mute</rightthumb>
     </joystick>
   </FullscreenInfo>
   <PlayerControls>
@@ -246,6 +260,7 @@
       <leftstick direction="right">NextPreset</leftstick>
       <leftstick direction="up">noop</leftstick>
       <leftstick direction="down">noop</leftstick>
+      <rightthumb>Mute</rightthumb>
     </joystick>
   </Visualisation>
   <MusicOSD>
