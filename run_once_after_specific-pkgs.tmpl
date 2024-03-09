@@ -1,0 +1,9 @@
+{{- if eq .chezmoi.hostname "Glamdring" }}
+#!/bin/bash
+sourceDir="$HOME/.local/share/chezmoi"
+pkgFile="$sourceDir/ignore-pkgs/yay-glamdring.pkgs"
+cmd1="yay -S --needed --noconfirm - < $pkgFile"
+echo "running $cmd1"
+sleep 1
+bash -c "$cmd1"
+{{- end -}}
