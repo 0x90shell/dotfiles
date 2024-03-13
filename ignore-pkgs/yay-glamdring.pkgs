@@ -470,7 +470,7 @@ kdeclarative5
 kded5
 keepassxc
 kernel-install-for-dracut
-kernel-modules-hook-hardlinks
+kernel-modules-hook-bindmount
 keyutils
 kglobalaccel
 kglobalaccel5
