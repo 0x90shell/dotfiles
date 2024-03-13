@@ -95,5 +95,5 @@ else
   
   #Backup emulationstation dir
   echo "Run tar backup and temporarily disable suspending/hibernating mid process"
-  sudo systemd-inhibit nohup tar -cJvf ~/ESDE-backup.tar.xz ~/ES-DE &>/dev/null &
+  nohup sudo -b systemd-inhibit tar -cJvf ~/ESDE-backup.tar.xz ~/ES-DE &>/dev/null
 fi
