@@ -6,7 +6,13 @@ then
     echo "NAS already mounted."
 else
   sudo mount -v -t cifs '//192.168.1.77/gamer'  ~/mnt/Games -o user=lolguest,vers=2.0,ro
-  echo "NAS mounted."
+  if grep -qs "$HOME/mnt/Games" /proc/mounts
+  then 
+      echo "NAS mounted."
+  else
+      echo "NAS mount error"
+      exit
+  fi
 fi
 
 workingDir=~/ROMs/"$1" 
@@ -42,7 +48,7 @@ else
   #Skycraper blah blah retro
 
   #Generate new gamelist with ratings and any additional stuff
-  Skyscraper -p "$1" -i "$workingDir" --flags unattend
+  Skyscraper -p "$1" -i "$workingDir" --flags unattend,relative
   #Skyscraper -p "$1" -i "$workingDir" --flags unattend --addext "*.wua"
 
   #Create ES gamelist folder if it doesn't exist
@@ -69,6 +75,7 @@ else
   fi
   
   #ESDE-media-move.sh
+  #convert to for loop
   rsync "$workingDir"/media/box2dback/ ~/ES-DE/downloaded_media/"$1"/backcovers
   rsync -avz --info=progress2 "$workingDir"/media/box2dfront/ ~/ES-DE/downloaded_media/"$1"/covers
   rsync -avz --info=progress2 "$workingDir"/media/box3d/ ~/ES-DE/downloaded_media/"$1"/3dboxes
