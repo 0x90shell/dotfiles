@@ -56,7 +56,6 @@ blueman
 bluez
 bluez-hid2hci
 bluez-libs
-bluez-plugins
 bluez-tools
 bluez-utils
 boost
@@ -429,6 +428,7 @@ jbig2dec
 jbigkit
 jdk17-openjdk
 jdupes
+jdupes-debug
 jellyfin-media-player
 jellyfin-media-player-debug
 jemalloc
@@ -1171,6 +1171,7 @@ openucx
 openvpn
 openvr
 openxcom
+openxcom-debug
 opus
 opusfile
 orc
@@ -1404,6 +1405,7 @@ qt6-declarative
 qt6-multimedia
 qt6-multimedia-ffmpeg
 qt6-positioning
+qt6-shadertools
 qt6-svg
 qt6-tools
 qt6-translations
@@ -1530,6 +1532,7 @@ shairplay
 shared-mime-info
 shellcheck
 simple64
+simple64-debug
 skyscraper-git
 slang
 sleek-bin
