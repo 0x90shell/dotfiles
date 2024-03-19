@@ -3,7 +3,7 @@
 zshins="apt update; apt -f -y upgrade;apt -f -y dist-upgrade"
 echo "running $zshins w/ sudo"
 sleep 1
-#sudo -E bash -c "$zshins"
+sudo -E bash -c "$zshins"
 {{- else -}}
 #!/bin/bash
 zshins="pacman -Syu --noconfirm"
