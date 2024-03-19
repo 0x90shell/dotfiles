@@ -1,0 +1,13 @@
+{{- if (and (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) -}}
+#!/bin/bash
+zshins="apt update; apt -f upgrade -y"
+echo "running $zshins w/ sudo"
+sleep 1
+sudo -E bash -c "$zshins"
+{{- else -}}
+#!/bin/bash
+zshins="pacman -Syu --noconfirm"
+echo "running $zshins w/ sudo"
+sleep 1
+sudo -E bash -c "$zshins"
+{{- end -}}
