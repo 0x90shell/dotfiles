@@ -1,6 +1,6 @@
 {{- if (and (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) -}}
 #!/bin/bash
-cmd1="apt -f install blackbird-gtk-theme greybird-gtk-theme adwaita-icon-theme"
+cmd1="apt -f -y install blackbird-gtk-theme greybird-gtk-theme adwaita-icon-theme"
 folder1="$HOME/bin"
 
 echo "running $cmd1 w/ sudo"

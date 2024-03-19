@@ -1,6 +1,6 @@
 {{- if (and (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) -}}
 #!/bin/bash
-zshins="apt -f install git zsh zsh-autosuggestions zsh-syntax-highlighting"
+zshins="apt -f -y install git zsh zsh-autosuggestions zsh-syntax-highlighting"
 echo "running $zshins w/ sudo"
 sleep 1
 sudo -E bash -c "$zshins"
