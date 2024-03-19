@@ -1,7 +1,6 @@
 {{- if (and (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) -}}
 #!/bin/bash
-zshins="apt -f install git zsh"
-pt -f/
+zshins="apt -f install git zsh zsh-autosuggestions zsh-syntax-highlighting"
 echo "running $zshins w/ sudo"
 sleep 1
 sudo -E bash -c "$zshins"
@@ -11,11 +10,9 @@ zsh1="$HOME/.oh-my-zsh/"
 if [ -d "$zsh1" ]; then
     cd "$zsh1" || exit
     git pull
-    cd "$zsh1" || exit 
 else
     cd "$HOME" || exit
     git clone https://github.com/ohmyzsh/ohmyzsh "$zsh1"
-    cd "$HOME" || exit
 fi
 
 chsh -s /bin/zsh

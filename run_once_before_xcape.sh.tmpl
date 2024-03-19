@@ -1,7 +1,6 @@
 {{- if (and (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) -}}
 #!/bin/bash
 cmd1="apt -f install xfce4-whiskermenu-plugin xcape"
-pt -f/
 folder1="$HOME/bin"
 
 echo "running $cmd1 w/ sudo"

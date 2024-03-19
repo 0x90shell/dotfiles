@@ -1,7 +1,6 @@
 {{- if (and (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) -}}
 #!/bin/bash
 cmd1="apt -f install git vim vim-gui-common"
-pt -f/
 echo "running $cmd1 w/ sudo"
 sleep 1
 sudo -E bash -c "$cmd1"
