@@ -88,7 +88,6 @@ cheat-bin
 chezmoi
 chromaprint
 cifs-utils
-citra-canary-bin
 clang
 clucene
 cmake
@@ -172,8 +171,6 @@ emulationstation-de-debug
 enchant
 endeavouros-keyring
 endeavouros-mirrorlist
-endeavouros-skel-default
-endeavouros-skel-xfce4
 endeavouros-theming
 endeavouros-xfce4-terminal-colors
 enet
@@ -1774,7 +1771,6 @@ yaml-cpp
 yarn
 yasm
 yay
-yuzu
 zbar
 zenity
 zeromq
