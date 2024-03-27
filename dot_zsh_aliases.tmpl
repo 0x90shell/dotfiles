@@ -246,8 +246,8 @@ alias ins="apt install"
 alias rem="apt purge"
 alias search="apt search"
 alias upd="apt update"
-alias upg-all='httrack-update & apt update & pipx upgrade-all; apt upgrade -y; apt dist-upgrade -y; git-update; service nessusd stop; nessuscli update --all & openvas-update; bleachbit -c --preset; runuser -u overflow -- bleachbit -c --preset'
-alias upg-more='apt update & pipx upgrade-all; apt upgrade -y; apt dist-upgrade -y; git-update; service nessusd stop; nessuscli update --all & openvas-update;bleachbit -c --preset; runuser -u overflow -- bleachbit -c --preset'
+alias upg-all='httrack-update & apt update & pipx upgrade-all; apt upgrade -y; apt dist-upgrade -y; git-update; service nessusd stop; nessuscli update --all & greenbone-feed-sync; bleachbit -c --preset; runuser -u overflow -- bleachbit -c --preset'
+alias upg-more='apt update & pipx upgrade-all; apt upgrade -y; apt dist-upgrade -y; git-update; service nessusd stop; nessuscli update --all & greenbone-feed-sync;bleachbit -c --preset; runuser -u overflow -- bleachbit -c --preset'
 alias upg-dist='apt update; apt upgrade -y; apt dist-upgrade -y; bleachbit -c --preset'
 alias upg="apt update; apt upgrade -y; bleachbit -c --preset"
 {{ end -}}
