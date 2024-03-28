@@ -92,8 +92,4 @@ else
   #not using $workDir to avoid accidental rm -rf
   rm -rf ~/ROMs/"$1"/media
   rm -f ~/ROMs/"$1"/gamelist.*
-  
-  #Backup emulationstation dir
-  echo "Run tar backup and temporarily disable suspending/hibernating mid process"
-  nohup sudo -b systemd-inhibit tar -cJvf ~/ESDE-backup.tar.xz ~/ES-DE &>/dev/null
 fi

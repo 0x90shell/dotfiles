@@ -117,10 +117,6 @@ else
   else
      echo "Directory isn't empty, manually inspect and then delete $workingDir"
   fi
-  
-  #Backup emulationstation dir
-  #echo "Run tar backup and temporarily disable suspending/hibernating mid process"
-  #nohup sudo -b systemd-inhibit tar -cJvf ~/ESDE-backup.tar.xz ~/ES-DE &>/dev/null
 fi
 
 workingDir=~/ROMs/"$1" 
@@ -157,8 +153,6 @@ then
 else
    echo "Directory isn't empty, manually inspect and then delete $workingDir/0merge/"
 fi
-
-#sudo rsync -avz --info=progress2 ~/ESDE-backup.tar.xz ~/mnt/Games/Roms/
 
 #unmount NAS
 sudo umount  ~/mnt/Games
