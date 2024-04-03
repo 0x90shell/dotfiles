@@ -5,6 +5,7 @@ bin/test-setup*
 {{ end }}
 {{ if ne .chezmoi.hostname "Glamdring" }} 
 bin/emucloser
+.config/systemd/user/esde-backup.service
 .jslisten
 .kodi/
 {{ end }}
