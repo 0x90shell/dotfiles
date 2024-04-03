@@ -4,7 +4,7 @@
 
 ## Installation
 
-[The Chezmoi Package is availabe in many package management systems](https://www.chezmoi.io/install/), and that's the ideal install method to avoid manually upgrading via the "--upgrade" flag. When that's not available you can use these:
+The Chezmoi Package is availabe in [many package management systems](https://www.chezmoi.io/install/), and that's the ideal install method to avoid manually upgrading via the "--upgrade" flag periodically. Alternatively, you can use the commands below.
 
 One-Line Binary Install
 
