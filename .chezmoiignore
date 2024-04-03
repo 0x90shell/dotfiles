@@ -1,4 +1,5 @@
 ignore-*/
+README.md
 {{ if ne .chezmoi.osRelease.id "kali" }}
 bin/cherrymap
 bin/test-setup*
