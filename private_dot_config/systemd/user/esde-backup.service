@@ -3,7 +3,7 @@ Description="A script to backup ES-DE configs and data."
 
 [Service]
 Type=simple
-ExecStart=$HOME/bin/ESDE-backup
+ExecStart=/home/gandalf/bin/ESDE-backup
 
 [Install]
 WantedBy=default.target

@@ -11,9 +11,5 @@ do
         rsync -avz --info=progress2 "$backup" "$HOME/mnt/Backups/Configs"
         break
     fi 
-    echo "no change detected"
 done
-
-
-
-
+echo "no change detected"
