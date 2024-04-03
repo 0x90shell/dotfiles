@@ -7,11 +7,9 @@
 [The Chezmoi Package is availabe in many package management systems](https://www.chezmoi.io/install/), and that's the ideal install method to avoid manually upgrading via the "--upgrade" flag. When that's not available you can use these:
 
 One-Line Binary Install
-
 `sh -c "$(curl -fsLS git.io/chezmoi)" -- init --apply 0x90shell`
 
 One-Line Apply then Purge Chezmoi & Related Files
-
 `sh -c "$(curl -fsLS git.io/chezmoi)" -- init --apply --purge --purge-binary 0x90shell`
 
 ## Update any machine
