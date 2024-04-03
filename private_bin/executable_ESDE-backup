@@ -1,0 +1,19 @@
+#!/bin/bash
+#Script to backup ES-DE configs and data
+dir="$HOME/ES-DE"
+backup="$HOME/Backups/ESDE-backup.tar.xz"
+for file in "$dir"/* 
+do 
+    if [[ $file -nt $backup ]]
+    then
+        echo "change detected"
+        nohup systemd-inhibit --what="idle:sleep" tar -cJvf "$backup" "$dir" &>/dev/null
+        rsync -avz --info=progress2 "$backup" "$HOME/mnt/Backups/Configs"
+        break
+    fi 
+    echo "no change detected"
+done
+
+
+
+
