@@ -1,0 +1,21 @@
+{{- if (and (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) -}}
+#!/bin/bash
+cmd1="apt -f -y gpg gpg-agent"
+echo "running $cmd1 w/ sudo"
+sleep 1
+sudo -E bash -c "$cmd1"
+gpg-connect-agent killagent /bye
+gpg-connect-agent /bye
+gpg --list-keys
+
+{{- else -}}
+#! /bin/bash
+cmd1="pacman -S --noconfirm --needed gnupg"
+echo "running $cmd1 w/ sudo"
+sleep 1
+sudo -E bash -c "$cmd1"
+gpg-connect-agent killagent /bye
+gpg-connect-agent /bye
+gpg --list-keys
+
+{{- end -}}
