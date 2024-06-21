@@ -1,0 +1,9 @@
+[Unit]
+Description="A recover NAS mounts & launch related containers."
+
+[Service]
+Type=simple
+ExecStart=/opt/container-recovery
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,15 @@
+#!/bin/bash
+#Script to attempt to restart containers with a NAS mount bind requirement.
+#192.168.1.77 = NAS.fort, could sub for hostname but the fstab entries were IP
+#If NAS is alive, then attempt to start containers which will use systemd.automount to remount & boot
+#This will execute when any containers are stopped, so this should be edited if additional containers are added later
+# 900 = Jellyfin, 901 = Calibre-Web
+if pct list | grep stopped >/dev/null
+then 
+	while ! timeout 0.2 ping -c 1 -n 192.168.1.77 &> /dev/null
+	do 
+		sleep 5s
+	done
+	pct start 900
+	pct start 901
+fi
