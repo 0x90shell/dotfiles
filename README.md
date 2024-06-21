@@ -14,6 +14,9 @@ Apply Then Purge Chezmoi
 
 `sh -c "$(curl -fsLS git.io/chezmoi)" -- init --apply --purge --purge-binary 0x90shell`
 
+Manually Import GPG Key to Fully Complete
+`gpg --import gpg.key`
+
 ## Update any machine
 
 `chezmoi update`
