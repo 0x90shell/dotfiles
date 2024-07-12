@@ -7,4 +7,5 @@ xdotool search --class 'simple64-gui' search --name 'simple64    build: ......' 
 
 #Media Player Close
 xdotool search --class 'Kodi' windowquit
+kill -9 $(pgrep kodi.bin)
 xdotool search --class 'jellyfin' windowquit
