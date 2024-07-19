@@ -6,6 +6,7 @@ bin/test-setup*
 {{ end }}
 {{ if ne .chezmoi.hostname "Glamdring" }} 
 bin/emucloser
+bin/esdepull
 .config/systemd/user/esde-backup.service
 .config/systemd/user/default.target.wants/weekly@esde-backup.timer
 .jslisten
