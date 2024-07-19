@@ -219,9 +219,9 @@ alias t4='tmux new-session \; send-keys clear C-m \; split-pane -v \; send-keys 
 {{- if eq .chezmoi.osRelease.id "endeavouros" }}
 alias terminator="terminator --profile=endeavouros"
 alias stm='DISPLAY=:0 bgrun steam'
-alias kstm='kill -9 $(psg steam | awk '{print $2}')'
+alias kstm='kill -9 $(pgrep steam)'
 alias spt='DISPLAY=:0 bgrun spotify'
-alias kspt='kill -9 $(psg spotify | awk '{print $2}')'
+alias kspt='kill -9 $(pgrep spotify)'
 alias esd='DISPLAY=:0 bgrun es-de'
 alias kesd='killall es-de'
 {{- end }}
