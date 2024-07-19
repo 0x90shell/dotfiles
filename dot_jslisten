@@ -14,10 +14,17 @@ button3=
 button4=
 
 [Open ES-DE]
-#PS3 Start + R1
+#PS3 Start + R1 + Down
 program=~/bin/esdepull
 button1=9
 button2=5
-button3=
+button3=14
 button4=
 
+[Open Steam]
+#PS3 Start + R2 + Down
+program=~/bin/steampull
+button1=9
+button2=7
+button3=14
+button4=
