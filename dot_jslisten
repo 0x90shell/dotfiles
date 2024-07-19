@@ -15,7 +15,7 @@ button4=
 
 [Open ES-DE]
 #PS3 Select + R1
-program="pgrep es-de || es-de"
+program=~/bin/jsl-esde
 button1=8
 button2=5
 button3=
