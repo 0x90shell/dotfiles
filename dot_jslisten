@@ -14,9 +14,9 @@ button3=
 button4=
 
 [Open ES-DE]
-#PS3 Select + R1
+#PS3 Start + R1
 program=~/bin/esdepull
-button1=8
+button1=9
 button2=5
 button3=
 button4=
