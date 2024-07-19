@@ -1,0 +1,17 @@
+#!/bin/bash
+#Need these as jslisten is running as systemd service
+export DISPLAY=:0
+export XDG_RUNTIME_DIR=/run/user/1000
+
+if [[ -n $(pidof steam) ]]; then
+    echo "Steam is already running, bringing window to focus now..."
+    kp_xwid=$(wmctrl -lp | grep Steam | grep -Ev '(Chrome|Firefox)' | awk '{print $1}')
+    if [[ -z $kp_xwid ]]; then
+        echo "No X window ID found. This happens if Steam is set to minimize to the system tray. Please change your settings."
+        exit
+    fi
+    wmctrl -i -a "$kp_xwid"
+else
+   echo "Steam is not running, starting now..."
+   nohup steam &>/dev/null &
+fi
