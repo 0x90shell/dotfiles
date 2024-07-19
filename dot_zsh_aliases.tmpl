@@ -221,7 +221,7 @@ alias terminator="terminator --profile=endeavouros"
 alias stm='DISPLAY=:0 bgrun steam'
 alias kstm='pgrep steam | xargs kill -9'
 alias spt='DISPLAY=:0 bgrun spotify'
-alias kspt='kill -9 $(pgrep spotify)'
+alias kspt='pgrep spotify | kill -9'
 alias esd='DISPLAY=:0 bgrun es-de'
 alias kesd='killall es-de'
 {{- end }}
