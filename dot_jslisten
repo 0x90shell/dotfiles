@@ -28,11 +28,3 @@ button1=9
 button2=7
 button3=14
 button4=
-
-[Open Spotify]
-#PS3 Start + R2 + Triangle 
-program=~/bin/spotlaunch
-button1=9
-button2=2
-button3=14
-button4=
