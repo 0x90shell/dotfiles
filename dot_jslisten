@@ -6,7 +6,7 @@ button3=
 button4=
 
 [Emulator Closer]
-#PS3 Select + L1
+#DS3 Select + L1
 program=~/bin/emucloser
 button1=8
 button2=4
@@ -14,7 +14,7 @@ button3=
 button4=
 
 [Open ES-DE]
-#PS3 Start + R1 + Down
+#DS3 Start + R1 + Down
 program=~/bin/esdepull
 button1=9
 button2=5
@@ -22,9 +22,17 @@ button3=14
 button4=
 
 [Open Steam]
-#PS3 Start + R2 + Down
+#DS3 Start + R2 + Down
 program=~/bin/steampull
 button1=9
 button2=7
+button3=14
+button4=
+
+[Open Spotify]
+#DS3 Start + L1 + Down
+program=~/bin/spotpull
+button1=9
+button2=4
 button3=14
 button4=

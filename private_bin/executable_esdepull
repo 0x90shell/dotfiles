@@ -1,6 +1,6 @@
 #!/bin/bash
-#Need these as jslisten is running as systemd service
-export XDG_RUNTIME_DIR=/run/user/1000
+#Need these as jslisten is running as non-user systemd service
+#export XDG_RUNTIME_DIR=/run/user/1000
 
 if [[ -n $(pidof es-de) ]]; then
     echo "ESDE is already running, bringing window to focus now..."

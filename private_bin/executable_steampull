@@ -1,6 +1,6 @@
 #!/bin/bash
-#Need these as jslisten is running as systemd service
-export XDG_RUNTIME_DIR=/run/user/1000
+#Need these as jslisten is running as non-systemd service
+#export XDG_RUNTIME_DIR=/run/user/1000
 
 if [[ -n $(pidof steam) ]]; then
     echo "Steam is already running, bringing window to focus now..."
