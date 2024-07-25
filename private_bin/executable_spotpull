@@ -1,0 +1,14 @@
+#!/bin/bash
+
+if [[ -n $(pidof spotify) ]]; then
+    echo "Spotify is already running, bringing window to focus now..."
+    kp_xwid=$(wmctrl -lp | grep $(pidof spotify | awk '{print $NF}') | awk '{print $1}')
+    if [[ -z $kp_xwid ]]; then
+        echo "No X window ID found. This happens if Spotify is set to minimize to the system tray. Please change your settings."
+        exit
+    fi
+    wmctrl -i -a "$kp_xwid"
+else
+   echo "Spotify is not running, starting now..."
+   nohup /opt/spotify/spotify &>/dev/null &
+fi
