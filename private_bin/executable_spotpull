@@ -10,5 +10,5 @@ if [[ -n $(pidof spotify) ]]; then
     wmctrl -i -a "$kp_xwid"
 else
    echo "Spotify is not running, starting now..."
-   nohup /opt/spotify/spotify &>/dev/null &
+   nohup spotify &>/dev/null &
 fi
