@@ -1,4 +1,5 @@
 ignore-*/
+.config/autostart/jslisten-hotkeys.desktop
 README.md
 {{ if ne .chezmoi.osRelease.id "kali" }}
 bin/cherrymap
