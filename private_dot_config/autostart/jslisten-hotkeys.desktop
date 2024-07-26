@@ -5,5 +5,3 @@ Comment=Using this to issue commands in emulators that don't support hotkeys.
 Exec=jslisten
 RunHook=0
 Hidden=true
-
-blah
