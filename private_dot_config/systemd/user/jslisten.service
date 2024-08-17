@@ -3,6 +3,7 @@ Description=jslisten daemon
 After=network.target auditd.service
 
 [Service]
+ExecStartPre=/bin/sleep 10
 Type=idle
 ExecStart=/bin/sh -ec "exec /usr/bin/jslisten"
 ExecReload=/bin/kill -9 $MAINPID

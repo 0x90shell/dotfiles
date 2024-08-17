@@ -1,5 +1,7 @@
 #!/bin/bash
 #Need these as jslisten is running as non-user systemd service
+#This has proven to be annoying as sometimes the apps are hidden when not specifed
+#Despite the launch process being owned by the same user via systemd --user
 #export XDG_RUNTIME_DIR=/run/user/1000
 
 if [[ -n $(pidof es-de) ]]; then
