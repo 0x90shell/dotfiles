@@ -49,8 +49,7 @@ import time
 from threading import Thread, Event
 
 # Maximum idle time in seconds (60 minutes)
-#maxidletime = 3600
-maxidletime = 60
+maxidletime = 3600
 
 # List of known devices to query from /proc/bus/input/devices
 specific_names = ["Sony PLAYSTATION(R)3 Controller", "Sony Computer Entertainment Wireless Controller"]
