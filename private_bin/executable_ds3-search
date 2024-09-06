@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+
+def parse_input_devices(specific_names):
+    devices = []
+    current_device = {}
+    
+    try:
+        with open("/proc/bus/input/devices", "r") as f:
+            for line in f:
+                line = line.strip()
+                
+                # Identify the device name
+                if line.startswith("N: Name="):
+                    device_name = line.split('=')[1].strip('"')
+                    current_device['name'] = device_name
+                
+                # Identify the handleri
+                elif line.startswith("H: Handlers="):
+                    handlers = line.split('=')[1].strip().split()
+                    current_device['handlers'] = handlers
+                
+                elif line.startswith("U: Uniq="):
+                    uniq = line.split('=')[1].strip()
+                    current_device['uniq'] = uniq
+
+               # End of a device block, add to list if it matches specific names and has "js" in handlers
+                elif line == "":
+                    if ('name' in current_device and 
+                        current_device['name'] in specific_names and
+                        any("js" in handler for handler in current_device['handlers'])):
+                        devices.append(current_device)
+                    current_device = {}
+    
+        # Display results
+        if devices:
+            for device in devices:
+                print(f"Device: {device['name']}")
+                print(f"Handlers: {' '.join(handler for handler in device['handlers'] if 'js' in handler)}")
+                print(f"MacAddress: {device['uniq']}")
+                print("-" * 40)
+        else:
+            print("No matching devices found.")
+    
+    except FileNotFoundError:
+        print("Error: Unable to open /proc/bus/input/devices. Are you running this on a system with /proc available?")
+
+# Example usage
+specific_names = ["Sony PLAYSTATION(R)3 Controller", "Sony Computer Entertainment Wireless Controller"]  # Add your exact device names here
+parse_input_devices(specific_names)
+

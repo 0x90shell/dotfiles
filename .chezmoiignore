@@ -8,8 +8,11 @@ bin/test-setup*
 bin/emucloser
 bin/esdepull
 bin/steampull
+bin/ds3-search
+bin/jstimeout
 .config/systemd/user/esde-backup.service
 .config/systemd/user/jslisten.service
+.config/systemd/user/jstimeout.service
 .config/systemd/user/default.target.wants/weekly@esde-backup.timer
 .jslisten
 .kodi/
