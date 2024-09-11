@@ -1,5 +1,48 @@
 #!/usr/bin/env -S python3 -u
 
+'''
+Script to automatically disable the bluetooth gamepad when
+there is no activity for a specified time. It matches /dev/input
+with bluetooth mac addresses for DS3 controllers to force a BT disconnect.
+This is necessary, because DS3 timeout cannot be configured without a PS3
+due to a proprietary timeout implementation by Sony.
+
+use -m or --maxidletime command to set idle time between 1s and 10800s (3h)
+the default is 3600s (1h)
+Modify specfic_names list to include any other controllers that need monitoring.
+
+Мake the script executable and add it to autorun in desktop mode
+or better yet a systemctl service to recover it if it crashes.
+
+################################################################
+######                 Service Setup                      ######
+################################################################
+------
+File |
+------
+~/.config/systemd/user/jstimeout.service
+[Unit]
+Description=jslisten daemon
+After=network.target auditd.service
+
+[Service]
+ExecStartPre=/bin/sleep 10
+Type=idle
+ExecStart=/home/gandalf/bin/jstimeout
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+
+----------
+Commands |
+----------
+systemctl daemon-reload
+systemctl enable --user jstimeout.service
+systemctl start --user jstimeout.service
+
+'''
+
 import struct
 from datetime import datetime as dt
 import sys
