@@ -121,9 +121,9 @@ def input_checker(dev, uniq_and_dev, device_event):
                 if file in r:
                     try:
                         event = file.read(EVENT_SIZE)
-                        # print(struct.unpack("llHHI", event))
                         struct.unpack("llHHI", event)
                         device_event.set()
+                        # commenting out to de-clutter journalctl logs
                         # print(f"movement detected for {uniq_and_dev}")
                     except:
                         break
