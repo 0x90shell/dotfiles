@@ -20,9 +20,8 @@ or better yet a systemctl service to recover it if it crashes.
 ------
 File |
 ------
-~/.config/systemd/user/jstimeout.service
 [Unit]
-Description=jslisten daemon
+Description=jstimeout daemon
 After=network.target auditd.service
 
 [Service]
@@ -30,6 +29,7 @@ ExecStartPre=/bin/sleep 10
 Type=idle
 ExecStart=/home/gandalf/bin/jstimeout
 Restart=on-failure
+RestartSec=5
 
 [Install]
 WantedBy=default.target
