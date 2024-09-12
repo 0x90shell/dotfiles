@@ -10,6 +10,8 @@ bin/esdepull
 bin/steampull
 bin/ds3-search
 bin/jstimeout
+bin/jstimeout.go
+bin/jstimeout.py
 .config/systemd/user/esde-backup.service
 .config/systemd/user/jslisten.service
 .config/systemd/user/jstimeout.service
