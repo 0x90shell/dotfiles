@@ -7,10 +7,11 @@ BT disconnect. This is necessary, because DS3 timeout cannot be
 configured without a PS3 due to a proprietary timeout implementation 
 by Sony.
 
-Use -m or --maxidletime arg to set idle time between 1s and 10800s (3h)
+Use -m or -maxidletime arg to set idle time between 1s and 10800s (3h)
 The default idle time is 3600s (1h)
 
-This script uses the dot file ".jstimeout.devices" to identify 
+Use -d or -devicefile to set the location to pull the device name list.
+This script defaults to the dot file in ".jstimeout.devices" to identify 
 controllers to monitor. Add names from /proc/bus/input/devices 
 for any additional controllers that need to be monitored.
 
@@ -227,8 +228,9 @@ func disconnectDevice(uniq string) {
 
 func main() {
 	maxIdle := flag.Int("maxidletime", 3600, "Maximum idle time in seconds (1-10800)")
-	maxIdleShort := flag.Int("m", 3600, "Maximum idle time in seconds (shorthand) (1-10800)")
-    filePath := flag.String("devicefile", ".jstimeout.devices", "Path to the file containing device names")
+	maxIdleShort := flag.Int("m", 3600, "Maximum idle time in seconds (1-10800)")
+    filePath := flag.String("devicefile", ".jstimeout.devices", "Path to the file with device names")
+	filePathShort := flag.String("d", ".jstimeout.devices", "Path to the file with device names")
 
 	flag.Parse()
 
@@ -242,8 +244,16 @@ func main() {
 		os.Exit(1)
 	}
 
+    // Validate device file
+	deviceFilePath := *filePath
+	if *filePathShort != ".jstimeout.devices" {
+		deviceFilePath = *filePathShort
+	}
+
+    fmt.Printf("Using device file: %s\n", deviceFilePath)
+
     // Load device names from file
-	if err := loadSpecificNames(*filePath); err != nil {
+	if err := loadSpecificNames(deviceFilePath); err != nil {
 		fmt.Printf("Error loading device names: %v\n", err)
 		return
 	}
