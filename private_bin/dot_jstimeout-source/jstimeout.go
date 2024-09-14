@@ -229,7 +229,7 @@ func disconnectDevice(uniq string) {
 func main() {
 	maxIdle := flag.Int("maxidletime", 3600, "Maximum idle time in seconds (1-10800)")
 	maxIdleShort := flag.Int("m", 3600, "Maximum idle time in seconds (1-10800)")
-    filePath := flag.String("devicefile", ".jstimeout.devices", "Path to the file with device names")
+	filePath := flag.String("devicefile", ".jstimeout.devices", "Path to the file with device names")
 	filePathShort := flag.String("d", ".jstimeout.devices", "Path to the file with device names")
 
 	flag.Parse()
