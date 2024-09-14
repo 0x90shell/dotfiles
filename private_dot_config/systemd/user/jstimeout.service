@@ -5,6 +5,7 @@ After=network.target auditd.service
 [Service]
 ExecStartPre=/bin/sleep 10
 Type=idle
+WorkingDirectory=/home/gandalf/bin
 ExecStart=/home/gandalf/bin/jstimeout
 Restart=on-failure
 RestartSec=5

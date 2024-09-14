@@ -33,7 +33,8 @@ Sony Computer Entertainment Wireless Controller
 ######            [Opt 1] User Service Setup              ######
 ################################################################
 
-Substitute exec start to the path for the jstimeout binary.
+Replace WorkingDirectory path to be where jstimeout & device file 
+are located. ExecStart should be the exec path to launch jstimeout.
 
 -------
 ~/.config/systemd/user/jstimeout.service
@@ -44,6 +45,7 @@ After=network.target auditd.service
 [Service]
 ExecStartPre=/bin/sleep 10
 Type=idle
+WorkingDirectory=/home/user/bin/
 ExecStart=/home/user/bin/jstimeout
 Restart=on-failure
 RestartSec=5
