@@ -57,6 +57,42 @@ Commands
 systemctl daemon-reload
 systemctl enable --user jstimeout.service
 systemctl start --user jstimeout.service
+journalctl -u jstimeout.service --user -b -e -f # to see it working on
+
+################################################################
+######            [Opt 2] UDev Service Launch             ######
+################################################################
+
+Option 2 entails needing root access to modify udev rules so the process 
+is initiated only when specific devices are connected. This is a great 
+way to minimize running processes, but I found it does not stop when controllers 
+are gone which mitigates the benefit. The binary uses very minimal resources so
+it doesn't seem like a major problem to leave it running all the time via Option 1 
+for my use case.
+
+The solution to have it terminate on disconnect entails creating systemd devices or 
+modifying the script to terminate when no devices are present. I prefer having the 
+program monitor in an ongoing fashion, personally. To make the udev solution work, 
+you will need to modify and maintain udev rules should you add new devices. 
+
+The below rules will launch the existing user service we previously configured. You'll 
+want to disable auto-launch (disable) the user service. I explored "StopWhenNeeded" as 
+an option for stopping the systemd service, but that did not make the service terminate
+when devices disconnected.
+
+---
+/etc/udev/rules.d/99-jstimeout.rules
+---
+# Rule for launching the jstimeout program for specific gamepads
+SUBSYSTEM=="input", ATTRS{name}=="Sony PLAYSTATION(R)3 Controller", TAG+="systemd", ENV{SYSTEMD_USER_WANTS}="jstimeout.service"
+SUBSYSTEM=="input", ATTRS{name}=="Sony Computer Entertainment Wireless Controller", TAG+="systemd", ENV{SYSTEMD_USER_WANTS}="jstimeout.service"
+
+------
+Commands 
+------
+udev control --reload-rules
+systemctl restart systemd-udevd.service
+udevadm monitor --enviroment --udev # to see it working on device connection
 
 */
 
