@@ -81,6 +81,7 @@
       <property name="&lt;Primary&gt;&lt;Shift&gt;&lt;Alt&gt;s" type="string" value="esdepull"/>
       <property name="&lt;Primary&gt;&lt;Shift&gt;&lt;Alt&gt;n" type="string" value="joppull"/>
       <property name="&lt;Alt&gt;s" type="string" value="spotpull"/>
+      <property name="&lt;Super&gt;period" type="string" value="emoji-keyboard -k"/>
     </property>
   </property>
   <property name="xfwm4" type="empty">
