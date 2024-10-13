@@ -1,0 +1,13 @@
+[Unit]
+Description=Ensure bluetooth adapter is enabled on boot. This should happen by default, but at various times that has broken.
+After=bluetooth.target
+
+[Service]
+ExecStartPre=/bin/sleep 10
+Type=idle
+ExecStart=bluetoothctl -- power on
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
