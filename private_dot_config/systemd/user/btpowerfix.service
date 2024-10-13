@@ -5,7 +5,7 @@ After=bluetooth.target
 [Service]
 ExecStartPre=/bin/sleep 10
 Type=idle
-ExecStart=rfkill bluetooth unblock
+ExecStart=rfkill unblock bluetooth
 Restart=on-failure
 RestartSec=5
 
