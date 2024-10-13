@@ -5,13 +5,6 @@ bin/cherrymap
 bin/test-setup*
 {{ end }}
 {{ if ne .chezmoi.hostname "Glamdring" }} 
-bin/emucloser
-bin/esdepull
-bin/steampull
-bin/ds3-search
-bin/jstimeout
-bin/.jstimeout.devices
-bin/.jstimeout-source/
 .config/systemd/user/esde-backup.service
 .config/systemd/user/jslisten.service
 .config/systemd/user/jstimeout.service
@@ -24,6 +17,13 @@ bin/.jstimeout-source/
 bin/bash*
 bin/apt*
 {{ else }}
+bin/emucloser
+bin/esdepull
+bin/steampull
+bin/ds3-search
+bin/jstimeout
+bin/.jstimeout.devices
+bin/.jstimeout-source/
 bin/yaycache
 .config/xfce4/panel/datetime-12.rc
 .config/xfce4/panel/launcher-23
