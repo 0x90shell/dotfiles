@@ -19,14 +19,15 @@ bin/.jstimeout-source/
 .jslisten
 .kodi/
 {{ end }}
-{{ if eq .chezmoi.osRelease.id "arch" }}
-.vim/plugins/
-bin/bash*
-bin/apt*
-{{ else if eq .chezmoi.osRelease.id "endeavouros"}}
+{{- if eq .chezmoi.osRelease.id "arch" "endeavouros" }}
 .vim/plugins/
 bin/bash*
 bin/apt*
 {{ else }}
 bin/yaycache
+.config/xfce4/panel/datetime-12.rc
+.config/xfce4/panel/launcher-23
+.config/xfce4/panel/launcher-24
+.config/xfce4/panel/launcher-25
+.config/xfce4/panel/launcher-7
 {{ end }}

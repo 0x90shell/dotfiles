@@ -1,5 +1,5 @@
 {{- if eq .chezmoi.osRelease.id "kali" }}
 {{ .chezmoi.sourceDir }}/ignore-xfce4/kali/xfce-perchannel-xml/xfce4-keyboard-shortcuts.xml
-{{- else }}
+{{- else if eq .chezmoi.osRelease.id "arch" "endeavouros" }}
 {{ .chezmoi.sourceDir }}/ignore-xfce4/glamdring/xfce-perchannel-xml/xfce4-keyboard-shortcuts.xml
 {{- end }}
