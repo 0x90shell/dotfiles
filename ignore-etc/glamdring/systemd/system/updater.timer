@@ -1,8 +1,10 @@
 [Unit]
-Description="A timer to update system every Monday at 12AM"
+Description="A timer to update system every month."
+#Description="A timer to update system every Monday at 12AM"
 
 [Timer]
-OnCalendar=weekly
+OnCalendar=monthly
+#OnCalendar=weekly
 Persistent=true
 Unit=updater.service
 
