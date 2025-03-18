@@ -1,0 +1,14 @@
+[Unit]
+Description=Ensure bluetooth adapter is enabled on boot and wakeup. This should happen by default, but at various times that has broken seemingly because bluetooth is softblocked. This requires being run at the root systemd level, since the power states aren't accessible easily from the user systemd level.
+After=bluetooth.target suspend.target hibernate.target hybrid-sleep.target
+Wants=bluetooth.service
+
+[Service]
+ExecStartPre=/bin/sleep 10
+Type=idle
+ExecStart=rfkill unblock bluetooth
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target sleep.target suspend.target hibernate.target hybrid-sleep.target
