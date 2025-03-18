@@ -1,5 +1,6 @@
 [Unit]
-Description=Ensure bluetooth adapter is enabled on boot. This should happen by default, but at various times that has broken seemingly because bluetooth is softblocked.
+Description=Ensure bluetooth adapter is enabled on boot. 
+# This should happen by default, but at various times that has broken seemingly because bluetooth is softblocked.
 After=bluetooth.target
 
 [Service]
