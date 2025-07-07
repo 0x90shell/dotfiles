@@ -7,6 +7,7 @@ echo "running $cmd1"
 sleep 1
 bash -c "$cmd1"
 {{- else if eq .chezmoi.hostname "Excalibur" -}}
+#!/bin/bash
 sourceDir="$HOME/.local/share/chezmoi"
 pkgFile="$sourceDir/ignore-pkgs/yay-excalibur.pkgs"
 cmd1="yay -S --needed --noconfirm - < $pkgFile"
