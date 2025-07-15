@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# Try to find a window with "Sleek" in the title
+kp_xwid=$(wmctrl -lx | grep -i "sleek.sleek" | awk '{print $1}' | head -n1)
+
+if [[ -n "$kp_xwid" ]]; then
+    echo "Sleek is already running, bringing window to focus..."
+    wmctrl -i -a "$kp_xwid"
+else
+    echo "Sleek is not running, starting now..."
+    nohup sleek &>/dev/null &
+fi
+
