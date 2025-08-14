@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.4
+Name=Home Assistant
+Comment=Home automation platform that puts local control and privacy first.
+Keywords=;
+Categories=GTK;;
+Icon=FFPWA-01K1Y2T1MEM8Z9C6Y5VVGNZVDT
+Exec=/usr/bin/firefoxpwa site launch 01K1Y2T1MEM8Z9C6Y5VVGNZVDT --protocol %u
+Actions=
+MimeType=
+Terminal=false
+StartupNotify=true
+StartupWMClass=FFPWA-01K1Y2T1MEM8Z9C6Y5VVGNZVDT
