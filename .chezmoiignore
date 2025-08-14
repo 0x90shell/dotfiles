@@ -22,6 +22,7 @@ bin/emucloser
 bin/esdepull
 bin/steampull
 bin/ds3-search
+bin/chd-bulkconvert
 bin/jstimeout
 bin/.jstimeout.devices
 bin/.jstimeout-source/

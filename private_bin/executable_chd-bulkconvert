@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Recursively convert ISO/CUE/GDI to CHD using chdman createcd for all.
+
+set -euo pipefail
+
+ROOT="${1:-.}"
+
+command -v chdman >/dev/null 2>&1 || {
+  echo "Error: chdman not found in PATH." >&2
+  exit 1
+}
+
+find "$ROOT" -type f \( -iname '*.iso' -o -iname '*.cue' -o -iname '*.gdi' \) -print0 |
+while IFS= read -r -d '' src; do
+  out="${src%.*}.chd"
+  if [[ -e "$out" ]]; then
+    echo "Skip (exists): $out"
+    continue
+  fi
+  echo "Convert -> CHD: $src"
+  chdman createcd -i "$src" -o "$out"
+done
+
+echo "Done."
+
