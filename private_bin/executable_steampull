@@ -1,18 +1,100 @@
 #!/bin/bash
-#Need these as jslisten is running as non-systemd service
-#This has proven to be annoying as sometimes the apps are hidden when not specifed
-#Despite the launch process being owned by the same user via systemd --user
-#export XDG_RUNTIME_DIR=/run/user/1000
+set -euo pipefail
 
-if [[ -n $(pidof steam) ]]; then
-    echo "Steam is already running, bringing window to focus now..."
-    kp_xwid=$(wmctrl -lp | grep Steam | grep -Ev '(Chrome|Firefox)' | awk '{print $1}')
-    if [[ -z $kp_xwid ]]; then
-        echo "No X window ID found. This happens if Steam is set to minimize to the system tray. Please change your settings."
-        exit
-    fi
-    wmctrl -i -a "$kp_xwid"
-else
-   echo "Steam is not running, starting now..."
-   nohup steam &>/dev/null &
+# deps: wmctrl, xdotool, xrandr, xwininfo
+
+APP_NAME="Steam"
+APP_CLASS_RE="steam"
+LAUNCH_CMD="steam"
+
+if [[ "${XDG_SESSION_TYPE:-x11}" != "x11" ]]; then
+  echo "${APP_NAME} puller requires X11. Wayland is not supported by wmctrl/xdotool."
+  exit 1
 fi
+
+# Find an existing window by WM_CLASS (case-insensitive regex match)
+find_window() {
+  wmctrl -lx | awk -v cls="$APP_CLASS_RE" 'BEGIN{IGNORECASE=1} $3 ~ cls {print $1; exit}'
+}
+
+# Determine the active monitor via pointer and xrandr geometry
+get_target_monitor() {
+  eval "$(xdotool getmouselocation --shell)"
+  local px="$X" py="$Y"
+  # shellcheck disable=SC2207
+  MONS=($(xrandr --query | awk '/ connected( primary)? [0-9]+x[0-9]+\+[0-9]+\+[0-9]+/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+x[0-9]+\+[0-9]+\+[0-9]+$/) {print $i; break}}'))
+  for g in "${MONS[@]}"; do
+    local wh="${g%%+*}"; local offs="${g#*+}"
+    local mw="${wh%x*}"; local mh="${wh#*x}"
+    local mx="${offs%%+*}"; local my="${offs#*+}"
+    if (( px >= mx && px < mx + mw && py >= my && py < my + mh )); then
+      echo "$mx $my $mw $mh"
+      return 0
+    fi
+  done
+  # fallback to the first monitor
+  local wh="${MONS[0]%%+*}"; local offs="${MONS[0]#*+}"
+  echo "${offs%%+*} ${offs#*+} ${wh%x*} ${wh#*x}"
+}
+
+# Get window absolute position and size: x y w h
+get_win_geom() {
+  local wid="$1"
+  xwininfo -id "$wid" | awk '/Absolute upper-left X:/{x=$4} /Absolute upper-left Y:/{y=$4} /Width:/{w=$2} /Height:/{h=$2} END{print x, y, w, h}'
+}
+
+# Center window on target monitor if it is not already fully within that monitor
+maybe_center_on_monitor() {
+  local wid="$1"
+  read -r mx my mw mh <<<"$(get_target_monitor)"
+  read -r wx wy ww wh <<<"$(get_win_geom "$wid")"
+
+  # If geometry could not be read, default to moving
+  if [[ -z "$wx" || -z "$wy" || -z "$ww" || -z "$wh" ]]; then
+    wx=0; wy=0; ww=1000; wh=700
+  fi
+
+  # If window is fully inside the active monitor, do nothing
+  if (( wx >= mx && wx + ww <= mx + mw && wy >= my && wy + wh <= my + mh )); then
+    return 0
+  fi
+
+  local nx ny
+  nx=$(( mx + (mw - ww) / 2 ))
+  ny=$(( my + (mh - wh) / 2 ))
+  wmctrl -ir "$wid" -e "0,${nx},${ny},-1,-1"
+}
+
+focus_and_place() {
+  local wid="$1"
+  # Raise or activate, then maybe move
+  wmctrl -i -R "$wid" || wmctrl -i -a "$wid" || true
+  maybe_center_on_monitor "$wid"
+}
+
+main() {
+  local wid
+  wid="$(find_window || true)"
+  if [[ -n "$wid" ]]; then
+    echo "${APP_NAME} is already running. Focusing..."
+    focus_and_place "$wid"
+    exit 0
+  fi
+
+  echo "${APP_NAME} is not running. Starting..."
+  nohup $LAUNCH_CMD &>/dev/null &
+
+  # Wait for window to appear, then place it
+  for i in {1..30}; do
+    sleep 0.2
+    wid="$(find_window || true)"
+    if [[ -n "$wid" ]]; then
+      focus_and_place "$wid"
+      exit 0
+    fi
+  done
+
+  echo "Started ${APP_NAME}, but no window detected yet."
+}
+
+main "$@"

@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Recursively convert ISO/CUE/GDI to CHD using chdman createcd for all.
+# Recursively convert images to CHD:
+# - .iso  -> createdvd (DVD)
+# - .cue  -> createcd  (CD, multi-track aware)
+# - .gdi  -> createcd  (Dreamcast GDI descriptor)
 
 set -euo pipefail
 
@@ -10,15 +13,30 @@ command -v chdman >/dev/null 2>&1 || {
   exit 1
 }
 
-find "$ROOT" -type f \( -iname '*.iso' -o -iname '*.cue' -o -iname '*.gdi' \) -print0 |
+export LC_ALL=C
+
+# Convert .cue (CD) and .gdi via createcd
+find "$ROOT" -type f \( -iname '*.cue' -o -iname '*.gdi' \) -print0 |
 while IFS= read -r -d '' src; do
   out="${src%.*}.chd"
   if [[ -e "$out" ]]; then
     echo "Skip (exists): $out"
     continue
   fi
-  echo "Convert -> CHD: $src"
+  echo "CD  -> CHD: $src"
   chdman createcd -i "$src" -o "$out"
+done
+
+# Convert .iso (DVD) via createdvd
+find "$ROOT" -type f -iname '*.iso' -print0 |
+while IFS= read -r -d '' src; do
+  out="${src%.*}.chd"
+  if [[ -e "$out" ]]; then
+    echo "Skip (exists): $out"
+    continue
+  fi
+  echo "DVD -> CHD: $src"
+  chdman createdvd -i "$src" -o "$out"
 done
 
 echo "Done."
