@@ -4,7 +4,11 @@ README.md
 bin/cherrymap
 bin/test-setup*
 {{ end }}
-{{ if ne .chezmoi.hostname "Glamdring" }} 
+{{ if eq .chezmoi.hostname "Glamdring" }} 
+.config/autostart/Caffeine-ng.desktop
+.config/autostart/caffeine.desktop
+.config/autostart/redshift-gtk.desktop
+{{ else }}
 .config/systemd/user/esde-backup.service
 .config/systemd/user/jslisten.service
 .config/systemd/user/jstimeout.service
@@ -12,6 +16,8 @@ bin/test-setup*
 .config/systemd/user/default.target.wants/weekly@esde-backup.timer
 .jslisten
 .kodi/
+.config/autostart/bt-headset-autoconnect.desktop
+.config/autostart/jslisten-hotkeys.desktop
 {{ end }}
 {{- if eq .chezmoi.osRelease.id "arch" "endeavouros" }}
 .vim/plugins/
@@ -32,4 +38,8 @@ bin/yaycache
 .config/xfce4/panel/launcher-24
 .config/xfce4/panel/launcher-25
 .config/xfce4/panel/launcher-7
+.config/autostart/bt-headset-autoconnect.desktop
+.config/autostart/jslisten-hotkeys.desktop
+.config/autostart/dropbox.desktop
+.config/autostart/org.keepassxc.KeePassXC.desktop
 {{ end }}
