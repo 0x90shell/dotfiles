@@ -7,11 +7,15 @@ set autoindent
 set smartindent
 packadd chezmoi.vim
 syntax on
+" Enable or disable plugins
 map <leader>at :ALEToggle<CR>
 map <leader>nt :NERDTree<CR>
 map <leader>ex :exit<CR>
+" Cycle ale between ALE bug lines
 nmap <silent> <C-k> <Plug>(ale_previous_wrap)
 nmap <silent> <C-j> <Plug>(ale_next_wrap)
+" Toggle the location list with Ctrl+L
+nnoremap <silent> <C-l> :if getloclist(0, {'winid':0}).winid != 0 \| lclose \| else \| lwindow \| endif<CR>
 set pastetoggle=<F3>
 set clipboard^=unnamed,unnamedplus
 {{- if (and (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) }}
