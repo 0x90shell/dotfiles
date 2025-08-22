@@ -1,12 +1,22 @@
 #!/usr/bin/env bash
-# Recursively convert images to CHD:
-# - .iso  -> createdvd (DVD)
-# - .cue  -> createcd  (CD, multi-track aware)
-# - .gdi  -> createcd  (Dreamcast GDI descriptor)
+# Recursively convert images to CHD with minimal chdman output by default.
+# Non-verbose: single-line global progress bar with adaptive ETA.
+# Verbose (-v): print a header line matching non-verbose format, then CHDman's own dynamic bar.
+#               The "chdman - MAME ..." banner is stripped.
 
 set -euo pipefail
 
-ROOT="${1:-.}"
+ROOT="."
+VERBOSE=0
+
+while getopts ":v" opt; do
+  case "$opt" in
+    v) VERBOSE=1 ;;
+    *) ;;
+  esac
+done
+shift $((OPTIND-1))
+ROOT="${1:-$ROOT}"
 
 command -v chdman >/dev/null 2>&1 || {
   echo "Error: chdman not found in PATH." >&2
@@ -15,29 +25,250 @@ command -v chdman >/dev/null 2>&1 || {
 
 export LC_ALL=C
 
-# Convert .cue (CD) and .gdi via createcd
-find "$ROOT" -type f \( -iname '*.cue' -o -iname '*.gdi' \) -print0 |
-while IFS= read -r -d '' src; do
-  out="${src%.*}.chd"
-  if [[ -e "$out" ]]; then
-    echo "Skip (exists): $out"
-    continue
+# ---------- helpers ----------
+hsize() {
+  local bytes
+  bytes=${1:-0}
+  if command -v numfmt >/dev/null 2>&1; then
+    numfmt --to=iec --suffix=B --format="%.1f" "$bytes"
+  else
+    local i
+    local units=(B KiB MiB GiB TiB)
+    i=0
+    while (( bytes >= 1024 && i < ${#units[@]}-1 )); do
+      bytes=$((bytes/1024))
+      ((i++))
+    done
+    printf "%d%s" "$bytes" "${units[$i]}"
   fi
-  echo "CD  -> CHD: $src"
-  chdman createcd -i "$src" -o "$out"
+}
+
+cue_bytes() {
+  local cue
+  cue="$1"
+  local dir
+  dir=$(dirname "$cue")
+  awk '
+    BEGIN{IGNORECASE=1}
+    /^FILE[[:space:]]+/ {
+      if (match($0,/FILE[[:space:]]+\"([^\"]+)\"/,m)) print m[1];
+      else {
+        sub(/^FILE[[:space:]]+/, "", $0)
+        fname=$0
+        sub(/[[:space:]]+(BINARY|WAVE|MP3|AIFF|FLAC).*$/,"",fname)
+        print fname
+      }
+    }' "$cue" | while IFS= read -r rel; do
+      stat -c%s -- "$dir/$rel" 2>/dev/null || echo 0
+    done | awk '{s+=$1} END{print s+0}'
+}
+
+gdi_bytes() {
+  local gdi
+  gdi="$1"
+  local dir
+  dir=$(dirname "$gdi")
+  awk 'NR>1 {print $5}' "$gdi" | while IFS= read -r rel; do
+    stat -c%s -- "$dir/$rel" 2>/dev/null || echo 0
+  done | awk '{s+=$1} END{print s+0}'
+}
+
+iso_bytes() { stat -c%s -- "$1" 2>/dev/null || echo 0; }
+
+term_cols() { printf "%s" "${COLUMNS:-$(tput cols 2>/dev/null || echo 80)}"; }
+
+print_bar() {
+  local pct done_bytes total_bytes eta_s cur_idx nfiles fname
+  pct=$1; done_bytes=$2; total_bytes=$3; eta_s=$4; cur_idx=$5; nfiles=$6; fname="$7"
+
+  local cols
+  cols=$(term_cols)
+
+  local width filled empty bar hashes dots
+  width=40
+  filled=$(( pct*width/100 ))
+  (( filled < 0 )) && filled=0
+  (( filled > width )) && filled=$width
+  empty=$(( width - filled ))
+
+  printf -v hashes '%*s' "$filled" ''
+  hashes=${hashes// /#}
+  printf -v dots '%*s' "$empty" ''
+  dots=${dots// /.}
+  bar="${hashes}${dots}"
+
+  local h m s line maxw
+  h=$(( eta_s/3600 ))
+  m=$(( (eta_s%3600)/60 ))
+  s=$(( eta_s%60 ))
+  line=$(printf "[%s] %3d%% | %s / %s | ETA %02d:%02d:%02d | %d/%d | %s" \
+        "$bar" "$pct" "$(hsize "$done_bytes")" "$(hsize "$total_bytes")" \
+        "$h" "$m" "$s" "$cur_idx" "$nfiles" "$fname")
+
+  maxw=$(( cols - 1 ))
+  if (( ${#line} > maxw )); then
+    local prefix room fname_only shown
+    prefix="${line% | *}"
+    if [[ "$prefix" == "$line" ]]; then
+      prefix=$(printf "[%s] %3d%% | %s / %s | ETA %02d:%02d:%02d | %d/%d | " \
+        "$bar" "$pct" "$(hsize "$done_bytes")" "$(hsize "$total_bytes")" "$h" "$m" "$s" "$cur_idx" "$nfiles")
+    fi
+    room=$(( maxw - ${#prefix} - 1 ))
+    (( room < 5 )) && room=5
+    fname_only="${line##* | }"
+    shown="$fname_only"
+    if (( ${#fname_only} > room )); then
+      shown="${fname_only:0:room-1}…"
+    fi
+    line="${prefix} ${shown}"
+    (( ${#line} > maxw )) && line="${line:0:maxw}"
+  fi
+
+  printf "\r\033[2K%s" "$line"
+}
+
+quote_cmd() {
+  local out="" a
+  for a in "$@"; do
+    printf -v a '%q' "$a"
+    out+="$a "
+  done
+  printf "%s" "$out"
+}
+
+# Run chdman in a PTY so it keeps its own progress bar.
+# Strip the first banner line if present, pass everything else raw.
+run_chdman_verbose() {
+  local typ src out
+  typ="$1"; src="$2"; out="$3"
+
+  local cmd
+  if [[ "$typ" == "dvd" ]]; then
+    cmd=(chdman createdvd -i "$src" -o "$out")
+  else
+    cmd=(chdman createcd  -i "$src" -o "$out")
+  fi
+
+  local cmd_str
+  cmd_str=$(quote_cmd "${cmd[@]}")
+
+  if command -v script >/dev/null 2>&1; then
+    set +o pipefail
+    {
+      script -qe -c "$cmd_str" /dev/null
+    } | {
+      IFS= read -r first || true
+      if [[ "$first" != chdman\ -* ]]; then
+        printf '%s\n' "$first"
+      fi
+      cat
+    }
+    local ec=${PIPESTATUS[0]}
+    set -o pipefail
+    return "$ec"
+  else
+    "${cmd[@]}"
+  fi
+}
+
+# ---------- collect work ----------
+declare -a SRC PATHS TYPES BYTES OUTS
+SRC=(); PATHS=(); TYPES=(); BYTES=(); OUTS=()
+
+mapfile -d '' PATHS < <(find "$ROOT" -type f \( -iname '*.cue' -o -iname '*.gdi' -o -iname '*.iso' \) -print0)
+
+for src in "${PATHS[@]}"; do
+  out="${src%.*}.chd"
+  [[ -e "$out" ]] && continue
+  ext_lc="${src##*.}"; ext_lc="${ext_lc,,}"
+  case "$ext_lc" in
+    iso) TYPES+=("dvd"); BYTES+=("$(iso_bytes "$src")");;
+    cue) TYPES+=("cd");  BYTES+=("$(cue_bytes "$src")");;
+    gdi) TYPES+=("cd");  BYTES+=("$(gdi_bytes "$src")");;
+    *) continue ;;
+  esac
+  OUTS+=("$out"); SRC+=("$src")
 done
 
-# Convert .iso (DVD) via createdvd
-find "$ROOT" -type f -iname '*.iso' -print0 |
-while IFS= read -r -d '' src; do
-  out="${src%.*}.chd"
-  if [[ -e "$out" ]]; then
-    echo "Skip (exists): $out"
+n=${#SRC[@]}
+if (( n == 0 )); then
+  echo "Nothing to do. No convertible images without existing .chd found."
+  exit 0
+fi
+
+total_bytes=0
+for b in "${BYTES[@]}"; do total_bytes=$(( total_bytes + b )); done
+
+if (( VERBOSE )); then
+  echo "Planned conversions: $n files, $(hsize "$total_bytes") total."
+fi
+
+# ---------- run ----------
+if (( VERBOSE == 0 )); then
+  trap 'tput cnorm >/dev/null 2>&1 || true; echo' EXIT
+  tput civis >/dev/null 2>&1 || true
+fi
+
+start_ts=$(date +%s)
+done_bytes=0
+last_global_pct=-1
+
+for i in "${!SRC[@]}"; do
+  src="${SRC[$i]}"; out="${OUTS[$i]}"; typ="${TYPES[$i]}"; fbytes=${BYTES[$i]}
+  base="$(basename "$src")"
+
+  if (( VERBOSE )); then
+    # Print the same one-line header as non-verbose, then newline so CHDman's live bar follows
+    now=$(date +%s); elapsed=$(( now - start_ts ))
+    prog_bytes=$done_bytes
+    eta=$(( prog_bytes > 0 ? elapsed * (total_bytes - prog_bytes) / prog_bytes : 0 ))
+    global_pct=$(( (prog_bytes*100)/total_bytes ))
+    print_bar "$global_pct" "$prog_bytes" "$total_bytes" "$eta" $((i+1)) "$n" "$base"
+    printf "\n"
+
+    run_chdman_verbose "$typ" "$src" "$out"
+    done_bytes=$(( done_bytes + fbytes ))
     continue
   fi
-  echo "DVD -> CHD: $src"
-  chdman createdvd -i "$src" -o "$out"
+
+  # Non-verbose progress
+  now=$(date +%s); elapsed=$(( now - start_ts ))
+  prog_bytes=$done_bytes
+  eta=$(( prog_bytes > 0 ? elapsed * (total_bytes - prog_bytes) / prog_bytes : 0 ))
+  global_pct=$(( (prog_bytes*100)/total_bytes ))
+  print_bar "$global_pct" "$prog_bytes" "$total_bytes" "$eta" $((i+1)) "$n" "$base"
+  last_global_pct=$global_pct
+
+  while IFS= read -r line; do
+    if [[ "$line" =~ ([0-9]{1,3})% ]]; then
+      p="${BASH_REMATCH[1]}"
+      (( p > 100 )) && p=100
+      now=$(date +%s); elapsed=$(( now - start_ts ))
+      prog_bytes=$(( done_bytes + fbytes*p/100 ))
+      global_pct=$(( (prog_bytes*100)/total_bytes ))
+      if (( global_pct != last_global_pct )); then
+        eta=$(( prog_bytes > 0 ? elapsed * (total_bytes - prog_bytes) / prog_bytes : 0 ))
+        print_bar "$global_pct" "$prog_bytes" "$total_bytes" "$eta" $((i+1)) "$n" "$base"
+        last_global_pct=$global_pct
+      fi
+    fi
+  done < <(
+    if [[ "$typ" == "dvd" ]]; then
+      chdman createdvd -i "$src" -o "$out" 2>&1
+    else
+      chdman createcd  -i "$src" -o "$out" 2>&1
+    fi
+  )
+
+  done_bytes=$(( done_bytes + fbytes ))
+  now=$(date +%s); prog_bytes=$done_bytes
+  global_pct=$(( (prog_bytes*100)/total_bytes ))
+  print_bar "$global_pct" "$prog_bytes" "$total_bytes" 0 $((i+1)) "$n" "$base"
 done
 
+if (( VERBOSE == 0 )); then
+  echo
+  tput cnorm >/dev/null 2>&1 || true
+fi
 echo "Done."
 
