@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 # Recursively convert images to CHD with minimal chdman output by default.
+# - .iso  -> createdvd (DVD)
+# - .cue  -> createcd  (CD, multi-track aware)
+# - .gdi  -> createcd  (Dreamcast GDI descriptor)
+#
 # Non-verbose: single-line global progress bar with adaptive ETA.
+#
 # Verbose (-v): print a header line matching non-verbose format, then CHDman's own dynamic bar.
-#               The "chdman - MAME ..." banner is stripped.
+#
 
 set -euo pipefail
 
