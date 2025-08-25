@@ -29,6 +29,7 @@ bin/esdepull
 bin/steampull
 bin/ds3-search
 bin/chd-bulkconvert
+bin/ps2-bootcheck
 bin/jstimeout
 bin/.jstimeout.devices
 bin/.jstimeout-source/
