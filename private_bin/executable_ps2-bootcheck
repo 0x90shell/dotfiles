@@ -13,9 +13,9 @@ PRE_INPUT_WAIT=${PRE_INPUT_WAIT:-15}               # wait 15s before starting in
 INPUT_DURATION=${INPUT_DURATION:-30}               # spam inputs for 30s
 POST_INPUT_WAIT=${POST_INPUT_WAIT:-15}             # wait 15s after inputs before screenshot
 
-# Keys to press in rotation. Defaults to: X=K, O=L, Start=Return
-KEY_X="${KEY_X:-K}"                                # Cross (updated default)
-KEY_O="${KEY_O:-L}"                                # Circle (updated default)
+# Keys to press in rotation. Defaults to: X=k, O=l, Start=Return
+KEY_X="${KEY_X:-k}"                                # Cross (lowercase k)
+KEY_O="${KEY_O:-l}"                                # Circle (lowercase l)
 KEY_START="${KEY_START:-Return}"                   # Start (Enter)
 
 SCREENSHOT_KEY="${SCREENSHOT_KEY:-F8}"             # PCSX2 default screenshot key
