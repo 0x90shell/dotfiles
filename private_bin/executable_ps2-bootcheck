@@ -140,8 +140,11 @@ latest_shot() {
 
 kill_tree() {
   local root; root="$1"
+  # Disable job control messages temporarily
+  set +m 2>/dev/null
+  
   # Use SIGTERM first, suppress all output
-  kill -TERM "$root" 2>/dev/null || true
+  { kill -TERM "$root" 2>/dev/null || true; } 2>/dev/null
   
   # Find and kill children
   local kids
@@ -156,7 +159,10 @@ kill_tree() {
   done
   
   # Final SIGKILL, suppress output
-  kill -KILL "$root" 2>/dev/null || true
+  { kill -KILL "$root" 2>/dev/null || true; } 2>/dev/null
+  
+  # Re-enable job control if it was on
+  set -m 2>/dev/null || true
 }
 
 send_key() {
@@ -258,18 +264,19 @@ process_one() {
   local launch_cmd
   launch_cmd=("$BIN" -batch -fastboot -logfile "$log" -- "$absf")
   
+  # Launch in background with full output suppression
+  # Use exec to replace the subshell, avoiding "Killed" messages
   if [[ "$NO_SETSID" -eq 1 ]]; then
     if [[ "$QUIET" -eq 1 ]]; then
-      "${launch_cmd[@]}" >/dev/null 2>&1 &
+      ( exec "${launch_cmd[@]}" >/dev/null 2>&1 ) &
     else
-      "${launch_cmd[@]}" &
+      ( exec "${launch_cmd[@]}" ) &
     fi
   else
-    # Use subshell to prevent 'Killed' messages
     if [[ "$QUIET" -eq 1 ]]; then
-      ( setsid "${launch_cmd[@]}" >/dev/null 2>&1 ) &
+      ( exec setsid "${launch_cmd[@]}" >/dev/null 2>&1 ) &
     else
-      ( setsid "${launch_cmd[@]}" ) &
+      ( exec setsid "${launch_cmd[@]}" ) &
     fi
   fi
   
@@ -331,12 +338,27 @@ process_one() {
     vlog "[fail] No screenshot captured: $reason"
   fi
   
-  # Cleanup - suppress all output
+  # Cleanup - use disown to prevent "Killed" messages
   vlog "[cleanup] Terminating process..."
-  {
-    timeout "${TIMEOUT_BOOT}s" wait "$pid" 2>/dev/null || true
-    kill_tree "$pid"
-  } 2>/dev/null
+  
+  # Disown the process to prevent bash from reporting when it's killed
+  disown "$pid" 2>/dev/null || true
+  
+  # Now kill it silently
+  kill -TERM "$pid" 2>/dev/null || true
+  sleep 0.5
+  kill -KILL "$pid" 2>/dev/null || true
+  
+  # Kill any remaining children
+  local kids
+  if have pgrep; then
+    kids=$(pgrep -P "$pid" 2>/dev/null || true)
+  else
+    kids=$(ps -o pid= --ppid "$pid" 2>/dev/null | tr -d ' ' || true)
+  fi
+  for c in $kids; do
+    kill -KILL "$c" 2>/dev/null || true
+  done
   
   # Write result to TSV
   printf "%s\t%s\t%s\t%s\t%s\t-\t-\t%s\t%s\n" \
@@ -354,6 +376,9 @@ process_one() {
 }
 
 main() {
+  # Disable job control to prevent "Killed" messages
+  set +m
+  
   if [[ "$VERBOSE" -eq 1 ]]; then
     echo "=== PS2 Boot Check Script v5 ===" >&2
     echo "Scanning: $ROOT" >&2
@@ -403,7 +428,7 @@ main() {
     # Calculate elapsed time
     elapsed_s=$(( $(date +%s) - start_ts ))
     
-    # Show progress (non-verbose mode)
+    # Show progress (non-verbose mode) - this should update in place
     if [[ "$VERBOSE" -eq 0 ]]; then
       print_progress "$count" "$total" "$fname" "processing" "$elapsed_s"
     fi
@@ -422,7 +447,7 @@ main() {
   
   # Final summary
   if [[ "$VERBOSE" -eq 0 ]]; then
-    echo "" >&2
+    printf "\r\033[2K"  # Clear the last progress line
     echo "────────────────────────────────────────────" >&2
     tput cnorm >/dev/null 2>&1 || true
   fi
