@@ -1,0 +1,437 @@
+#!/usr/bin/env bash
+set -uE -o pipefail
+
+# ===== Basic Config (no autodetection) =====
+ROOT="${ROOT:-.}"                                  # where to scan for .chd/.iso
+OUT="${OUT:-/tmp/pcsx2_bootcheck.tsv}"             # output TSV
+BIN="${BIN:-pcsx2-qt}"                             # pcsx2-qt or pcsx2; set to the one that works for you
+SHOT_DIR="${SHOT_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/PCSX2/snaps}"  # where F8 saves screenshots
+TIMEOUT_BOOT=${TIMEOUT_BOOT:-75}                   # total max wait for process (increased for new timing)
+
+# New timing configuration
+PRE_INPUT_WAIT=${PRE_INPUT_WAIT:-15}               # wait 15s before starting input
+INPUT_DURATION=${INPUT_DURATION:-30}               # spam inputs for 30s
+POST_INPUT_WAIT=${POST_INPUT_WAIT:-15}             # wait 15s after inputs before screenshot
+
+# Keys to press in rotation. Defaults to: X=K, O=L, Start=Return
+KEY_X="${KEY_X:-K}"                                # Cross (updated default)
+KEY_O="${KEY_O:-L}"                                # Circle (updated default)
+KEY_START="${KEY_START:-Return}"                   # Start (Enter)
+
+SCREENSHOT_KEY="${SCREENSHOT_KEY:-F8}"             # PCSX2 default screenshot key
+KEY_PRESS_INTERVAL="${KEY_PRESS_INTERVAL:-0.2}"    # seconds between individual keypresses
+KEY_HOLD_MS="${KEY_HOLD_MS:-120}"                  # press duration per key (ms)
+KEYS_PER_BATCH="${KEYS_PER_BATCH:-5}"              # press each key this many times before rotating
+
+# Launch behavior toggles
+NO_SETSID=${NO_SETSID:-0}                          # 1 = don't use setsid
+QUIET=${QUIET:-1}                                  # 0 = show emulator stdout/stderr
+VERBOSE=${VERBOSE:-0}                              # 1 = show detailed progress messages
+
+# ===== Parse command line arguments =====
+while getopts ":v" opt; do
+  case "$opt" in
+    v) VERBOSE=1 ;;
+    *) ;;
+  esac
+done
+shift $((OPTIND-1))
+[[ $# -gt 0 ]] && ROOT="$1"
+
+# ===== Internals =====
+script_version="2025-08-25.v5"
+have() { command -v "$1" >/dev/null 2>&1; }
+ts() { date -Ins | sed 's/,/./'; }
+
+safe_mkdir() { mkdir -p "$1" 2>/dev/null || true; }
+
+vlog() {
+  [[ "$VERBOSE" -eq 1 ]] && echo "$@" >&2
+}
+
+term_cols() { printf "%s" "${COLUMNS:-$(tput cols 2>/dev/null || echo 80)}"; }
+
+print_progress() {
+  local cur_idx total fname status elapsed_s
+  cur_idx=$1; total=$2; fname="$3"; status="${4:-processing}"; elapsed_s="${5:-0}"
+  
+  local cols width
+  cols=$(term_cols)
+  
+  # Calculate average time per game and ETA
+  local eta_s eta_str avg_time
+  if [[ "$cur_idx" -gt 1 && "$elapsed_s" -gt 0 ]]; then
+    avg_time=$(( elapsed_s / (cur_idx - 1) ))
+    eta_s=$(( avg_time * (total - cur_idx + 1) ))
+    local h m s
+    h=$(( eta_s/3600 ))
+    m=$(( (eta_s%3600)/60 ))
+    s=$(( eta_s%60 ))
+    eta_str=$(printf "ETA %02d:%02d:%02d" "$h" "$m" "$s")
+  else
+    eta_str="ETA --:--:--"
+  fi
+  
+  # Build progress line
+  local pct filled empty bar hashes dots
+  pct=$(( (cur_idx - 1) * 100 / total ))
+  width=30
+  filled=$(( pct*width/100 ))
+  (( filled < 0 )) && filled=0
+  (( filled > width )) && filled=$width
+  empty=$(( width - filled ))
+  
+  printf -v hashes '%*s' "$filled" ''
+  hashes=${hashes// /#}
+  printf -v dots '%*s' "$empty" ''
+  dots=${dots// /.}
+  bar="${hashes}${dots}"
+  
+  local line maxw
+  if [[ "$status" == "FAIL" ]]; then
+    # For failures, show the full line with FAIL status
+    line=$(printf "[%s] %3d%% | %d/%d | %s | FAIL: %s | %s" \
+          "$bar" "$pct" "$cur_idx" "$total" "$eta_str" "${fail_reason:-unknown}" "$fname")
+  else
+    # For processing, show the game being checked
+    line=$(printf "[%s] %3d%% | %d/%d | %s | %s" \
+          "$bar" "$pct" "$cur_idx" "$total" "$eta_str" "$fname")
+  fi
+  
+  maxw=$(( cols - 1 ))
+  if (( ${#line} > maxw )); then
+    # Truncate filename portion if line is too long
+    local prefix="${line% | *}"
+    local fname_part="${line##* | }"
+    local room=$(( maxw - ${#prefix} - 3 ))
+    if (( room > 5 )); then
+      if (( ${#fname_part} > room )); then
+        fname_part="${fname_part:0:room-1}…"
+      fi
+      line="${prefix} | ${fname_part}"
+    fi
+    (( ${#line} > maxw )) && line="${line:0:maxw}"
+  fi
+  
+  if [[ "$status" == "FAIL" ]]; then
+    # Print failure on a new line so it persists
+    printf "\r\033[2K%s\n" "$line"
+  else
+    # Overwrite current line for processing status
+    printf "\r\033[2K%s" "$line"
+  fi
+}
+
+latest_shot() {
+  local dir; dir="$1"
+  local since_time="${2:-}"
+  
+  # Look for screenshots in both the base directory and game-specific subdirectories
+  if [[ -n "$since_time" ]]; then
+    # Find files newer than the specified timestamp
+    find "$dir" -type f \( -iname '*.png' -o -iname '*.bmp' -o -iname '*.jpg' \) -newermt "$since_time" -printf '%T@ %p\n' 2>/dev/null \
+      | sort -nr | awk 'NR==1{$1=""; sub(/^ /,""); print}'
+  else
+    # Find the most recent file overall
+    find "$dir" -type f \( -iname '*.png' -o -iname '*.bmp' -o -iname '*.jpg' \) -printf '%T@ %p\n' 2>/dev/null \
+      | sort -nr | awk 'NR==1{$1=""; sub(/^ /,""); print}'
+  fi
+}
+
+kill_tree() {
+  local root; root="$1"
+  # Use SIGTERM first, suppress all output
+  kill -TERM "$root" 2>/dev/null || true
+  
+  # Find and kill children
+  local kids
+  if have pgrep; then
+    kids=$(pgrep -P "$root" 2>/dev/null || true)
+  else
+    kids=$(ps -o pid= --ppid "$root" 2>/dev/null | tr -d ' ' || true)
+  fi
+  
+  for c in $kids; do 
+    kill_tree "$c" 2>/dev/null || true
+  done
+  
+  # Final SIGKILL, suppress output
+  kill -KILL "$root" 2>/dev/null || true
+}
+
+send_key() {
+  local pid key
+  pid="$1"; key="$2"
+  if have xdotool; then
+    local id hold_s
+    hold_s=$(awk -v ms="$KEY_HOLD_MS" 'BEGIN{printf("%.3f", ms/1000)}')
+    id=$(xdotool search --onlyvisible --pid "$pid" 2>/dev/null | head -n1 || true)
+    if [[ -n "$id" ]]; then
+      xdotool windowactivate --sync "$id" >/dev/null 2>&1 || true
+      xdotool keydown --window "$id" "$key" >/dev/null 2>&1 || true
+      sleep "$hold_s"
+      xdotool keyup --window "$id" "$key" >/dev/null 2>&1 || true
+    else
+      xdotool keydown "$key" >/dev/null 2>&1 || true
+      sleep "$hold_s"
+      xdotool keyup "$key" >/dev/null 2>&1 || true
+    fi
+  fi
+}
+
+obvious_reason_from_log() {
+  local log
+  log="$1"
+  [[ -s "$log" ]] || return 1
+  if grep -qi "Failed to create data directory" "$log"; then echo "portable_permission"; return 0; fi
+  if grep -qi "Cannot use batch mode" "$log"; then echo "bad_batch_usage"; return 0; fi
+  if grep -qiE "Could not open|No such file|failed to open" "$log"; then echo "bad_input_file"; return 0; fi
+  if grep -qi "OpenGL context .* failed" "$log"; then echo "gpu_context"; return 0; fi
+  if grep -qi "unknown option" "$log"; then echo "bad_cli_flags"; return 0; fi
+  return 1
+}
+
+spam_inputs_rotated() {
+  local pid duration
+  pid="$1"
+  duration="$2"
+  
+  if ! have xdotool; then
+    vlog "[warn] xdotool not found, skipping input spam"
+    sleep "$duration"
+    return
+  fi
+  
+  local end_time start_time elapsed
+  start_time=$SECONDS
+  end_time=$((start_time + duration))
+  
+  # Rotation pattern: O (5x), X (5x), Start (5x), repeat
+  local keys=("$KEY_O" "$KEY_X" "$KEY_START")
+  local key_names=("O" "X" "Start")
+  local key_idx=0
+  local press_count=0
+  
+  vlog "[input] Starting input rotation for ${duration}s"
+  
+  while (( SECONDS < end_time )) && kill -0 "$pid" 2>/dev/null; do
+    elapsed=$((SECONDS - start_time))
+    
+    # Send current key
+    vlog "[input] T+${elapsed}s: Pressing ${key_names[$key_idx]} (${keys[$key_idx]})"
+    send_key "$pid" "${keys[$key_idx]}"
+    press_count=$((press_count + 1))
+    
+    # Check if we should rotate to next key
+    if (( press_count >= KEYS_PER_BATCH )); then
+      press_count=0
+      key_idx=$(( (key_idx + 1) % ${#keys[@]} ))
+      vlog "[input] Rotating to ${key_names[$key_idx]}"
+    fi
+    
+    sleep "$KEY_PRESS_INTERVAL"
+  done
+  
+  vlog "[input] Input rotation complete"
+}
+
+process_one() {
+  local f absf base log launched_ts
+  f="$1"
+  absf="$(readlink -f -- "$f" 2>/dev/null || echo "$f")"
+  base="$(basename "${f%.*}")"
+  log="/tmp/pcsx2_bootcheck_${base// /_}.log"
+  rm -f "$log"
+  
+  vlog "[process] Processing: $f"
+  
+  safe_mkdir "$SHOT_DIR"
+  
+  # Record the exact start time for screenshot detection
+  local start_time
+  start_time=$(date '+%Y-%m-%d %H:%M:%S')
+  
+  # Launch emulator
+  launched_ts="$(ts)"
+  vlog "[launch] Starting PCSX2 at $launched_ts"
+  
+  local launch_cmd
+  launch_cmd=("$BIN" -batch -fastboot -logfile "$log" -- "$absf")
+  
+  if [[ "$NO_SETSID" -eq 1 ]]; then
+    if [[ "$QUIET" -eq 1 ]]; then
+      "${launch_cmd[@]}" >/dev/null 2>&1 &
+    else
+      "${launch_cmd[@]}" &
+    fi
+  else
+    # Use subshell to prevent 'Killed' messages
+    if [[ "$QUIET" -eq 1 ]]; then
+      ( setsid "${launch_cmd[@]}" >/dev/null 2>&1 ) &
+    else
+      ( setsid "${launch_cmd[@]}" ) &
+    fi
+  fi
+  
+  local pid
+  pid=$!
+  
+  # Check if process started successfully
+  sleep 0.5
+  if ! kill -0 "$pid" 2>/dev/null; then
+    local reason ec
+    reason="died_immediately"
+    wait "$pid" 2>/dev/null; ec=$? || true
+    if [[ "$ec" -gt 128 ]]; then
+      reason="killed_sig$((ec-128))"
+    elif [[ "$ec" -gt 0 ]]; then
+      reason="exit_$ec"
+    fi
+    if r=$(obvious_reason_from_log "$log"); then reason="$r"; fi
+    printf "%s\t%s\tFAIL\t%s\t-\t-\t-\t%s\t%s\n" "$script_version" "$f" "$reason" "$BIN" "$launched_ts" >>"$OUT"
+    fail_reason="$reason"
+    vlog "[fail] Process died immediately: $reason"
+    return 1
+  fi
+  
+  # Wait 15 seconds before starting input
+  vlog "[wait] Waiting ${PRE_INPUT_WAIT}s before input..."
+  sleep "$PRE_INPUT_WAIT"
+  
+  # Spam inputs with rotation pattern for 30 seconds
+  vlog "[input] Starting input sequence..."
+  spam_inputs_rotated "$pid" "$INPUT_DURATION"
+  
+  # Wait 15 seconds before taking screenshot
+  vlog "[wait] Waiting ${POST_INPUT_WAIT}s before screenshot..."
+  sleep "$POST_INPUT_WAIT"
+  
+  # Take screenshot if process is still alive
+  if kill -0 "$pid" 2>/dev/null && have xdotool; then
+    vlog "[shot] Taking screenshot with $SCREENSHOT_KEY"
+    send_key "$pid" "$SCREENSHOT_KEY"
+    sleep 2
+  fi
+  
+  # Collect results - only look for screenshots created after we started
+  local new_shot status reason
+  status="FAIL"; reason="no_screenshot"
+  new_shot="$(latest_shot "$SHOT_DIR" "$start_time")"
+  
+  if [[ -n "$new_shot" ]]; then
+    status="PASS"
+    reason="screenshot_saved"
+    vlog "[pass] Screenshot saved: $new_shot"
+  elif ! kill -0 "$pid" 2>/dev/null; then
+    reason="crashed_during_test"
+    if r=$(obvious_reason_from_log "$log"); then reason="$r"; fi
+    vlog "[fail] Process crashed: $reason"
+  else
+    if r=$(obvious_reason_from_log "$log"); then reason="$r"; fi
+    vlog "[fail] No screenshot captured: $reason"
+  fi
+  
+  # Cleanup - suppress all output
+  vlog "[cleanup] Terminating process..."
+  {
+    timeout "${TIMEOUT_BOOT}s" wait "$pid" 2>/dev/null || true
+    kill_tree "$pid"
+  } 2>/dev/null
+  
+  # Write result to TSV
+  printf "%s\t%s\t%s\t%s\t%s\t-\t-\t%s\t%s\n" \
+    "$script_version" "$f" "$status" "$reason" "${new_shot:-"-"}" "$BIN" "$launched_ts" >>"$OUT"
+  
+  vlog "[done] Completed: $f ($status)"
+  vlog ""
+  
+  # Set fail_reason for progress display if it failed
+  if [[ "$status" == "FAIL" ]]; then
+    fail_reason="$reason"
+    return 1
+  fi
+  return 0
+}
+
+main() {
+  if [[ "$VERBOSE" -eq 1 ]]; then
+    echo "=== PS2 Boot Check Script v5 ===" >&2
+    echo "Scanning: $ROOT" >&2
+    echo "Output: $OUT" >&2
+    echo "" >&2
+  else
+    # Hide cursor for cleaner progress display
+    trap 'tput cnorm >/dev/null 2>&1 || true; echo' EXIT
+    tput civis >/dev/null 2>&1 || true
+  fi
+  
+  # Ensure output directory exists
+  safe_mkdir "$(dirname -- "$OUT")"
+  touch "$OUT"
+  
+  # Add header if file is new/empty
+  if ! head -1 "$OUT" 2>/dev/null | grep -q '^script_version'; then
+    printf "script_version\tpath\tstatus\treason\tshot\tmean\tbright_pct\tbin\tlaunched_ts\n" >>"$OUT"
+  fi
+  
+  # Find all CHD/ISO files
+  local -a files
+  mapfile -d '' files < <(find "$ROOT" -type f \( -iname '*.chd' -o -iname '*.iso' \) -print0)
+  local total=${#files[@]}
+  
+  if (( total == 0 )); then
+    echo "No CHD or ISO files found in $ROOT" >&2
+    exit 0
+  fi
+  
+  if [[ "$VERBOSE" -eq 0 ]]; then
+    echo "PS2 Boot Check v5 - Testing $total game(s)" >&2
+    echo "────────────────────────────────────────────" >&2
+  fi
+  
+  # Process all files
+  local count=0 failed=0 passed=0
+  local start_ts elapsed_s
+  start_ts=$(date +%s)
+  fail_reason=""
+  
+  for f in "${files[@]}"; do
+    count=$((count + 1))
+    local fname
+    fname="$(basename "$f")"
+    
+    # Calculate elapsed time
+    elapsed_s=$(( $(date +%s) - start_ts ))
+    
+    # Show progress (non-verbose mode)
+    if [[ "$VERBOSE" -eq 0 ]]; then
+      print_progress "$count" "$total" "$fname" "processing" "$elapsed_s"
+    fi
+    
+    # Process the file
+    if process_one "$f"; then
+      passed=$((passed + 1))
+    else
+      failed=$((failed + 1))
+      # In non-verbose mode, print failure on new line
+      if [[ "$VERBOSE" -eq 0 ]]; then
+        print_progress "$count" "$total" "$fname" "FAIL" "$elapsed_s"
+      fi
+    fi
+  done
+  
+  # Final summary
+  if [[ "$VERBOSE" -eq 0 ]]; then
+    echo "" >&2
+    echo "────────────────────────────────────────────" >&2
+    tput cnorm >/dev/null 2>&1 || true
+  fi
+  
+  echo "" >&2
+  echo "=== Completed processing $total file(s) ===" >&2
+  echo "Passed: $passed | Failed: $failed" >&2
+  echo "Results saved to: $OUT" >&2
+}
+
+# Run main function with all arguments
+main "$@"
