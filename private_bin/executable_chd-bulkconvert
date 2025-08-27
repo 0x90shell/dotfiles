@@ -56,8 +56,11 @@ cue_bytes() {
   awk '
     BEGIN{IGNORECASE=1}
     /^FILE[[:space:]]+/ {
-      if (match($0,/FILE[[:space:]]+\"([^\"]+)\"/,m)) print m[1];
-      else {
+      # Handle quoted filenames
+      if (match($0, /FILE[[:space:]]+["]([^"]+)["]/, m)) {
+        print m[1]
+      } else {
+        # Handle unquoted filenames
         sub(/^FILE[[:space:]]+/, "", $0)
         fname=$0
         sub(/[[:space:]]+(BINARY|WAVE|MP3|AIFF|FLAC).*$/,"",fname)
@@ -82,9 +85,23 @@ iso_bytes() { stat -c%s -- "$1" 2>/dev/null || echo 0; }
 
 term_cols() { printf "%s" "${COLUMNS:-$(tput cols 2>/dev/null || echo 80)}"; }
 
+# Get conversion type display string
+get_conv_type() {
+  local typ src
+  typ="$1"; src="$2"
+  local ext_lc="${src##*.}"; ext_lc="${ext_lc,,}"
+  
+  case "$ext_lc" in
+    iso) echo "ISO" ;;
+    cue) echo "CD" ;;
+    gdi) echo "GDI" ;;
+    *) echo "CHD" ;;
+  esac
+}
+
 print_bar() {
-  local pct done_bytes total_bytes eta_s cur_idx nfiles fname
-  pct=$1; done_bytes=$2; total_bytes=$3; eta_s=$4; cur_idx=$5; nfiles=$6; fname="$7"
+  local pct done_bytes total_bytes eta_s cur_idx nfiles fname conv_type
+  pct=$1; done_bytes=$2; total_bytes=$3; eta_s=$4; cur_idx=$5; nfiles=$6; fname="$7"; conv_type="$8"
 
   local cols
   cols=$(term_cols)
@@ -106,17 +123,17 @@ print_bar() {
   h=$(( eta_s/3600 ))
   m=$(( (eta_s%3600)/60 ))
   s=$(( eta_s%60 ))
-  line=$(printf "[%s] %3d%% | %s / %s | ETA %02d:%02d:%02d | %d/%d | %s" \
+  line=$(printf "[%s] %3d%% | %s / %s | ETA %02d:%02d:%02d | %d/%d | %s | %s" \
         "$bar" "$pct" "$(hsize "$done_bytes")" "$(hsize "$total_bytes")" \
-        "$h" "$m" "$s" "$cur_idx" "$nfiles" "$fname")
+        "$h" "$m" "$s" "$cur_idx" "$nfiles" "$conv_type" "$fname")
 
   maxw=$(( cols - 1 ))
   if (( ${#line} > maxw )); then
     local prefix room fname_only shown
     prefix="${line% | *}"
     if [[ "$prefix" == "$line" ]]; then
-      prefix=$(printf "[%s] %3d%% | %s / %s | ETA %02d:%02d:%02d | %d/%d | " \
-        "$bar" "$pct" "$(hsize "$done_bytes")" "$(hsize "$total_bytes")" "$h" "$m" "$s" "$cur_idx" "$nfiles")
+      prefix=$(printf "[%s] %3d%% | %s / %s | ETA %02d:%02d:%02d | %d/%d | %s | " \
+        "$bar" "$pct" "$(hsize "$done_bytes")" "$(hsize "$total_bytes")" "$h" "$m" "$s" "$cur_idx" "$nfiles" "$conv_type")
     fi
     room=$(( maxw - ${#prefix} - 1 ))
     (( room < 5 )) && room=5
@@ -210,7 +227,7 @@ fi
 
 # ---------- run ----------
 if (( VERBOSE == 0 )); then
-  trap 'tput cnorm >/dev/null 2>&1 || true; echo' EXIT
+  trap 'show_results' EXIT
   tput civis >/dev/null 2>&1 || true
 fi
 
@@ -218,9 +235,42 @@ start_ts=$(date +%s)
 done_bytes=0
 last_global_pct=-1
 
+# Track failed conversions
+declare -a FAILED_CONVERSIONS
+FAILED_CONVERSIONS=()
+
+# Function to show results
+show_results() {
+  if (( VERBOSE == 0 )); then
+    echo
+    tput cnorm >/dev/null 2>&1 || true
+  fi
+
+  # Report results (always show, regardless of verbose mode)
+  local total=${#SRC[@]}
+  if (( total > 0 )); then
+    local successful=$((total - ${#FAILED_CONVERSIONS[@]}))
+    local failed_count=${#FAILED_CONVERSIONS[@]}
+    if (( failed_count > 0 )); then
+      echo "Completed: $successful/$total conversions successful."
+      echo
+      echo "Failed conversions:"
+      for failed_file in "${FAILED_CONVERSIONS[@]}"; do
+        echo "  - $(basename "$failed_file")"
+      done
+    else
+      echo "Done. All $total conversions completed successfully."
+    fi
+  fi
+}
+
+# Set trap to always show results
+trap 'show_results' EXIT
+
 for i in "${!SRC[@]}"; do
   src="${SRC[$i]}"; out="${OUTS[$i]}"; typ="${TYPES[$i]}"; fbytes=${BYTES[$i]}
   base="$(basename "$src")"
+  conv_type=$(get_conv_type "$typ" "$src")
 
   if (( VERBOSE )); then
     # Print the same one-line header as non-verbose, then newline so CHDman's live bar follows
@@ -228,11 +278,16 @@ for i in "${!SRC[@]}"; do
     prog_bytes=$done_bytes
     eta=$(( prog_bytes > 0 ? elapsed * (total_bytes - prog_bytes) / prog_bytes : 0 ))
     global_pct=$(( (prog_bytes*100)/total_bytes ))
-    print_bar "$global_pct" "$prog_bytes" "$total_bytes" "$eta" $((i+1)) "$n" "$base"
+    print_bar "$global_pct" "$prog_bytes" "$total_bytes" "$eta" $((i+1)) "$n" "$base" "$conv_type"
     printf "\n"
 
-    run_chdman_verbose "$typ" "$src" "$out"
-    done_bytes=$(( done_bytes + fbytes ))
+    if run_chdman_verbose "$typ" "$src" "$out"; then
+      done_bytes=$(( done_bytes + fbytes ))
+    else
+      FAILED_CONVERSIONS+=("$src")
+      # Remove partial output file if it exists
+      [[ -f "$out" ]] && rm -f "$out"
+    fi
     continue
   fi
 
@@ -241,39 +296,73 @@ for i in "${!SRC[@]}"; do
   prog_bytes=$done_bytes
   eta=$(( prog_bytes > 0 ? elapsed * (total_bytes - prog_bytes) / prog_bytes : 0 ))
   global_pct=$(( (prog_bytes*100)/total_bytes ))
-  print_bar "$global_pct" "$prog_bytes" "$total_bytes" "$eta" $((i+1)) "$n" "$base"
+  print_bar "$global_pct" "$prog_bytes" "$total_bytes" "$eta" $((i+1)) "$n" "$base" "$conv_type"
   last_global_pct=$global_pct
 
-  while IFS= read -r line; do
-    if [[ "$line" =~ ([0-9]{1,3})% ]]; then
-      p="${BASH_REMATCH[1]}"
-      (( p > 100 )) && p=100
-      now=$(date +%s); elapsed=$(( now - start_ts ))
-      prog_bytes=$(( done_bytes + fbytes*p/100 ))
-      global_pct=$(( (prog_bytes*100)/total_bytes ))
-      if (( global_pct != last_global_pct )); then
-        eta=$(( prog_bytes > 0 ? elapsed * (total_bytes - prog_bytes) / prog_bytes : 0 ))
-        print_bar "$global_pct" "$prog_bytes" "$total_bytes" "$eta" $((i+1)) "$n" "$base"
-        last_global_pct=$global_pct
+  # Convert using appropriate method
+  conversion_success=0
+  
+  if [[ "$typ" == "dvd" ]]; then
+    # DVD/ISO conversion
+    set +e  # Temporarily disable exit on error
+    chdman createdvd -i "$src" -o "$out" 2>&1 | while IFS= read -r line; do
+      if [[ "$line" =~ ([0-9]{1,3})% ]]; then
+        p="${BASH_REMATCH[1]}"
+        (( p > 100 )) && p=100
+        now=$(date +%s); elapsed=$(( now - start_ts ))
+        prog_bytes=$(( done_bytes + fbytes*p/100 ))
+        global_pct=$(( (prog_bytes*100)/total_bytes ))
+        if (( global_pct != last_global_pct )); then
+          eta=$(( prog_bytes > 0 ? elapsed * (total_bytes - prog_bytes) / prog_bytes : 0 ))
+          print_bar "$global_pct" "$prog_bytes" "$total_bytes" "$eta" $((i+1)) "$n" "$base" "$conv_type"
+          last_global_pct=$global_pct
+        fi
       fi
+    done
+    cmd_exit_code=$?
+    set -e  # Re-enable exit on error
+    
+    if (( cmd_exit_code == 0 )); then
+      conversion_success=1
     fi
-  done < <(
-    if [[ "$typ" == "dvd" ]]; then
-      chdman createdvd -i "$src" -o "$out" 2>&1
-    else
-      chdman createcd  -i "$src" -o "$out" 2>&1
+  else
+    # CD conversion (CUE/GDI)
+    set +e  # Temporarily disable exit on error
+    chdman createcd -i "$src" -o "$out" 2>&1 | while IFS= read -r line; do
+      if [[ "$line" =~ ([0-9]{1,3})% ]]; then
+        p="${BASH_REMATCH[1]}"
+        (( p > 100 )) && p=100
+        now=$(date +%s); elapsed=$(( now - start_ts ))
+        prog_bytes=$(( done_bytes + fbytes*p/100 ))
+        global_pct=$(( (prog_bytes*100)/total_bytes ))
+        if (( global_pct != last_global_pct )); then
+          eta=$(( prog_bytes > 0 ? elapsed * (total_bytes - prog_bytes) / prog_bytes : 0 ))
+          print_bar "$global_pct" "$prog_bytes" "$total_bytes" "$eta" $((i+1)) "$n" "$base" "$conv_type"
+          last_global_pct=$global_pct
+        fi
+      fi
+    done
+    cmd_exit_code=$?
+    set -e  # Re-enable exit on error
+    
+    if (( cmd_exit_code == 0 )); then
+      conversion_success=1
     fi
-  )
+  fi
 
-  done_bytes=$(( done_bytes + fbytes ))
+  if (( conversion_success )); then
+    done_bytes=$(( done_bytes + fbytes ))
+  else
+    FAILED_CONVERSIONS+=("$src")
+    # Remove partial output file if it exists
+    [[ -f "$out" ]] && rm -f "$out"
+  fi
+  
   now=$(date +%s); prog_bytes=$done_bytes
   global_pct=$(( (prog_bytes*100)/total_bytes ))
-  print_bar "$global_pct" "$prog_bytes" "$total_bytes" 0 $((i+1)) "$n" "$base"
+  print_bar "$global_pct" "$prog_bytes" "$total_bytes" 0 $((i+1)) "$n" "$base" "$conv_type"
 done
 
-if (( VERBOSE == 0 )); then
-  echo
-  tput cnorm >/dev/null 2>&1 || true
-fi
-echo "Done."
-
+# Clear trap since we're handling results manually now
+trap - EXIT
+show_results
