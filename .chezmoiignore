@@ -27,6 +27,7 @@ bin/apt*
 bin/emucloser
 bin/esdepull
 bin/ESDE*
+bin/kernel-purge
 bin/steampull
 bin/ds3-search
 bin/chd-bulkconvert

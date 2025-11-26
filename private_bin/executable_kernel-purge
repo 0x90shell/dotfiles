@@ -1,0 +1,38 @@
+#!/bin/bash
+
+ARMED=false
+if [[ "$1" == "--armed" ]]; then
+    ARMED=true
+fi
+
+RUNNING=$(uname -r)
+
+echo "=== RUNNING KERNEL ==="
+echo "  $RUNNING"
+echo ""
+
+echo "=== WOULD REMAIN ==="
+for dir in /usr/lib/modules/*/; do
+    ver=$(basename "$dir")
+    if [[ "$ver" == "$RUNNING" ]] || pacman -Qo "${dir}pkgbase" &>/dev/null; then
+        echo "  $ver"
+    fi
+done
+echo ""
+
+echo "=== WOULD DELETE ==="
+for dir in /usr/lib/modules/*/; do
+    ver=$(basename "$dir")
+    if [[ "$ver" != "$RUNNING" ]] && ! pacman -Qo "${dir}pkgbase" &>/dev/null; then
+        echo "  $ver"
+        if $ARMED; then
+            sudo trash-put "$dir"
+            sudo kernel-install remove "$ver"
+        fi
+    fi
+done
+
+if ! $ARMED; then
+    echo ""
+    echo "Dry run. Use --armed to actually delete."
+fi
