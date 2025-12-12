@@ -1,5 +1,4 @@
 #!/bin/bash
-
 ARMED=false
 if [[ "$1" == "--armed" ]]; then
     ARMED=true
@@ -7,32 +6,97 @@ fi
 
 RUNNING=$(uname -r)
 
+# Detect ESP mount point
+ESP=$(bootctl --print-esp-path 2>/dev/null || echo "/efi")
+MACHINE_ID=$(cat /etc/machine-id)
+ESP_DIR="$ESP/$MACHINE_ID"
+
 echo "=== RUNNING KERNEL ==="
 echo "  $RUNNING"
+echo ""
+echo "ESP: $ESP_DIR"
 echo ""
 
 echo "=== WOULD REMAIN ==="
 for dir in /usr/lib/modules/*/; do
     ver=$(basename "$dir")
     if [[ "$ver" == "$RUNNING" ]] || pacman -Qo "${dir}pkgbase" &>/dev/null; then
-        echo "  $ver"
+        if ! sudo test -d "$ESP_DIR/$ver"; then
+            echo "  $ver  ⚠️  NO BOOT ENTRY"
+        else
+            echo "  $ver"
+        fi
     fi
 done
 echo ""
 
-echo "=== WOULD DELETE ==="
+echo "=== WOULD DELETE (modules) ==="
 for dir in /usr/lib/modules/*/; do
     ver=$(basename "$dir")
     if [[ "$ver" != "$RUNNING" ]] && ! pacman -Qo "${dir}pkgbase" &>/dev/null; then
         echo "  $ver"
         if $ARMED; then
-            sudo trash-put "$dir"
-            sudo kernel-install remove "$ver"
+            if [[ "$ver" =~ ^[0-9]+\.[0-9]+ ]]; then
+                sudo rm -rf "$dir"
+                sudo kernel-install remove "$ver"
+            else
+                echo "    ⚠️  Skipped (doesn't look like kernel version)"
+            fi
         fi
     fi
 done
+echo ""
+
+echo "=== ORPHANED ESP ENTRIES ==="
+for ver in $(sudo ls "$ESP_DIR" 2>/dev/null); do
+    if [[ ! -d "/usr/lib/modules/$ver" ]]; then
+        echo "  $ver/"
+        if $ARMED; then
+            if [[ "$ver" =~ ^[0-9]+\.[0-9]+ ]]; then
+                sudo rm -rf "$ESP_DIR/$ver"
+                sudo rm -f "$ESP/loader/entries/${MACHINE_ID}-${ver}.conf"
+                sudo rm -f "$ESP/loader/entries/${MACHINE_ID}-${ver}-fallback.conf"
+            else
+                echo "    ⚠️  Skipped (doesn't look like kernel version)"
+            fi
+        fi
+    fi
+done
+echo ""
+
+echo "=== ORPHANED LOADER ENTRIES ==="
+declare -A seen_versions
+for conf in $(sudo ls "$ESP/loader/entries/" 2>/dev/null | grep '\.conf$'); do
+    ver=$(echo "$conf" | sed "s/^${MACHINE_ID}-//; s/-fallback//; s/\.conf$//")
+    [[ -n "${seen_versions[$ver]}" ]] && continue
+    seen_versions[$ver]=1
+    if [[ ! -d "/usr/lib/modules/$ver" ]]; then
+        echo "  $ver"
+        if $ARMED; then
+            if [[ "$ver" =~ ^[0-9]+\.[0-9]+ ]]; then
+                sudo rm -f "$ESP/loader/entries/${MACHINE_ID}-${ver}.conf"
+                sudo rm -f "$ESP/loader/entries/${MACHINE_ID}-${ver}-fallback.conf"
+            fi
+        fi
+    fi
+done
+echo ""
+
+# Check for stale bootctl cache
+BOOTCTL_COUNT=$(sudo bootctl list 2>/dev/null | grep -cE '\.conf$')
+FS_COUNT=$(sudo ls "$ESP/loader/entries/" 2>/dev/null | grep -c '\.conf$')
+if [[ "$BOOTCTL_COUNT" -gt "$FS_COUNT" ]]; then
+    echo "ℹ️  bootctl shows $BOOTCTL_COUNT entries but only $FS_COUNT exist on disk."
+    echo "   Stale entries will clear after reboot."
+    echo ""
+fi
+
+# Show ESP space
+ESP_USAGE=$(df -h "$ESP" | awk 'NR==2 {print $3 "/" $2 " (" $5 " used)"}')
+echo "=== ESP SPACE ==="
+echo "  $ESP_USAGE"
+echo ""
 
 if ! $ARMED; then
-    echo ""
     echo "Dry run. Use --armed to actually delete."
 fi
