@@ -3,29 +3,32 @@ ARMED=false
 if [[ "$1" == "--armed" ]]; then
     ARMED=true
 fi
-
 RUNNING=$(uname -r)
-
 # Detect ESP mount point
 ESP=$(bootctl --print-esp-path 2>/dev/null || echo "/efi")
 MACHINE_ID=$(cat /etc/machine-id)
 ESP_DIR="$ESP/$MACHINE_ID"
+
+# Build list of installed kernel versions
+INSTALLED_VERSIONS=()
+for dir in /usr/lib/modules/*/; do
+    ver=$(basename "$dir")
+    if [[ "$ver" == "$RUNNING" ]] || pacman -Qo "${dir}pkgbase" &>/dev/null; then
+        INSTALLED_VERSIONS+=("$ver")
+    fi
+done
 
 echo "=== RUNNING KERNEL ==="
 echo "  $RUNNING"
 echo ""
 echo "ESP: $ESP_DIR"
 echo ""
-
 echo "=== WOULD REMAIN ==="
-for dir in /usr/lib/modules/*/; do
-    ver=$(basename "$dir")
-    if [[ "$ver" == "$RUNNING" ]] || pacman -Qo "${dir}pkgbase" &>/dev/null; then
-        if ! sudo test -d "$ESP_DIR/$ver"; then
-            echo "  $ver  ⚠️  NO BOOT ENTRY"
-        else
-            echo "  $ver"
-        fi
+for ver in "${INSTALLED_VERSIONS[@]}"; do
+    if ! sudo test -d "$ESP_DIR/$ver"; then
+        echo "  $ver  ⚠️  NO BOOT ENTRY"
+    else
+        echo "  $ver"
     fi
 done
 echo ""
@@ -80,6 +83,37 @@ for conf in $(sudo ls "$ESP/loader/entries/" 2>/dev/null | grep '\.conf$'); do
         fi
     fi
 done
+echo ""
+
+# /boot cleanup - only if /boot is not a separate mount
+echo "=== ORPHANED FILES (/boot) ==="
+if findmnt /boot &>/dev/null; then
+    echo "  /boot is a separate mount, skipping"
+else
+    shopt -s nullglob
+    for file in /boot/initramfs-*.img /boot/vmlinuz-*; do
+        filename=$(basename "$file")
+        # Extract version: initramfs-6.12.35-1-lts.img -> 6.12.35-1-lts
+        ver=$(echo "$filename" | sed -E 's/^(initramfs-|vmlinuz-)//; s/(-fallback)?\.img$//')
+        
+        # Check if it matches any installed/running kernel
+        is_orphan=true
+        for installed in "${INSTALLED_VERSIONS[@]}"; do
+            if [[ "$ver" == "$installed" ]]; then
+                is_orphan=false
+                break
+            fi
+        done
+        
+        if $is_orphan; then
+            echo "  $filename"
+            if $ARMED; then
+                sudo rm -f "$file"
+            fi
+        fi
+    done
+    shopt -u nullglob
+fi
 echo ""
 
 # Check for stale bootctl cache
