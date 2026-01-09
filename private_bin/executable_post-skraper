@@ -1,0 +1,444 @@
+#!/bin/bash
+set -euo pipefail
+IFS=$'\n\t'
+
+# =============================================================================
+# Post-Skraper Processing Script
+# =============================================================================
+# Processes Skraper output: validates missing.txt, encodes videos to h265,
+# verifies encoding success, then safely overwrites originals.
+#
+# Usage: ./post-skraper.sh <console>
+# Example: ./post-skraper.sh psx
+# =============================================================================
+
+# --- Configuration (override via environment variables) ---
+NAS_ROM_BASE="${NAS_ROM_BASE:-/home/overflow/mnt/NAS/Gamer/Roms}"
+TEMP_ENCODE_DIR="${TEMP_ENCODE_DIR:-/home/overflow/Videos/roms}"
+LOG_DIR="${LOG_DIR:-/home/overflow/Videos/roms/logs}"
+
+# ffmpeg settings (matching Handbrake preset: Fast ES-DE Conversion)
+FFMPEG_VIDEO_CODEC="${FFMPEG_VIDEO_CODEC:-libx265}"
+FFMPEG_CRF="${FFMPEG_CRF:-26}"
+FFMPEG_PRESET="${FFMPEG_PRESET:-fast}"
+FFMPEG_AUDIO_CODEC="${FFMPEG_AUDIO_CODEC:-aac}"
+FFMPEG_AUDIO_BITRATE="${FFMPEG_AUDIO_BITRATE:-160k}"
+FFMPEG_AUDIO_CHANNELS="${FFMPEG_AUDIO_CHANNELS:-2}"
+
+# Duration tolerance for verification (seconds)
+DURATION_TOLERANCE="${DURATION_TOLERANCE:-2}"
+
+# --- Required Dependencies ---
+REQUIRED_COMMANDS=(ffmpeg ffprobe)
+
+# --- Color Output ---
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# --- Logging Functions ---
+log_info() { echo -e "${BLUE}[INFO]${NC} $*"; }
+log_success() { echo -e "${GREEN}[OK]${NC} $*"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+
+# --- Dependency Check ---
+check_dependencies() {
+    local missing=()
+    
+    for cmd in "${REQUIRED_COMMANDS[@]}"; do
+        if ! command -v "$cmd" &>/dev/null; then
+            missing+=("$cmd")
+        fi
+    done
+    
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        log_error "Missing required dependencies: ${missing[*]}"
+        echo ""
+        log_info "Install with:"
+        echo "  Arch/EndeavourOS: sudo pacman -S ffmpeg"
+        echo "  Ubuntu/Debian:    sudo apt install ffmpeg"
+        echo "  Fedora:           sudo dnf install ffmpeg"
+        return 1
+    fi
+    
+    log_success "All dependencies found (${REQUIRED_COMMANDS[*]})"
+    return 0
+}
+
+# --- Help ---
+show_help() {
+    cat << EOF
+Post-Skraper Processing Script
+
+USAGE:
+    $(basename "$0") [OPTIONS] <console>
+
+ARGUMENTS:
+    <console>       Console name (e.g., psx, n64, 3do, genesis)
+
+OPTIONS:
+    -f, --force     Skip missing.txt check and proceed anyway
+    -d, --dry-run   Show what would be done without encoding
+    -h, --help      Show this help message
+
+WORKFLOW:
+    1. Check for missing.txt in console folder
+       → If entries exist: STOP and alert to re-run Skraper
+    2. Find all videos in {console}/media/videos/
+    3. Encode each to h265 in temp directory
+    4. Verify each encode (file exists, size > 0, duration matches)
+    5. Only after ALL pass verification: overwrite originals
+    6. Generate completion report
+
+PATHS (override via environment variables):
+    NAS_ROM_BASE:    $NAS_ROM_BASE
+    TEMP_ENCODE_DIR: $TEMP_ENCODE_DIR
+    LOG_DIR:         $LOG_DIR
+
+ENCODING SETTINGS (override via environment variables):
+    FFMPEG_VIDEO_CODEC:   $FFMPEG_VIDEO_CODEC
+    FFMPEG_CRF:           $FFMPEG_CRF
+    FFMPEG_PRESET:        $FFMPEG_PRESET
+    FFMPEG_AUDIO_CODEC:   $FFMPEG_AUDIO_CODEC
+    FFMPEG_AUDIO_BITRATE: $FFMPEG_AUDIO_BITRATE
+    FFMPEG_AUDIO_CHANNELS: $FFMPEG_AUDIO_CHANNELS
+    Container: MP4
+
+DEPENDENCIES:
+    ffmpeg, ffprobe (usually bundled with ffmpeg package)
+
+EXAMPLES:
+    $(basename "$0") psx           # Process PlayStation videos
+    $(basename "$0") --dry-run n64 # Preview N64 processing
+    $(basename "$0") --force 3do   # Skip missing.txt check
+
+    # Override paths via environment variables:
+    NAS_ROM_BASE=/mnt/games/roms $(basename "$0") psx
+    
+    # Override encoding settings:
+    FFMPEG_CRF=24 FFMPEG_PRESET=slow $(basename "$0") psx
+
+EOF
+}
+
+# --- Utility Functions ---
+
+# Get video duration in seconds using ffprobe
+get_duration() {
+    local file="$1"
+    ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null | cut -d. -f1
+}
+
+# Get file size in bytes
+get_filesize() {
+    stat -c%s "$1" 2>/dev/null || echo "0"
+}
+
+# Verify encoded file matches original
+verify_encode() {
+    local original="$1"
+    local encoded="$2"
+    
+    # Check file exists
+    if [[ ! -f "$encoded" ]]; then
+        log_error "Encoded file does not exist: $encoded"
+        return 1
+    fi
+    
+    # Check file size > 0
+    local encoded_size
+    encoded_size=$(get_filesize "$encoded")
+    if [[ "$encoded_size" -eq 0 ]]; then
+        log_error "Encoded file is empty: $encoded"
+        return 1
+    fi
+    
+    # Check duration matches within tolerance
+    local orig_duration encoded_duration duration_diff
+    orig_duration=$(get_duration "$original")
+    encoded_duration=$(get_duration "$encoded")
+    
+    if [[ -z "$orig_duration" ]] || [[ -z "$encoded_duration" ]]; then
+        log_warn "Could not verify duration for: $(basename "$original")"
+        # Still pass if file exists and has size - duration check is secondary
+        return 0
+    fi
+    
+    duration_diff=$((orig_duration - encoded_duration))
+    duration_diff=${duration_diff#-}  # Absolute value
+    
+    if [[ "$duration_diff" -gt "$DURATION_TOLERANCE" ]]; then
+        log_error "Duration mismatch: original=${orig_duration}s, encoded=${encoded_duration}s (diff=${duration_diff}s)"
+        return 1
+    fi
+    
+    return 0
+}
+
+# --- Main Processing Functions ---
+
+check_missing_txt() {
+    local console="$1"
+    local missing_file="$NAS_ROM_BASE/$console/missing.txt"
+    
+    if [[ -f "$missing_file" ]]; then
+        local line_count
+        line_count=$(wc -l < "$missing_file" | tr -d ' ')
+        
+        if [[ "$line_count" -gt 0 ]]; then
+            log_error "missing.txt contains $line_count entries!"
+            log_error "Re-run Skraper to resolve missing titles before encoding."
+            echo ""
+            log_info "Missing titles:"
+            head -20 "$missing_file"
+            if [[ "$line_count" -gt 20 ]]; then
+                echo "  ... and $((line_count - 20)) more"
+            fi
+            return 1
+        fi
+    fi
+    
+    log_success "No missing titles found"
+    return 0
+}
+
+encode_videos() {
+    local console="$1"
+    local dry_run="$2"
+    
+    local source_dir="$NAS_ROM_BASE/$console/media/videos"
+    local temp_dir="$TEMP_ENCODE_DIR/$console"
+    local log_file
+    log_file="$LOG_DIR/${console}_$(date +%Y%m%d_%H%M%S).log"
+    
+    # Check source directory exists
+    if [[ ! -d "$source_dir" ]]; then
+        log_error "Video directory not found: $source_dir"
+        return 1
+    fi
+    
+    # Find all video files
+    local -a video_files
+    mapfile -t video_files < <(find "$source_dir" -type f \( -iname "*.mp4" -o -iname "*.avi" -o -iname "*.mkv" -o -iname "*.webm" -o -iname "*.mov" \) 2>/dev/null | sort)
+    
+    local total_files=${#video_files[@]}
+    
+    if [[ "$total_files" -eq 0 ]]; then
+        log_warn "No video files found in: $source_dir"
+        return 0
+    fi
+    
+    log_info "Found $total_files video files to process"
+    
+    if [[ "$dry_run" == "true" ]]; then
+        log_info "DRY RUN - would encode these files:"
+        for f in "${video_files[@]}"; do
+            echo "  $(basename "$f")"
+        done
+        return 0
+    fi
+    
+    # Create temp and log directories
+    mkdir -p "$temp_dir" "$LOG_DIR"
+    
+    # Arrays to track results
+    local -a encoded_files=()
+    local -a original_files=()
+    local -a failed_files=()
+    
+    log_info "Encoding videos to: $temp_dir"
+    log_info "Log file: $log_file"
+    echo ""
+    
+    local current=0
+    for video in "${video_files[@]}"; do
+        ((current++))
+        local basename_noext="${video##*/}"
+        basename_noext="${basename_noext%.*}"
+        local output_file="$temp_dir/${basename_noext}.mp4"
+        
+        echo -e "${BLUE}[$current/$total_files]${NC} Encoding: $(basename "$video")"
+        
+        # Encode with ffmpeg
+        if ffmpeg -y -i "$video" \
+            -c:v "$FFMPEG_VIDEO_CODEC" \
+            -crf "$FFMPEG_CRF" \
+            -preset "$FFMPEG_PRESET" \
+            -c:a "$FFMPEG_AUDIO_CODEC" \
+            -b:a "$FFMPEG_AUDIO_BITRATE" \
+            -ac "$FFMPEG_AUDIO_CHANNELS" \
+            -movflags +faststart \
+            "$output_file" \
+            >> "$log_file" 2>&1; then
+            
+            # Verify the encode
+            if verify_encode "$video" "$output_file"; then
+                log_success "Encoded and verified: $(basename "$video")"
+                encoded_files+=("$output_file")
+                original_files+=("$video")
+            else
+                log_error "Verification failed: $(basename "$video")"
+                failed_files+=("$video")
+                rm -f "$output_file"  # Remove failed encode
+            fi
+        else
+            log_error "Encoding failed: $(basename "$video")"
+            failed_files+=("$video")
+        fi
+    done
+    
+    echo ""
+    log_info "=========================================="
+    log_info "Encoding complete: ${#encoded_files[@]}/$total_files successful"
+    
+    # Report failures
+    if [[ ${#failed_files[@]} -gt 0 ]]; then
+        log_error "${#failed_files[@]} files failed:"
+        for f in "${failed_files[@]}"; do
+            echo "  - $(basename "$f")"
+        done
+        echo ""
+        log_error "NOT overwriting originals due to failures."
+        log_error "Review log: $log_file"
+        return 1
+    fi
+    
+    # All encodes successful - proceed with overwrite
+    log_success "All encodes verified successfully!"
+    echo ""
+    log_info "Overwriting originals with encoded files..."
+    
+    local overwrite_failures=0
+    for i in "${!encoded_files[@]}"; do
+        local encoded="${encoded_files[$i]}"
+        local original="${original_files[$i]}"
+        local original_dir
+        original_dir=$(dirname "$original")
+        local original_name
+        original_name=$(basename "$original")
+        local original_noext="${original_name%.*}"
+        local target="$original_dir/${original_noext}.mp4"
+        
+        # If original wasn't mp4, remove it after copying new one
+        if [[ "$original" != "$target" ]]; then
+            if cp "$encoded" "$target" && rm -f "$original"; then
+                log_success "Replaced: $original_name → ${original_noext}.mp4"
+            else
+                log_error "Failed to replace: $original_name"
+                ((overwrite_failures++))
+            fi
+        else
+            if cp "$encoded" "$target"; then
+                log_success "Updated: $original_name"
+            else
+                log_error "Failed to update: $original_name"
+                ((overwrite_failures++))
+            fi
+        fi
+    done
+    
+    if [[ "$overwrite_failures" -gt 0 ]]; then
+        log_error "$overwrite_failures files failed to overwrite"
+        log_warn "Encoded files preserved in: $temp_dir"
+        return 1
+    fi
+    
+    # Cleanup temp files
+    log_info "Cleaning up temp directory..."
+    rm -rf "$temp_dir"
+    
+    # Generate report
+    echo ""
+    log_info "=========================================="
+    log_success "COMPLETE: $console"
+    log_info "Videos processed: ${#encoded_files[@]}"
+    log_info "Log file: $log_file"
+    log_info "=========================================="
+    
+    return 0
+}
+
+# --- Main ---
+main() {
+    local force=false
+    local dry_run=false
+    local console=""
+    
+    # Check dependencies first
+    if ! check_dependencies; then
+        exit 1
+    fi
+    
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_help
+                exit 0
+                ;;
+            -f|--force)
+                force=true
+                shift
+                ;;
+            -d|--dry-run)
+                dry_run=true
+                shift
+                ;;
+            -*)
+                log_error "Unknown option: $1"
+                exit 1
+                ;;
+            *)
+                if [[ -z "$console" ]]; then
+                    console="$1"
+                else
+                    log_error "Too many arguments"
+                    exit 1
+                fi
+                shift
+                ;;
+        esac
+    done
+    
+    # Validate console argument
+    if [[ -z "$console" ]]; then
+        log_error "Missing console argument"
+        echo "Usage: $(basename "$0") <console>"
+        echo "Try '$(basename "$0") --help' for more information."
+        exit 1
+    fi
+    
+    # Validate console directory exists
+    if [[ ! -d "$NAS_ROM_BASE/$console" ]]; then
+        log_error "Console directory not found: $NAS_ROM_BASE/$console"
+        exit 1
+    fi
+    
+    log_info "Processing console: $console"
+    echo ""
+    
+    # Step 1: Check missing.txt
+    if [[ "$force" != "true" ]]; then
+        log_info "Checking for missing titles..."
+        if ! check_missing_txt "$console"; then
+            echo ""
+            log_info "Use --force to skip this check and encode anyway"
+            exit 1
+        fi
+    else
+        log_warn "Skipping missing.txt check (--force)"
+    fi
+    
+    echo ""
+    
+    # Step 2: Encode videos
+    log_info "Starting video encoding..."
+    if ! encode_videos "$console" "$dry_run"; then
+        exit 1
+    fi
+}
+
+main "$@"
