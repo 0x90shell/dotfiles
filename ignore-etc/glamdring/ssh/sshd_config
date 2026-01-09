@@ -25,14 +25,16 @@ AllowAgentForwarding no
 # prevent TCP ports from being forwarded over SSH tunnels
 # **please be aware that disabling TCP forwarding does not prevent port forwarding**
 # any user with an interactive login shell can spin up his/her own instance of sshd
-AllowTcpForwarding no
+#AllowTcpForwarding no
+AllowTcpForwarding yes
 
 # prevent StreamLocal (Unix-domain socket) forwarding
 AllowStreamLocalForwarding no
 
 # disables all forwarding features
 # overrides all other forwarding switches
-DisableForwarding yes
+#DisableForwarding yes
+DisableForwarding no
 
 # disallow remote hosts from connecting to forwarded ports
 # i.e. forwarded ports are forced to bind to 127.0.0.1 instad of 0.0.0.0
@@ -47,6 +49,8 @@ PrintMotd no
 # disable X11 forwarding since it is not necessary
 #X11Forwarding no
 X11Forwarding yes
+X11DisplayOffset 10
+X11UseLocalhost yes
 
 ########## Authentication ##########
 
@@ -63,7 +67,8 @@ AllowUsers gandalf
 #   - UsePAM: set to no to disable all PAM authentication, also disables PasswordAuthentication when set to no
 AuthenticationMethods publickey
 #PasswordAuthentication no
-UsePAM no
+#Enabled get systemctl --user via SSH working but password auth still blocked
+UsePAM yes
 
 # PAM authentication enabled to make password authentication available
 # remove this if password authentication is not needed
@@ -94,8 +99,8 @@ MACs hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,umac-128-etm@op
 
 # short moduli should be deactivated before enabling the use of diffie-hellman-group-exchange-sha256
 # see this link for more details: https://github.com/k4yt3x/sshd_config#deactivating-short-diffie-hellman-moduli
-#KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group-exchange-sha256,diffie-hellman-group14-sha256
-KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256
+KexAlgorithms sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256
+#KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256
 
 ########## Connection Preferences ##########
 
@@ -136,3 +141,4 @@ TCPKeepAlive no
 
 # disable reverse DNS lookups
 UseDNS no
+
