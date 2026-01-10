@@ -55,13 +55,22 @@ CARTRIDGE_EXTENSIONS = (
     '.col', '.int', '.vec', '.bin'
 )
 
+# NOTE: CSO (Compressed ISO) is NOT directly supported by RAHasher.
+# CSO files must be decompressed to ISO first, or used with an emulator
+# that handles decompression (like PPSSPP standalone for PSP).
+# We include .cso in the list to detect these files and warn users.
 DISC_EXTENSIONS = (
-    '.cue', '.iso', '.chd', '.cso', '.pbp', '.gdi', '.m3u'
+    '.cue', '.iso', '.chd', '.pbp', '.gdi', '.m3u'
 )
+
+# Compressed formats that need special handling
+# CSO: Compressed ISO (PSP) - NOT supported by RAHasher, needs decompression
+# ZSO: Alternative compressed ISO format - NOT supported
+UNSUPPORTED_DISC_FORMATS = ('.cso', '.zso', '.dax', '.jso')
 
 ARCHIVE_EXTENSIONS = ('.zip', '.7z')
 
-ALL_ROM_EXTENSIONS = CARTRIDGE_EXTENSIONS + DISC_EXTENSIONS + ARCHIVE_EXTENSIONS
+ALL_ROM_EXTENSIONS = CARTRIDGE_EXTENSIONS + DISC_EXTENSIONS + ARCHIVE_EXTENSIONS + UNSUPPORTED_DISC_FORMATS
 
 # Systems that particularly need RAHasher (disc-based or special headers)
 # Used for display purposes - RAHasher is preferred for ALL systems when available
@@ -343,6 +352,95 @@ def verify_rahasher(rahasher_path: str) -> bool:
     except (FileNotFoundError, subprocess.TimeoutExpired, PermissionError):
         return False
 
+
+def get_rahasher_version(rahasher_path: str) -> Optional[str]:
+    """Get the installed RAHasher version."""
+    try:
+        result = subprocess.run(
+            [rahasher_path],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        # RAHasher outputs version in format: "RAHasher - X.Y.Z\n..."
+        output = result.stdout + result.stderr  # Version might be in either
+        for line in output.split('\n'):
+            if 'RAHasher' in line:
+                # Extract version number (e.g., "RAHasher - 1.8.1" or "RAHasher 1.8.1")
+                import re
+                match = re.search(r'(\d+\.\d+(?:\.\d+)?)', line)
+                if match:
+                    return match.group(1)
+        return None
+    except (FileNotFoundError, subprocess.TimeoutExpired, PermissionError):
+        return None
+
+
+def get_latest_rahasher_version() -> Optional[tuple]:
+    """Get the latest RAHasher version from GitHub.
+
+    Returns tuple of (version_string, release_url) or None on failure.
+    """
+    try:
+        url = "https://api.github.com/repos/RetroAchievements/RALibretro/releases/latest"
+        req = urllib.request.Request(url, headers={'User-Agent': 'ra_tool'})
+        with urllib.request.urlopen(req, timeout=15) as response:
+            data = json.loads(response.read().decode())
+            tag = data.get('tag_name', '')
+            html_url = data.get('html_url', '')
+            # Tag might be "1.8.1" or "v1.8.1"
+            version = tag.lstrip('v')
+            return (version, html_url)
+    except Exception:
+        return None
+
+
+def parse_version(version_str: str) -> tuple:
+    """Parse version string into tuple for comparison."""
+    try:
+        parts = version_str.split('.')
+        return tuple(int(p) for p in parts)
+    except (ValueError, AttributeError):
+        return (0,)
+
+
+def check_rahasher_version(rahasher_path: str, verbose: bool = True) -> dict:
+    """Check if RAHasher is up to date.
+
+    Returns dict with keys: installed, latest, up_to_date, release_url
+    """
+    result = {
+        'installed': None,
+        'latest': None,
+        'up_to_date': None,
+        'release_url': None
+    }
+
+    installed = get_rahasher_version(rahasher_path)
+    result['installed'] = installed
+
+    latest_info = get_latest_rahasher_version()
+    if latest_info:
+        result['latest'] = latest_info[0]
+        result['release_url'] = latest_info[1]
+
+    if installed and result['latest']:
+        installed_tuple = parse_version(installed)
+        latest_tuple = parse_version(result['latest'])
+        result['up_to_date'] = installed_tuple >= latest_tuple
+
+        if verbose:
+            if result['up_to_date']:
+                print(f"RAHasher {installed} is up to date")
+            else:
+                print(f"RAHasher {installed} is outdated (latest: {result['latest']})")
+                print(f"  Update: {result['release_url']}")
+                print("  Or run: ra_tool.py setup --upgrade")
+    elif verbose and installed:
+        print(f"RAHasher {installed} installed (could not check for updates)")
+
+    return result
+
 # ============================================================================
 # HASHING FUNCTIONS
 # ============================================================================
@@ -436,6 +534,13 @@ def hash_rom(filepath: Path, system_id: int, rahasher_path: Optional[str] = None
                 results.append(('rahasher', ra_hash))
                 return results
         results.append(('error', '7z_not_supported'))
+        return results
+
+    # Check for unsupported compressed disc formats (CSO, ZSO, DAX, JSO)
+    # These need to be decompressed to ISO first, or used with an emulator
+    # that handles decompression on-the-fly (like standalone PPSSPP)
+    elif suffix in UNSUPPORTED_DISC_FORMATS:
+        results.append(('error', f'unsupported_format:{suffix}'))
         return results
 
     # All other files: use RAHasher (handles CHD, CUE, ISO, cartridge ROMs, etc.)
@@ -659,10 +764,14 @@ def cmd_check(args):
             print(f"Warning: RAHasher found but not working: {rahasher}", file=sys.stderr)
             rahasher = None
         else:
-            print(f"Using RAHasher: {rahasher}", file=sys.stderr)
+            version = get_rahasher_version(rahasher)
+            version_str = f" ({version})" if version else ""
+            print(f"Using RAHasher: {rahasher}{version_str}", file=sys.stderr)
+            # Quick version check (non-blocking)
+            check_rahasher_version(rahasher, verbose=False)
     else:
         print("Warning: RAHasher not found. Disc-based formats (CHD, CUE, ISO) will fail.", file=sys.stderr)
-        print("Set RA_HASHER env var or add RAHasher to PATH.", file=sys.stderr)
+        print("Run 'ra_tool.py setup' to install RAHasher.", file=sys.stderr)
 
     # Auto-pull if cache missing or expired (or forced)
     print(f"Loading hash database for system {system_id}...", file=sys.stderr)
@@ -833,7 +942,9 @@ def cmd_hash(args):
             print(f"Warning: RAHasher found but not working: {rahasher}", file=sys.stderr)
             rahasher = None
         else:
-            print(f"Using RAHasher: {rahasher}", file=sys.stderr)
+            version = get_rahasher_version(rahasher)
+            version_str = f" ({version})" if version else ""
+            print(f"Using RAHasher: {rahasher}{version_str}", file=sys.stderr)
     else:
         print("Warning: RAHasher not found, using fallback MD5", file=sys.stderr)
 
@@ -874,22 +985,56 @@ def cmd_setup(args):
     import platform
     import stat
 
+    upgrade = getattr(args, 'upgrade', False)
+    check_only = getattr(args, 'check', False)
+
+    # Check if RAHasher is already installed
+    existing = find_rahasher()
+    if existing:
+        print(f"Found existing RAHasher: {existing}")
+        version_info = check_rahasher_version(existing, verbose=True)
+
+        if check_only:
+            # Just checking version, done
+            sys.exit(0 if version_info.get('up_to_date', True) else 1)
+
+        if version_info.get('up_to_date') and not upgrade:
+            print("\nRAHasher is already up to date. Use --upgrade to reinstall.")
+            sys.exit(0)
+
+        if not upgrade and version_info.get('installed'):
+            print("\nUse --upgrade to update to the latest version.")
+            sys.exit(0)
+
+        print("\nProceeding with upgrade...")
+
     # Detect platform
     system = platform.system().lower()
     machine = platform.machine().lower()
 
+    # Asset naming: RAHasher-{arch}-{os}-{version}.zip
+    # Arch: x64 (64-bit), x86 (32-bit), aarch64 (ARM64)
     if system == 'linux':
         if machine in ('x86_64', 'amd64'):
-            asset_pattern = 'RAHasher-x86_64-Linux'
+            asset_pattern = 'RAHasher-x64-Linux'
         elif machine in ('aarch64', 'arm64'):
             asset_pattern = 'RAHasher-aarch64-Linux'
+        elif machine in ('i386', 'i686', 'x86'):
+            asset_pattern = 'RAHasher-x86-Linux'
         else:
             print(f"Unsupported architecture: {machine}", file=sys.stderr)
             sys.exit(1)
     elif system == 'darwin':
-        asset_pattern = 'RAHasher-x86_64-Darwin'
+        # macOS - try x64 first, may not have ARM builds yet
+        if machine in ('arm64', 'aarch64'):
+            asset_pattern = 'RAHasher-aarch64-Darwin'
+        else:
+            asset_pattern = 'RAHasher-x64-Darwin'
     elif system == 'windows':
-        asset_pattern = 'RAHasher-x86_64-Windows'
+        if machine in ('amd64', 'x86_64'):
+            asset_pattern = 'RAHasher-x64-Windows'
+        else:
+            asset_pattern = 'RAHasher-x86-Windows'
     else:
         print(f"Unsupported OS: {system}", file=sys.stderr)
         sys.exit(1)
@@ -979,9 +1124,13 @@ def cmd_setup(args):
         else:
             print("RAHasher is ready to use!")
 
-        # Verify
+        # Verify and show version
         if verify_rahasher(str(install_path)):
-            print("\n✓ RAHasher verified working")
+            version = get_rahasher_version(str(install_path))
+            if version:
+                print(f"\n✓ RAHasher {version} installed and verified")
+            else:
+                print("\n✓ RAHasher verified working")
         else:
             print("\n! RAHasher installed but verification failed", file=sys.stderr)
 
@@ -1008,7 +1157,11 @@ def cmd_dedup(args):
                   file=sys.stderr)
             rahasher = None
         else:
-            print(f"Using RAHasher: {rahasher}", file=sys.stderr)
+            version = get_rahasher_version(rahasher)
+            version_str = f" ({version})" if version else ""
+            print(f"Using RAHasher: {rahasher}{version_str}", file=sys.stderr)
+            # Quick version check (non-blocking)
+            check_rahasher_version(rahasher, verbose=False)
     else:
         print("Warning: RAHasher not found. Run 'ra_tool.py setup' to install.",
               file=sys.stderr)
@@ -1285,6 +1438,10 @@ Cache:
 
     # setup command
     sub_setup = subparsers.add_parser('setup', help='Download and install RAHasher')
+    sub_setup.add_argument('--upgrade', '-u', action='store_true',
+                           help='Upgrade RAHasher even if already installed')
+    sub_setup.add_argument('--check', '-c', action='store_true',
+                           help='Just check version, don\'t install')
     sub_setup.set_defaults(func=cmd_setup)
 
     # systems command
