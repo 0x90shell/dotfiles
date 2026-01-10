@@ -1176,13 +1176,14 @@ def cmd_dedup(args):
               file=sys.stderr)
         sys.exit(1)
 
-    # Build game_id -> game_info lookup
+    # Build game_id -> game_info lookup (include hashes for missing report)
     game_info = {}
     for g in games:
         game_info[g.get('ID')] = {
             'title': g.get('Title', 'Unknown'),
             'achievements': g.get('NumAchievements', 0),
             'points': g.get('Points', 0),
+            'hashes': g.get('Hashes', []),
         }
 
     # Find ROM files
@@ -1415,21 +1416,70 @@ def cmd_dedup(args):
 
     # Show missing RA titles (games with achievements you don't have)
     show_missing = getattr(args, 'missing', False)
+    missing_base_only = getattr(args, 'missing_base_only', False)
     missing_list_file = getattr(args, 'missing_list', None)
+    summary_only = getattr(args, 'summary', False)
 
-    if show_missing or missing_list_file:
+    if show_missing or missing_list_file or missing_base_only:
         # Find all games with achievements that user doesn't have
         all_achievable = {
             gid: info for gid, info in game_info.items()
             if info.get('achievements', 0) > 0
         }
-        missing_games = {
-            gid: info for gid, info in all_achievable.items()
-            if gid not in games_found
-        }
 
+        # Helper to categorize titles
+        def categorize_title(title):
+            """Returns (category, base_title) - category is 'base', 'hack', 'homebrew', 'subset'"""
+            if '[Subset' in title:
+                # Extract base game name: "Game Name [Subset - X]" -> "Game Name"
+                base = title.split('[Subset')[0].strip()
+                return ('subset', base)
+            elif title.startswith('~Hack~'):
+                return ('hack', title)
+            elif title.startswith('~Homebrew~'):
+                return ('homebrew', title)
+            elif title.startswith('~'):  # Other special (demos, prototypes, etc.)
+                return ('special', title)
+            else:
+                return ('base', title)
+
+        # Build set of base game titles user owns
+        owned_base_titles = set()
+        for gid in games_found.keys():
+            info = game_info.get(gid, {})
+            cat, base = categorize_title(info.get('title', ''))
+            if cat == 'base':
+                owned_base_titles.add(info.get('title', ''))
+            elif cat == 'subset':
+                owned_base_titles.add(base)
+
+        # Find missing games
+        missing_games = {}
+        subsets_owned_base = []  # Subsets for games you already own
+
+        for gid, info in all_achievable.items():
+            if gid in games_found:
+                continue  # Already have this exact game
+
+            title = info.get('title', '')
+            cat, base = categorize_title(title)
+
+            # Skip subsets if you own the base game (you can already earn those achievements)
+            if cat == 'subset' and base in owned_base_titles:
+                subsets_owned_base.append((gid, info))
+                continue
+
+            # Apply base-only filter
+            if missing_base_only and cat != 'base':
+                continue
+
+            missing_games[gid] = info
+
+        # Calculate stats
         missing_ach = sum(info['achievements'] for info in missing_games.values())
         missing_pts = sum(info['points'] for info in missing_games.values())
+        subset_ach = sum(info['achievements'] for _, info in subsets_owned_base)
+        subset_pts = sum(info['points'] for _, info in subsets_owned_base)
 
         # Sort by points descending (most valuable first)
         sorted_missing = sorted(
@@ -1437,38 +1487,61 @@ def cmd_dedup(args):
             key=lambda x: (-x[1]['points'], -x[1]['achievements'])
         )
 
-        # Write to file if requested
+        # Write to file if requested (include hashes for ROM hunting)
         if missing_list_file:
             with open(missing_list_file, 'w') as f:
+                # Header
+                f.write("# Title\tAchievements\tPoints\tURL\tHashes\n")
                 for gid, info in sorted_missing:
+                    hashes = ','.join(info.get('hashes', [])[:5])  # First 5 hashes
                     f.write(f"{info['title']}\t{info['achievements']}\t{info['points']}\t"
-                            f"https://retroachievements.org/game/{gid}\n")
+                            f"https://retroachievements.org/game/{gid}\t{hashes}\n")
             print(f"MISSING list saved to: {missing_list_file} ({len(missing_games)} titles)",
                   file=sys.stderr)
 
         # Show to stderr if --missing flag
-        if show_missing:
+        if show_missing or missing_base_only:
+            filter_label = " (base games only)" if missing_base_only else ""
             print(f"\n{'=' * 70}", file=sys.stderr)
-            print(f"MISSING RA TITLES ({len(missing_games)} games, "
+            print(f"MISSING RA TITLES{filter_label} ({len(missing_games)} games, "
                   f"{missing_ach} achievements, {missing_pts} points)", file=sys.stderr)
             print(f"{'=' * 70}", file=sys.stderr)
 
-            # Show top 50 by default, or all if not too many
-            show_count = min(50, len(sorted_missing))
+            # Show all if not summary mode, otherwise top 50
+            show_count = len(sorted_missing) if not summary_only else min(50, len(sorted_missing))
+
             for gid, info in sorted_missing[:show_count]:
-                print(f"  {info['title']}", file=sys.stderr)
-                print(f"    {info['achievements']} achievements, {info['points']} pts "
-                      f"- https://retroachievements.org/game/{gid}", file=sys.stderr)
+                title = info['title']
+                hashes = info.get('hashes', [])
+                hash_str = hashes[0] if hashes else 'no hash'
+
+                print(f"  {title}", file=sys.stderr)
+                print(f"    {info['achievements']} ach, {info['points']} pts | "
+                      f"{hash_str} | https://retroachievements.org/game/{gid}", file=sys.stderr)
 
             if len(sorted_missing) > show_count:
                 remaining = len(sorted_missing) - show_count
-                print(f"\n  ... and {remaining} more titles", file=sys.stderr)
+                print(f"\n  ... and {remaining} more (use without -s to see all)", file=sys.stderr)
 
             # Stats
-            print(f"\nYou have: {len(games_found)}/{len(all_achievable)} achievable titles "
+            base_achievable = sum(
+                1 for gid, info in all_achievable.items()
+                if categorize_title(info['title'])[0] == 'base'
+            )
+            base_owned = sum(
+                1 for gid in games_found
+                if categorize_title(game_info.get(gid, {}).get('title', ''))[0] == 'base'
+            )
+
+            print(f"\nCollection: {len(games_found)}/{len(all_achievable)} total achievable "
                   f"({100 * len(games_found) / len(all_achievable):.1f}%)", file=sys.stderr)
-            print(f"Missing: {len(missing_games)} titles worth {missing_ach} achievements "
+            print(f"  Base games: {base_owned}/{base_achievable}", file=sys.stderr)
+            print(f"  Missing: {len(missing_games)} titles = {missing_ach} achievements "
                   f"({missing_pts} points)", file=sys.stderr)
+
+            if subsets_owned_base:
+                print(f"  Subsets available (own base): {len(subsets_owned_base)} = "
+                      f"{subset_ach} achievements ({subset_pts} points)", file=sys.stderr)
 
     # Offer to delete
     if delete_list and args.execute:
@@ -1501,6 +1574,8 @@ Examples:
   %(prog)s dedup snes ~/roms/snes/      # Find duplicates (human-readable)
   %(prog)s dedup snes ~/roms/ -s        # Quick summary only
   %(prog)s dedup snes ~/roms/ --missing # Show RA titles you're missing
+  %(prog)s dedup snes ~/roms/ --missing-base-only  # Missing official games only
+  %(prog)s dedup snes ~/roms/ --missing-list wanted.txt  # Export with hashes
   %(prog)s dedup snes ~/roms/ -o report.txt    # Save report to file
   %(prog)s dedup snes ~/roms/ --format json -o results.json  # JSON to file
   %(prog)s dedup snes ~/roms/ --format csv     # CSV output for spreadsheets
@@ -1569,6 +1644,8 @@ Cache:
                            help='Output format: text (default), json, or csv')
     sub_dedup.add_argument('--missing', action='store_true',
                            help='Show RA titles you don\'t have (with achievements)')
+    sub_dedup.add_argument('--missing-base-only', action='store_true',
+                           help='Only show base games (exclude hacks, homebrew, subsets)')
     sub_dedup.add_argument('--missing-list', help='Output file for missing RA titles')
     sub_dedup.add_argument('--keep-list', help='Output file for ROMs to keep (one per line)')
     sub_dedup.add_argument('--delete-list', help='Output file for duplicate ROMs to delete')
