@@ -1373,7 +1373,16 @@ def cmd_dedup(args):
     finally:
         if output_file:
             out_handle.close()
-            print(f"Output saved to: {output_file}", file=sys.stderr)
+
+    # Always print summary to stderr (visible even when output goes to file)
+    duplicates = {gid: roms for gid, roms in games_found.items() if len(roms) > 1}
+    print(f"\n✓ Scanned {len(rom_files)} ROMs → {len(games_found)} RA titles, "
+          f"{len(duplicates)} with duplicates, {len(unsupported)} unsupported", file=sys.stderr)
+    print(f"  Keep: {len(keep_list)} | Delete: {len(delete_list)} | "
+          f"Achievements: {total_ach} ({total_pts} pts)", file=sys.stderr)
+
+    if output_file:
+        print(f"  Output saved to: {output_file}", file=sys.stderr)
 
     # Output files if requested (works with any format)
     if args.keep_list:
