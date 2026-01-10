@@ -1,0 +1,1340 @@
+#!/usr/bin/env python3
+"""
+RetroAchievements ROM Compatibility Tool
+
+Features:
+- Pull hash databases for any/all RA-supported systems
+- Hash local ROMs using RAHasher for all systems (handles CHD, headers, disc formats)
+- Auto-pull if cache missing or older than 6 months
+- Compare local collection against RA database
+- Generate compatibility reports
+
+Usage:
+  ra_tool.py systems                     # List all RA systems with IDs
+  ra_tool.py pull <system_id|all>        # Download hash DB for system(s)
+  ra_tool.py check <system_id> <rom_dir> # Check ROMs against cached DB
+  ra_tool.py hash <system_id> <file>     # Hash a single file
+
+Environment:
+  RA_API_KEY  - Your RetroAchievements Web API Key (required for pull)
+  RA_HASHER   - Path to RAHasher executable (default: searches PATH)
+
+Author: Generated for Zach's ROM management workflow
+"""
+
+import argparse
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+
+import urllib.request
+import urllib.error
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Optional
+import zipfile
+
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+
+# Default cache directory
+CACHE_DIR = Path.home() / ".cache" / "ra_tool"
+
+# Cache expiry in days (6 months)
+CACHE_EXPIRY_DAYS = 180
+
+# ROM file extensions by category
+CARTRIDGE_EXTENSIONS = (
+    '.sfc', '.smc', '.nes', '.gba', '.gb', '.gbc', '.md', '.gen',
+    '.sms', '.gg', '.n64', '.z64', '.v64', '.nds', '.pce', '.a26',
+    '.a78', '.lnx', '.ngp', '.ngc', '.ws', '.wsc', '.vb', '.sg',
+    '.col', '.int', '.vec', '.bin'
+)
+
+DISC_EXTENSIONS = (
+    '.cue', '.iso', '.chd', '.cso', '.pbp', '.gdi', '.m3u'
+)
+
+ARCHIVE_EXTENSIONS = ('.zip', '.7z')
+
+ALL_ROM_EXTENSIONS = CARTRIDGE_EXTENSIONS + DISC_EXTENSIONS + ARCHIVE_EXTENSIONS
+
+# Systems that particularly need RAHasher (disc-based or special headers)
+# Used for display purposes - RAHasher is preferred for ALL systems when available
+RAHASHER_REQUIRED = {
+    7,   # NES (headerless)
+    12,  # PlayStation
+    13,  # Atari Lynx (header detection)
+    21,  # PlayStation 2
+    39,  # Saturn
+    40,  # Dreamcast
+    41,  # PlayStation Portable
+    49,  # PC-FX
+    56,  # Mega CD / Sega CD
+    76,  # PC Engine CD / TurboGrafx-CD
+    77,  # Atari Jaguar CD
+}
+
+# System name aliases - maps common names to system ID
+# These are used for user-friendly lookups
+SYSTEM_ALIASES = {
+    # SNES variants
+    'snes': 3, 'super nintendo': 3, 'super famicom': 3, 'sfc': 3,
+    # Genesis/Mega Drive
+    'genesis': 1, 'mega drive': 1, 'megadrive': 1, 'md': 1,
+    # NES variants
+    'nes': 7, 'famicom': 7, 'fc': 7,
+    # Game Boy variants
+    'gb': 4, 'game boy': 4, 'gameboy': 4,
+    'gbc': 6, 'game boy color': 6, 'gameboy color': 6,
+    'gba': 5, 'game boy advance': 5, 'gameboy advance': 5,
+    # PlayStation variants
+    'ps1': 12, 'psx': 12, 'playstation': 12, 'playstation 1': 12,
+    'ps2': 21, 'playstation 2': 21,
+    'psp': 41, 'playstation portable': 41,
+    # Nintendo handhelds
+    'nds': 18, 'ds': 18, 'nintendo ds': 18,
+    'n64': 2, 'nintendo 64': 2,
+    # Sega
+    'saturn': 39, 'sega saturn': 39,
+    'dreamcast': 40, 'dc': 40,
+    'sega cd': 56, 'mega cd': 56, 'segacd': 56, 'megacd': 56,
+    'master system': 11, 'sms': 11,
+    'game gear': 15, 'gg': 15,
+    '32x': 10, 'sega 32x': 10,
+    # Atari
+    'atari 2600': 25, '2600': 25, 'a2600': 25,
+    'atari 7800': 51, '7800': 51, 'a7800': 51,
+    'lynx': 13, 'atari lynx': 13,
+    'jaguar': 17, 'atari jaguar': 17,
+    # PC Engine / TurboGrafx
+    'pce': 8, 'pc engine': 8, 'turbografx': 8, 'tg16': 8,
+    'pce cd': 76, 'pc engine cd': 76, 'turbografx cd': 76,
+    # Neo Geo
+    'neo geo': 14, 'neogeo': 14, 'ng': 14,
+    'neo geo pocket': 53, 'ngp': 53,
+    'neo geo pocket color': 80, 'ngpc': 80,
+    # Other
+    'msx': 29,
+    'colecovision': 44, 'coleco': 44,
+    'intellivision': 45,
+    'wonderswan': 53, 'ws': 53,
+    'wonderswan color': 63, 'wsc': 63,
+    'virtual boy': 28, 'vb': 28,
+    'arcade': 27,
+    'pokemon mini': 24,
+}
+
+# ============================================================================
+# SYSTEMS CACHE
+# ============================================================================
+
+
+def get_systems_cache_path() -> Path:
+    """Get path to systems cache file."""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    return CACHE_DIR / "ra_systems.json"
+
+
+def load_systems_cache() -> Optional[dict]:
+    """Load systems cache if valid."""
+    cache_path = get_systems_cache_path()
+    if not cache_path.exists():
+        return None
+
+    try:
+        with open(cache_path) as f:
+            cached = json.load(f)
+
+        # Check expiry (30 days for systems - they rarely change)
+        cached_at = datetime.fromisoformat(cached['cached_at'])
+        if datetime.now() - cached_at > timedelta(days=30):
+            return None
+
+        return cached
+    except (json.JSONDecodeError, KeyError, ValueError):
+        return None
+
+
+def save_systems_cache(systems: list) -> dict:
+    """Save systems to cache and build lookup tables."""
+    # Build lookups
+    by_id = {}
+    by_name = {}
+
+    for s in systems:
+        sid = s.get('ID')
+        name = s.get('Name', '')
+        by_id[sid] = {'id': sid, 'name': name}
+        # Lowercase name for lookup
+        by_name[name.lower()] = sid
+
+    cached = {
+        'cached_at': datetime.now().isoformat(),
+        'systems': systems,
+        'by_id': by_id,
+        'by_name': by_name,
+    }
+
+    cache_path = get_systems_cache_path()
+    with open(cache_path, 'w') as f:
+        json.dump(cached, f)
+
+    return cached
+
+
+def ensure_systems_cache(force: bool = False) -> dict:
+    """Ensure systems cache exists, fetch if needed."""
+    if not force:
+        cached = load_systems_cache()
+        if cached:
+            return cached
+
+    print("Fetching systems list from RetroAchievements...", file=sys.stderr)
+    systems = fetch_systems()
+    return save_systems_cache(systems)
+
+
+def resolve_system_id(system_arg: str) -> int:
+    """
+    Resolve a system argument to its numeric ID.
+    Accepts: numeric ID, system name, or alias.
+    Returns system ID or exits with error.
+    """
+    # Try as numeric ID first
+    try:
+        return int(system_arg)
+    except ValueError:
+        pass
+
+    # Normalize input
+    normalized = system_arg.lower().strip()
+
+    # Check hardcoded aliases first (faster, no API needed)
+    if normalized in SYSTEM_ALIASES:
+        return SYSTEM_ALIASES[normalized]
+
+    # Check cached system names
+    cached = ensure_systems_cache()
+    by_name = cached.get('by_name', {})
+
+    if normalized in by_name:
+        return by_name[normalized]
+
+    # Fuzzy match - check if input is contained in any system name
+    for name, sid in by_name.items():
+        if normalized in name or name in normalized:
+            return sid
+
+    # Not found - show available systems
+    print(f"Error: Unknown system '{system_arg}'", file=sys.stderr)
+    print("Use 'ra_tool.py systems' to see available systems", file=sys.stderr)
+    print("Common examples: snes, genesis, nes, psx, gba, n64", file=sys.stderr)
+    sys.exit(1)
+
+# ============================================================================
+# API FUNCTIONS
+# ============================================================================
+
+
+def get_api_key() -> str:
+    """Get API key from environment."""
+    key = os.environ.get("RA_API_KEY")
+    if not key:
+        print("Error: RA_API_KEY environment variable not set", file=sys.stderr)
+        print("Get your key from: https://retroachievements.org/settings (Keys section)", file=sys.stderr)
+        sys.exit(1)
+    return key
+
+
+def api_request(endpoint: str, params: dict) -> dict:
+    """Make an API request to RetroAchievements."""
+    api_key = get_api_key()
+    params["y"] = api_key
+
+    query = "&".join(f"{k}={v}" for k, v in params.items())
+    url = f"https://retroachievements.org/API/{endpoint}?{query}"
+
+    try:
+        with urllib.request.urlopen(url, timeout=60) as response:
+            return json.loads(response.read().decode())
+    except urllib.error.HTTPError as e:
+        print(f"API Error: {e.code} {e.reason}", file=sys.stderr)
+        sys.exit(1)
+    except urllib.error.URLError as e:
+        print(f"Network Error: {e.reason}", file=sys.stderr)
+        sys.exit(1)
+
+
+def fetch_systems() -> list:
+    """Fetch all system IDs from RA."""
+    return api_request("API_GetConsoleIDs.php", {})
+
+
+def fetch_game_list(system_id: int, include_hashes: bool = True) -> list:
+    """Fetch all games for a system."""
+    params = {"i": system_id}
+    if include_hashes:
+        params["h"] = 1
+        params["f"] = 1  # Include games without achievements
+    return api_request("API_GetGameList.php", params)
+
+# ============================================================================
+# RAHASHER DETECTION
+# ============================================================================
+
+
+def find_rahasher() -> Optional[str]:
+    """Find RAHasher executable."""
+    # Check environment variable first
+    env_path = os.environ.get('RA_HASHER')
+    if env_path and os.path.isfile(env_path):
+        return env_path
+
+    # Check PATH
+    rahasher = shutil.which('RAHasher') or shutil.which('rahasher')
+    if rahasher:
+        return rahasher
+
+    # Check common locations directly (in preference order)
+    # ~/bin is checked first as user's preferred location
+    common_paths = [
+        Path.home() / 'bin' / 'RAHasher',
+        Path.home() / '.local' / 'bin' / 'RAHasher',
+        Path('/usr/local/bin/RAHasher'),
+        Path('/opt/retroachievements/RAHasher'),
+    ]
+    for p in common_paths:
+        if p.exists() and p.is_file():
+            return str(p)
+
+    return None
+
+
+def get_rahasher_install_dir() -> Path:
+    """Get the preferred directory for installing RAHasher."""
+    # Prefer ~/bin if it exists (user's custom bin)
+    home_bin = Path.home() / 'bin'
+    if home_bin.exists() and home_bin.is_dir():
+        return home_bin
+
+    # Fall back to ~/.local/bin (XDG standard)
+    local_bin = Path.home() / '.local' / 'bin'
+    # Create it if needed - this is the guaranteed fallback
+    local_bin.mkdir(parents=True, exist_ok=True)
+    return local_bin
+
+
+def verify_rahasher(rahasher_path: str) -> bool:
+    """Verify RAHasher works."""
+    try:
+        subprocess.run(
+            [rahasher_path],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        # RAHasher with no args returns usage info
+        return True
+    except (FileNotFoundError, subprocess.TimeoutExpired, PermissionError):
+        return False
+
+# ============================================================================
+# HASHING FUNCTIONS
+# ============================================================================
+
+
+def hash_with_rahasher(filepath: Path, system_id: int, rahasher_path: str) -> Optional[str]:
+    """Hash a file using RAHasher. Handles all formats including CHD."""
+    try:
+        result = subprocess.run(
+            [rahasher_path, str(system_id), str(filepath)],
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 min timeout for large CHD files
+        )
+        if result.returncode == 0:
+            # RAHasher outputs: "hash filename" or just "hash"
+            output = result.stdout.strip()
+            if output:
+                # Get the hash (first word if multiple, or the whole thing)
+                hash_val = output.split()[0] if ' ' in output else output
+                # Validate it looks like a hash (32 hex chars for MD5)
+                if len(hash_val) == 32 and all(c in '0123456789abcdef' for c in hash_val.lower()):
+                    return hash_val.lower()
+                # Could be longer hash, just return it
+                return hash_val.lower()
+        # Log error for debugging
+        if result.stderr:
+            print(f"  RAHasher stderr: {result.stderr.strip()}", file=sys.stderr)
+        return None
+    except FileNotFoundError:
+        return None
+    except subprocess.TimeoutExpired:
+        print(f"  RAHasher timeout for: {filepath.name}", file=sys.stderr)
+        return None
+    except Exception as e:
+        print(f"  RAHasher error: {e}", file=sys.stderr)
+        return None
+
+
+def md5_file(filepath: Path) -> str:
+    """Calculate MD5 hash of a file (fallback when RAHasher unavailable)."""
+    hash_md5 = hashlib.md5()
+    with open(filepath, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
+
+def hash_rom(filepath: Path, system_id: int, rahasher_path: Optional[str] = None) -> list:
+    """
+    Hash a ROM file using RAHasher (preferred) or fallback MD5.
+    Returns list of (hash_type, hash_value) tuples.
+    """
+    results = []
+    suffix = filepath.suffix.lower()
+
+    # Handle ZIP files - extract and hash contents
+    if suffix == ".zip":
+        try:
+            with zipfile.ZipFile(filepath, 'r') as zf:
+                for name in zf.namelist():
+                    name_lower = name.lower()
+                    if any(name_lower.endswith(ext) for ext in CARTRIDGE_EXTENSIONS + DISC_EXTENSIONS):
+                        # Extract to temp, hash with RAHasher, cleanup
+                        if rahasher_path:
+                            import tempfile
+                            with tempfile.TemporaryDirectory() as tmpdir:
+                                extracted = Path(tmpdir) / name
+                                extracted.parent.mkdir(parents=True, exist_ok=True)
+                                with open(extracted, 'wb') as f:
+                                    f.write(zf.read(name))
+                                ra_hash = hash_with_rahasher(extracted, system_id, rahasher_path)
+                                if ra_hash:
+                                    results.append(('rahasher', ra_hash))
+                                    return results
+
+                        # Fallback: direct MD5 of extracted content
+                        data = zf.read(name)
+                        results.append(('md5', hashlib.md5(data).hexdigest()))
+                        return results
+        except zipfile.BadZipFile:
+            results.append(('error', 'bad_zip'))
+            return results
+
+    # Handle 7z files
+    elif suffix == ".7z":
+        if rahasher_path:
+            # RAHasher might handle 7z directly in newer versions
+            ra_hash = hash_with_rahasher(filepath, system_id, rahasher_path)
+            if ra_hash:
+                results.append(('rahasher', ra_hash))
+                return results
+        results.append(('error', '7z_not_supported'))
+        return results
+
+    # All other files: use RAHasher (handles CHD, CUE, ISO, cartridge ROMs, etc.)
+    else:
+        if rahasher_path:
+            ra_hash = hash_with_rahasher(filepath, system_id, rahasher_path)
+            if ra_hash:
+                results.append(('rahasher', ra_hash))
+                return results
+            # RAHasher failed, fall through to MD5 for non-disc formats
+
+        # Fallback MD5 for cartridge formats only (disc formats need RAHasher)
+        if suffix in CARTRIDGE_EXTENSIONS or suffix == '.bin':
+            results.append(('md5', md5_file(filepath)))
+        elif suffix in DISC_EXTENSIONS:
+            results.append(('error', 'rahasher_required'))
+        else:
+            results.append(('md5', md5_file(filepath)))
+
+    return results
+
+# ============================================================================
+# CACHE MANAGEMENT
+# ============================================================================
+
+
+def get_cache_path(system_id: int) -> Path:
+    """Get cache file path for a system."""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    return CACHE_DIR / f"ra_system_{system_id}.json"
+
+
+def is_cache_valid(system_id: int) -> bool:
+    """Check if cache exists and is not expired (< 6 months old)."""
+    cache_path = get_cache_path(system_id)
+    if not cache_path.exists():
+        return False
+
+    # Check file modification time
+    mtime = datetime.fromtimestamp(cache_path.stat().st_mtime)
+    expiry = datetime.now() - timedelta(days=CACHE_EXPIRY_DAYS)
+
+    if mtime < expiry:
+        return False
+
+    # Also check internal timestamp if present
+    try:
+        with open(cache_path) as f:
+            data = json.load(f)
+        cached_time = data.get('cached_at')
+        if cached_time:
+            cached_dt = datetime.fromisoformat(cached_time)
+            if cached_dt < expiry:
+                return False
+    except (json.JSONDecodeError, KeyError, ValueError):
+        return False
+
+    return True
+
+
+def get_cache_age_str(system_id: int) -> str:
+    """Get human-readable cache age."""
+    cache_path = get_cache_path(system_id)
+    if not cache_path.exists():
+        return "not cached"
+
+    mtime = datetime.fromtimestamp(cache_path.stat().st_mtime)
+    age = datetime.now() - mtime
+
+    if age.days > 0:
+        return f"{age.days} days old"
+    elif age.seconds > 3600:
+        return f"{age.seconds // 3600} hours old"
+    else:
+        return "recent"
+
+
+def load_cached_hashes(system_id: int) -> Optional[dict]:
+    """Load cached hash database for a system."""
+    cache_path = get_cache_path(system_id)
+    if cache_path.exists():
+        try:
+            with open(cache_path) as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            return None
+    return None
+
+
+def save_cached_hashes(system_id: int, data: dict):
+    """Save hash database to cache."""
+    cache_path = get_cache_path(system_id)
+    with open(cache_path, "w") as f:
+        json.dump(data, f)
+    print(f"  Cached to: {cache_path}", file=sys.stderr)
+
+
+def build_hash_lookup(games: list) -> dict:
+    """Build hash -> game info lookup from game list."""
+    lookup = {}
+    for game in games:
+        info = {
+            'title': game.get('Title', 'Unknown'),
+            'id': game.get('ID', 0),
+            'achievements': game.get('NumAchievements', 0),
+            'points': game.get('Points', 0),
+        }
+        for h in game.get('Hashes', []):
+            lookup[h.lower()] = info
+    return lookup
+
+
+def ensure_cache(system_id: int, force: bool = False) -> dict:
+    """
+    Ensure cache is available and valid. Auto-pulls if needed.
+    Returns the cached data.
+    """
+    if not force and is_cache_valid(system_id):
+        cached = load_cached_hashes(system_id)
+        if cached:
+            age = get_cache_age_str(system_id)
+            print(f"  Using cached data ({age})", file=sys.stderr)
+            return cached
+
+    # Need to pull
+    reason = "expired" if get_cache_path(system_id).exists() else "missing"
+    print(f"  Cache {reason}, pulling from RA API...", file=sys.stderr)
+
+    games = fetch_game_list(system_id)
+    if not games:
+        print(f"  Warning: No games returned for system {system_id}", file=sys.stderr)
+        return {'system_id': system_id, 'games': [], 'lookup': {}, 'game_count': 0, 'hash_count': 0}
+
+    lookup = build_hash_lookup(games)
+
+    data = {
+        'system_id': system_id,
+        'cached_at': datetime.now().isoformat(),
+        'game_count': len(games),
+        'hash_count': len(lookup),
+        'games': games,
+        'lookup': lookup,
+    }
+
+    save_cached_hashes(system_id, data)
+    print(f"  Cached {len(games)} games, {len(lookup)} hashes", file=sys.stderr)
+    return data
+
+# ============================================================================
+# COMMANDS
+# ============================================================================
+
+
+def cmd_systems(args):
+    """List all RA systems."""
+    systems = fetch_systems()
+
+    print(f"{'ID':<4} {'Name':<40} {'Active':<8} {'Game System'}")
+    print("-" * 70)
+
+    for console in sorted(systems, key=lambda x: x.get('ID', 0)):
+        sys_id = console.get('ID', 0)
+        name = console.get('Name', 'Unknown')
+        active = "Yes" if console.get('Active') else "No"
+        is_game = "Yes" if console.get('IsGameSystem') else "No"
+
+        # Mark systems requiring RAHasher
+        marker = "*" if sys_id in RAHASHER_REQUIRED else " "
+        print(f"{sys_id:<4}{marker}{name:<40} {active:<8} {is_game}")
+
+    print()
+    print("* = Requires RAHasher for accurate hashing (disc-based or special header)")
+
+
+def cmd_pull(args):
+    """Pull hash database for system(s)."""
+    if args.system.lower() == "all":
+        cached_systems = ensure_systems_cache()
+        system_ids = [s['ID'] for s in cached_systems['systems'] if s.get('IsGameSystem')]
+        print(f"Pulling {len(system_ids)} systems...", file=sys.stderr)
+    else:
+        system_ids = [resolve_system_id(args.system)]
+
+    for sys_id in system_ids:
+        print(f"\nFetching system {sys_id}...", file=sys.stderr)
+        games = fetch_game_list(sys_id)
+
+        if not games:
+            print(f"  No games found for system {sys_id}", file=sys.stderr)
+            continue
+
+        # Build lookup and save
+        lookup = build_hash_lookup(games)
+
+        data = {
+            'system_id': sys_id,
+            'cached_at': datetime.now().isoformat(),
+            'game_count': len(games),
+            'hash_count': len(lookup),
+            'games': games,
+            'lookup': lookup,
+        }
+
+        save_cached_hashes(sys_id, data)
+        print(f"  ✓ {len(games)} games, {len(lookup)} hashes", file=sys.stderr)
+
+
+def cmd_check(args):
+    """Check ROMs against cached database (auto-pulls if needed)."""
+    system_id = resolve_system_id(args.system)
+    rom_dir = Path(args.rom_dir)
+
+    if not rom_dir.exists():
+        print(f"Error: Directory not found: {rom_dir}", file=sys.stderr)
+        sys.exit(1)
+
+    # Find RAHasher
+    rahasher = find_rahasher()
+    if rahasher:
+        if not verify_rahasher(rahasher):
+            print(f"Warning: RAHasher found but not working: {rahasher}", file=sys.stderr)
+            rahasher = None
+        else:
+            print(f"Using RAHasher: {rahasher}", file=sys.stderr)
+    else:
+        print("Warning: RAHasher not found. Disc-based formats (CHD, CUE, ISO) will fail.", file=sys.stderr)
+        print("Set RA_HASHER env var or add RAHasher to PATH.", file=sys.stderr)
+
+    # Auto-pull if cache missing or expired (or forced)
+    print(f"Loading hash database for system {system_id}...", file=sys.stderr)
+    cached = ensure_cache(system_id, force=getattr(args, 'force', False))
+    lookup = cached.get('lookup', {})
+
+    if not lookup:
+        print(f"Error: No hashes available for system {system_id}", file=sys.stderr)
+        sys.exit(1)
+
+    # Find ROM files
+    rom_files = []
+    for ext in ALL_ROM_EXTENSIONS:
+        rom_files.extend(rom_dir.rglob(f"*{ext}"))
+        # Also check uppercase
+        rom_files.extend(rom_dir.rglob(f"*{ext.upper()}"))
+
+    # Deduplicate (rglob can return same file for different case patterns)
+    rom_files = list(set(rom_files))
+
+    print(f"Found {len(rom_files)} ROM files to check", file=sys.stderr)
+
+    if not rom_files:
+        print("No ROM files found in directory.", file=sys.stderr)
+        return
+
+    # Check each ROM
+    supported = []
+    supported_no_ach = []
+    unsupported = []
+    errors = []
+
+    print("Hashing ROMs...", file=sys.stderr)
+    for i, rom_path in enumerate(rom_files):
+        if args.verbose and (i % 25 == 0 or i == len(rom_files) - 1):
+            print(f"  [{i + 1}/{len(rom_files)}] {rom_path.name[:50]}...", file=sys.stderr)
+
+        rel_path = rom_path.relative_to(rom_dir)
+        hashes = hash_rom(rom_path, system_id, rahasher)
+
+        if not hashes:
+            errors.append((str(rel_path), 'no_hash'))
+            continue
+
+        if hashes[0][0] == 'error':
+            errors.append((str(rel_path), hashes[0][1]))
+            continue
+
+        # Check against lookup
+        matched = None
+        matched_hash = None
+        for hash_type, hash_val in hashes:
+            if hash_val.lower() in lookup:
+                matched = lookup[hash_val.lower()]
+                matched_hash = hash_val
+                break
+
+        if matched:
+            if matched['achievements'] > 0:
+                supported.append((str(rel_path), matched, matched_hash))
+            else:
+                supported_no_ach.append((str(rel_path), matched, matched_hash))
+        else:
+            unsupported.append((str(rel_path), [h[1] for h in hashes if h[0] != 'error']))
+
+    # Setup output (file or stdout)
+    output_file = None
+    output = sys.stdout
+    if args.output:
+        output_file = open(args.output, 'w')
+        output = output_file
+        print(f"Writing report to: {args.output}", file=sys.stderr)
+
+    def out(msg=""):
+        print(msg, file=output)
+
+    # Output report
+    out("\n" + "=" * 70)
+    out("RETROACHIEVEMENTS COMPATIBILITY REPORT")
+    out("=" * 70)
+    out(f"System ID: {system_id}")
+    out(f"ROM Directory: {rom_dir}")
+    out(f"Database: {cached.get('game_count', '?')} games, {cached.get('hash_count', '?')} hashes")
+    cache_age = get_cache_age_str(system_id)
+    out(f"Cache: {cache_age}")
+    out("\nResults:")
+    out(f"  ✓ Supported (achievements): {len(supported)}")
+    out(f"  ○ Supported (no achievements): {len(supported_no_ach)}")
+    out(f"  ✗ Not found: {len(unsupported)}")
+    if errors:
+        out(f"  ! Errors: {len(errors)}")
+
+    # Supported with achievements
+    if supported:
+        out("\n" + "=" * 70)
+        out(f"SUPPORTED - ACHIEVEMENTS AVAILABLE ({len(supported)})")
+        out("=" * 70)
+        for rom, info, h in sorted(supported, key=lambda x: -x[1]['achievements']):
+            out(f"\n{rom}")
+            out(f"  → {info['title']}")
+            out(f"    {info['achievements']} achievements, {info['points']} points")
+            out(f"    https://retroachievements.org/game/{info['id']}")
+
+    # Supported without achievements
+    if supported_no_ach and args.verbose:
+        out("\n" + "=" * 70)
+        out(f"SUPPORTED - NO ACHIEVEMENTS ({len(supported_no_ach)})")
+        out("=" * 70)
+        for rom, info, h in sorted(supported_no_ach, key=lambda x: x[1]['title']):
+            out(f"\n{rom}")
+            out(f"  → {info['title']}")
+
+    # Unsupported
+    if unsupported:
+        out("\n" + "=" * 70)
+        out(f"NOT IN DATABASE ({len(unsupported)})")
+        out("=" * 70)
+        for rom, hashes in sorted(unsupported):
+            out(f"\n{rom}")
+            if hashes:
+                out(f"  MD5: {hashes[0]}")
+
+    # Errors
+    if errors:
+        out("\n" + "=" * 70)
+        out(f"ERRORS ({len(errors)})")
+        out("=" * 70)
+        for rom, err in sorted(errors):
+            out(f"\n{rom}")
+            out(f"  Error: {err}")
+
+    # Summary
+    out("\n" + "=" * 70)
+    out("SUMMARY")
+    out("=" * 70)
+    total_roms = len(rom_files)
+    total_supported = len(supported) + len(supported_no_ach)
+    total_ach = sum(info['achievements'] for _, info, _ in supported)
+    total_pts = sum(info['points'] for _, info, _ in supported)
+    out(f"Total ROMs scanned: {total_roms}")
+    out(f"Supported: {total_supported} ({len(supported)} with achievements, {len(supported_no_ach)} without)")
+    out(f"Unsupported: {len(unsupported)}")
+    if errors:
+        out(f"Errors: {len(errors)}")
+    out(f"Achievable: {total_ach} achievements, {total_pts} points")
+    pct = len(supported) / len(rom_files) * 100 if rom_files else 0
+    out(f"Achievement coverage: {pct:.1f}% of your ROMs")
+
+    # Close file if opened
+    if output_file:
+        output_file.close()
+        print(f"Report saved to: {args.output}", file=sys.stderr)
+
+
+def cmd_hash(args):
+    """Hash a single file using RAHasher."""
+    system_id = resolve_system_id(args.system)
+    filepath = Path(args.file)
+
+    if not filepath.exists():
+        print(f"Error: File not found: {filepath}", file=sys.stderr)
+        sys.exit(1)
+
+    # Find RAHasher
+    rahasher = find_rahasher()
+    if rahasher:
+        if not verify_rahasher(rahasher):
+            print(f"Warning: RAHasher found but not working: {rahasher}", file=sys.stderr)
+            rahasher = None
+        else:
+            print(f"Using RAHasher: {rahasher}", file=sys.stderr)
+    else:
+        print("Warning: RAHasher not found, using fallback MD5", file=sys.stderr)
+
+    hashes = hash_rom(filepath, system_id, rahasher)
+
+    print(f"\nFile: {filepath}")
+    print(f"Size: {filepath.stat().st_size:,} bytes")
+    print(f"System ID: {system_id}")
+    print("\nHashes:")
+    for hash_type, hash_val in hashes:
+        status = "✓" if hash_type == 'rahasher' else "○"
+        print(f"  {status} {hash_type}: {hash_val}")
+
+    # If we have a cached DB, check if this hash matches anything
+    cached = load_cached_hashes(system_id)
+    if cached and 'lookup' in cached:
+        lookup = cached['lookup']
+        for hash_type, hash_val in hashes:
+            if hash_val.lower() in lookup:
+                info = lookup[hash_val.lower()]
+                print("\n✓ MATCH FOUND:")
+                print(f"  Title: {info['title']}")
+                print(f"  Achievements: {info['achievements']}")
+                print(f"  Points: {info['points']}")
+                print(f"  https://retroachievements.org/game/{info['id']}")
+                return
+        print(f"\n✗ No match in cached database ({cached.get('hash_count', 0)} hashes)")
+    else:
+        print(f"\n  (No cached DB for system {system_id} - run 'check' to auto-pull)")
+
+# ============================================================================
+# MAIN
+# ============================================================================
+
+
+def cmd_setup(args):
+    """Download and install RAHasher."""
+    import platform
+    import stat
+
+    # Detect platform
+    system = platform.system().lower()
+    machine = platform.machine().lower()
+
+    if system == 'linux':
+        if machine in ('x86_64', 'amd64'):
+            asset_pattern = 'RAHasher-x86_64-Linux'
+        elif machine in ('aarch64', 'arm64'):
+            asset_pattern = 'RAHasher-aarch64-Linux'
+        else:
+            print(f"Unsupported architecture: {machine}", file=sys.stderr)
+            sys.exit(1)
+    elif system == 'darwin':
+        asset_pattern = 'RAHasher-x86_64-Darwin'
+    elif system == 'windows':
+        asset_pattern = 'RAHasher-x86_64-Windows'
+    else:
+        print(f"Unsupported OS: {system}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Platform: {system} {machine}")
+    print(f"Looking for: {asset_pattern}")
+
+    # Get latest release info from GitHub API
+    print("Fetching latest RAHasher release...")
+    try:
+        url = "https://api.github.com/repos/RetroAchievements/RALibretro/releases/latest"
+        req = urllib.request.Request(url, headers={'User-Agent': 'ra_tool'})
+        with urllib.request.urlopen(req, timeout=30) as response:
+            release = json.loads(response.read().decode())
+    except Exception as e:
+        print(f"Error fetching release info: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Find matching asset
+    download_url = None
+    asset_name = None
+    for asset in release.get('assets', []):
+        name = asset.get('name', '')
+        if asset_pattern in name and name.endswith('.zip'):
+            download_url = asset.get('browser_download_url')
+            asset_name = name
+            break
+
+    if not download_url:
+        print(f"Could not find RAHasher for {asset_pattern}", file=sys.stderr)
+        print("Available assets:", file=sys.stderr)
+        for asset in release.get('assets', []):
+            print(f"  {asset.get('name')}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Found: {asset_name}")
+    print(f"Downloading from: {download_url}")
+
+    # Download to temp location
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmpdir:
+        zip_path = Path(tmpdir) / asset_name
+        try:
+            req = urllib.request.Request(download_url, headers={'User-Agent': 'ra_tool'})
+            with urllib.request.urlopen(req, timeout=120) as response:
+                with open(zip_path, 'wb') as f:
+                    f.write(response.read())
+        except Exception as e:
+            print(f"Error downloading: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        print(f"Downloaded: {zip_path.stat().st_size:,} bytes")
+
+        # Extract
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            zf.extractall(tmpdir)
+
+        # Find RAHasher binary
+        rahasher_bin = None
+        for f in Path(tmpdir).rglob('RAHasher*'):
+            if f.is_file() and 'zip' not in f.suffix.lower():
+                rahasher_bin = f
+                break
+
+        if not rahasher_bin:
+            print("Could not find RAHasher binary in archive", file=sys.stderr)
+            sys.exit(1)
+
+        # Install location - prefers ~/bin if exists, falls back to ~/.local/bin
+        install_dir = get_rahasher_install_dir()
+        install_path = install_dir / rahasher_bin.name
+
+        # Copy binary
+        shutil.copy2(rahasher_bin, install_path)
+
+        # Make executable (Linux/Mac)
+        if system != 'windows':
+            install_path.chmod(install_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP)
+
+        print(f"\n✓ Installed to: {install_path}")
+
+        # Check if in PATH
+        if str(install_dir) not in os.environ.get('PATH', ''):
+            print(f"\nNote: {install_dir} may not be in your PATH.")
+            print("Add to your shell config:")
+            print(f'  export PATH="$PATH:{install_dir}"')
+        else:
+            print("RAHasher is ready to use!")
+
+        # Verify
+        if verify_rahasher(str(install_path)):
+            print("\n✓ RAHasher verified working")
+        else:
+            print("\n! RAHasher installed but verification failed", file=sys.stderr)
+
+
+def cmd_dedup(args):
+    """RA-aware deduplication - find best ROM per game for achievements."""
+    from collections import defaultdict
+    import csv
+    import io
+
+    system_id = resolve_system_id(args.system)
+    rom_dir = Path(args.rom_dir)
+    output_format = getattr(args, 'format', 'text')
+
+    if not rom_dir.exists():
+        print(f"Error: Directory not found: {rom_dir}", file=sys.stderr)
+        sys.exit(1)
+
+    # Find RAHasher
+    rahasher = find_rahasher()
+    if rahasher:
+        if not verify_rahasher(rahasher):
+            print(f"Warning: RAHasher found but not working: {rahasher}",
+                  file=sys.stderr)
+            rahasher = None
+        else:
+            print(f"Using RAHasher: {rahasher}", file=sys.stderr)
+    else:
+        print("Warning: RAHasher not found. Run 'ra_tool.py setup' to install.",
+              file=sys.stderr)
+
+    # Auto-pull if cache missing or expired
+    print(f"Loading hash database for system {system_id}...", file=sys.stderr)
+    cached = ensure_cache(system_id, force=getattr(args, 'force', False))
+    lookup = cached.get('lookup', {})
+    games = cached.get('games', [])
+
+    if not lookup:
+        print(f"Error: No hashes available for system {system_id}",
+              file=sys.stderr)
+        sys.exit(1)
+
+    # Build game_id -> game_info lookup
+    game_info = {}
+    for g in games:
+        game_info[g.get('ID')] = {
+            'title': g.get('Title', 'Unknown'),
+            'achievements': g.get('NumAchievements', 0),
+            'points': g.get('Points', 0),
+        }
+
+    # Find ROM files
+    rom_files = []
+    for ext in ALL_ROM_EXTENSIONS:
+        rom_files.extend(rom_dir.rglob(f"*{ext}"))
+        rom_files.extend(rom_dir.rglob(f"*{ext.upper()}"))
+    rom_files = list(set(rom_files))
+
+    print(f"Found {len(rom_files)} ROM files to analyze", file=sys.stderr)
+
+    # Hash each ROM and group by RA game ID
+    games_found = defaultdict(list)
+    unsupported = []
+
+    print("Hashing ROMs...", file=sys.stderr)
+    for i, rom_path in enumerate(rom_files):
+        if args.verbose and i % 25 == 0:
+            print(f"  [{i + 1}/{len(rom_files)}]", file=sys.stderr)
+
+        rel_path = rom_path.relative_to(rom_dir)
+        hashes = hash_rom(rom_path, system_id, rahasher)
+
+        if not hashes or hashes[0][0] == 'error':
+            continue
+
+        # Check against lookup
+        matched_game_id = None
+        matched_hash = None
+        for hash_type, hash_val in hashes:
+            if hash_val.lower() in lookup:
+                info = lookup[hash_val.lower()]
+                matched_game_id = info['id']
+                matched_hash = hash_val
+                break
+
+        if matched_game_id:
+            # Score region preference (higher = better)
+            name = rom_path.stem.lower()
+            region_score = 0
+            if '(usa)' in name or '(us)' in name or '(u)' in name:
+                region_score = 100
+            elif '(world)' in name:
+                region_score = 90
+            elif '(europe)' in name or '(eu)' in name or '(e)' in name:
+                region_score = 80
+            elif '(japan)' in name or '(jp)' in name or '(j)' in name:
+                region_score = 70
+            else:
+                region_score = 50
+
+            # Boost for Rev 1, Rev 2 etc (newer is usually better)
+            if 'rev 2' in name or '(rev 2)' in name:
+                region_score += 3
+            elif 'rev 1' in name or '(rev 1)' in name:
+                region_score += 2
+            elif 'rev' in name:
+                region_score += 1
+
+            games_found[matched_game_id].append({
+                'path': str(rel_path),
+                'hash': matched_hash,
+                'score': region_score,
+            })
+        else:
+            unsupported.append({'path': str(rel_path), 'hash': hashes[0][1] if hashes else ''})
+
+    # Build result data structure
+    keep_list = []
+    delete_list = []
+    results = []
+
+    for game_id, roms in games_found.items():
+        info = game_info.get(game_id, {})
+        sorted_roms = sorted(roms, key=lambda x: -x['score'])
+
+        for j, rom in enumerate(sorted_roms):
+            action = 'keep' if j == 0 else 'delete'
+            entry = {
+                'action': action,
+                'path': rom['path'],
+                'game_id': game_id,
+                'title': info.get('title', 'Unknown'),
+                'achievements': info.get('achievements', 0),
+                'points': info.get('points', 0),
+                'hash': rom['hash'],
+                'score': rom['score'],
+                'url': f"https://retroachievements.org/game/{game_id}",
+            }
+            results.append(entry)
+            if action == 'keep':
+                keep_list.append(rom['path'])
+            else:
+                delete_list.append(rom['path'])
+
+    # Calculate totals
+    total_ach = sum(game_info.get(gid, {}).get('achievements', 0) for gid in games_found.keys())
+    total_pts = sum(game_info.get(gid, {}).get('points', 0) for gid in games_found.keys())
+
+    summary = {
+        'system_id': system_id,
+        'directory': str(rom_dir),
+        'total_roms': len(rom_files),
+        'unique_games': len(games_found),
+        'keep_count': len(keep_list),
+        'delete_count': len(delete_list),
+        'unsupported_count': len(unsupported),
+        'total_achievements': total_ach,
+        'total_points': total_pts,
+    }
+
+    # Output based on format
+    if output_format == 'json':
+        output = {
+            'summary': summary,
+            'results': results,
+            'unsupported': unsupported,
+        }
+        print(json.dumps(output, indent=2))
+
+    elif output_format == 'csv':
+        # CSV output - one row per ROM, easy to filter/sort
+        out = io.StringIO()
+        writer = csv.DictWriter(out, fieldnames=[
+            'action', 'path', 'game_id', 'title', 'achievements', 'points', 'hash', 'score'
+        ])
+        writer.writeheader()
+        for r in results:
+            writer.writerow({k: r[k] for k in writer.fieldnames})
+        # Add unsupported with action='unsupported'
+        for u in unsupported:
+            writer.writerow({
+                'action': 'unsupported', 'path': u['path'], 'game_id': '',
+                'title': '', 'achievements': '', 'points': '', 'hash': u['hash'], 'score': ''
+            })
+        print(out.getvalue())
+
+    else:  # text format (default)
+        print("\n" + "=" * 70)
+        print("RA-AWARE DEDUPLICATION REPORT")
+        print("=" * 70)
+        print(f"System: {system_id}")
+        print(f"Directory: {rom_dir}")
+        print(f"Total ROMs: {len(rom_files)}")
+        print(f"Unique RA games found: {len(games_found)}")
+        print(f"Unsupported ROMs: {len(unsupported)}")
+
+        # Games with duplicates
+        duplicates = {gid: roms for gid, roms in games_found.items() if len(roms) > 1}
+
+        if duplicates:
+            print("\n" + "=" * 70)
+            print(f"DUPLICATES FOUND ({len(duplicates)} games with multiple ROMs)")
+            print("=" * 70)
+
+            for game_id, roms in sorted(duplicates.items(),
+                                        key=lambda x: game_info.get(x[0], {}).get('title', '')):
+                info = game_info.get(game_id, {})
+                title = info.get('title', f'Game {game_id}')
+                achievements = info.get('achievements', 0)
+                points = info.get('points', 0)
+
+                print(f"\n{title}")
+                print(f"  ({achievements} achievements, {points} points)")
+                print(f"  https://retroachievements.org/game/{game_id}")
+
+                sorted_roms = sorted(roms, key=lambda x: -x['score'])
+                for j, rom in enumerate(sorted_roms):
+                    if j == 0:
+                        print(f"  ✓ KEEP: {rom['path']}")
+                    else:
+                        print(f"  ✗ DUP:  {rom['path']}")
+
+        # Summary
+        print("\n" + "=" * 70)
+        print("SUMMARY")
+        print("=" * 70)
+        print(f"Total ROMs scanned: {len(rom_files)}")
+        print(f"Unique RA games: {len(games_found)}")
+        print(f"ROMs to KEEP: {len(keep_list)}")
+        print(f"ROMs to DELETE (duplicates): {len(delete_list)}")
+        print(f"Unsupported (no RA match): {len(unsupported)}")
+        print(f"Achievable: {total_ach} achievements, {total_pts} points")
+
+    # Output files if requested (works with any format)
+    if args.keep_list:
+        with open(args.keep_list, 'w') as f:
+            for p in sorted(keep_list):
+                f.write(p + '\n')
+        print(f"\nKEEP list saved to: {args.keep_list}", file=sys.stderr)
+
+    if args.delete_list:
+        with open(args.delete_list, 'w') as f:
+            for p in sorted(delete_list):
+                f.write(p + '\n')
+        print(f"DELETE list saved to: {args.delete_list}", file=sys.stderr)
+
+    if args.unsupported_list:
+        with open(args.unsupported_list, 'w') as f:
+            for u in sorted(unsupported, key=lambda x: x['path']):
+                f.write(u['path'] + '\n')
+        print(f"UNSUPPORTED list saved to: {args.unsupported_list}", file=sys.stderr)
+
+    # Offer to delete
+    if delete_list and args.execute:
+        print(f"\n⚠️  Deleting {len(delete_list)} duplicate ROMs...", file=sys.stderr)
+        for p in delete_list:
+            full_path = rom_dir / p
+            if full_path.exists():
+                full_path.unlink()
+                print(f"  Deleted: {p}", file=sys.stderr)
+        print("Done!", file=sys.stderr)
+    elif delete_list and output_format == 'text':
+        print("\nTo actually delete duplicates, run with --execute")
+        print("Or manually delete files listed above")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="RetroAchievements ROM Compatibility Tool",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s setup                        # Download/install RAHasher
+  %(prog)s systems                      # List all systems
+  %(prog)s pull snes                    # Pull SNES hashes (by name)
+  %(prog)s pull 3                       # Pull SNES hashes (by ID)
+  %(prog)s check snes ~/roms/snes/      # Check SNES ROMs
+  %(prog)s check psx ~/roms/psx/ -v     # Check PS1 ROMs with progress
+  %(prog)s dedup snes ~/roms/snes/      # Find duplicates (human-readable)
+  %(prog)s dedup snes ~/roms/ --format json    # JSON output for scripting
+  %(prog)s dedup snes ~/roms/ --format csv     # CSV output for spreadsheets
+  %(prog)s hash psx game.chd            # Hash a PS1 CHD file
+
+System names accepted (examples):
+  snes, "super nintendo", "super famicom", 3  (all equivalent)
+  genesis, "mega drive", md, 1
+  psx, ps1, playstation, 12
+  gba, "game boy advance", 5
+
+Environment Variables:
+  RA_API_KEY  - RetroAchievements Web API Key (required)
+  RA_HASHER   - Path to RAHasher executable (auto-detected if in PATH)
+
+Cache:
+  Systems list cached in ~/.cache/ra_tool/ra_systems.json (30 days)
+  Hash databases cached in ~/.cache/ra_tool/ra_system_*.json (6 months)
+        """
+    )
+
+    subparsers = parser.add_subparsers(dest='command', required=True)
+
+    # setup command
+    sub_setup = subparsers.add_parser('setup', help='Download and install RAHasher')
+    sub_setup.set_defaults(func=cmd_setup)
+
+    # systems command
+    sub_systems = subparsers.add_parser('systems', help='List all RA systems')
+    sub_systems.set_defaults(func=cmd_systems)
+
+    # pull command
+    sub_pull = subparsers.add_parser('pull', help='Pull hash database')
+    sub_pull.add_argument('system', help='System ID, name, or "all"')
+    sub_pull.add_argument('-f', '--force', action='store_true',
+                          help='Force refresh even if cache is valid')
+    sub_pull.set_defaults(func=cmd_pull)
+
+    # check command
+    sub_check = subparsers.add_parser(
+        'check', help='Check ROMs against database (auto-pulls if needed)')
+    sub_check.add_argument('system', help='System ID or name (e.g., 3, snes, "super nintendo")')
+    sub_check.add_argument('rom_dir', help='ROM directory to scan')
+    sub_check.add_argument('-v', '--verbose', action='store_true', help='Show progress')
+    sub_check.add_argument('-o', '--output', help='Output report to file')
+    sub_check.add_argument('-f', '--force', action='store_true',
+                           help='Force refresh hash database')
+    sub_check.set_defaults(func=cmd_check)
+
+    # dedup command
+    sub_dedup = subparsers.add_parser(
+        'dedup', help='RA-aware deduplication - recommend best ROM per game')
+    sub_dedup.add_argument('system', help='System ID or name (e.g., 3, snes, "super nintendo")')
+    sub_dedup.add_argument('rom_dir', help='ROM directory to scan')
+    sub_dedup.add_argument('-v', '--verbose', action='store_true', help='Show progress')
+    sub_dedup.add_argument('-f', '--force', action='store_true',
+                           help='Force refresh hash database')
+    sub_dedup.add_argument('--format', choices=['text', 'json', 'csv'], default='text',
+                           help='Output format: text (default), json, or csv')
+    sub_dedup.add_argument('--keep-list', help='Output file for ROMs to keep (one per line)')
+    sub_dedup.add_argument('--delete-list', help='Output file for duplicate ROMs to delete')
+    sub_dedup.add_argument('--unsupported-list', help='Output file for unsupported ROMs')
+    sub_dedup.add_argument('--execute', action='store_true',
+                           help='Actually delete duplicate files (DANGEROUS)')
+    sub_dedup.set_defaults(func=cmd_dedup)
+
+    # hash command
+    sub_hash = subparsers.add_parser('hash', help='Hash a single file')
+    sub_hash.add_argument('system', help='System ID or name')
+    sub_hash.add_argument('file', help='File to hash')
+    sub_hash.set_defaults(func=cmd_hash)
+
+    args = parser.parse_args()
+    args.func(args)
+
+
+if __name__ == '__main__':
+    main()
