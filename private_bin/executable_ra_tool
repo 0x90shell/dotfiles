@@ -1295,84 +1295,91 @@ def cmd_dedup(args):
     }
 
     # Determine output destination
+    summary_only = getattr(args, 'summary', False)
     output_file = getattr(args, 'output', None)
-    out_handle = open(output_file, 'w') if output_file else sys.stdout
 
-    try:
-        # Output based on format
-        if output_format == 'json':
-            output_data = {
-                'summary': summary,
-                'results': results,
-                'unsupported': unsupported,
-            }
-            print(json.dumps(output_data, indent=2), file=out_handle)
+    # Skip full output if --summary flag is set
+    if not summary_only:
+        out_handle = open(output_file, 'w') if output_file else sys.stdout
 
-        elif output_format == 'csv':
-            # CSV output - one row per ROM, easy to filter/sort
-            writer = csv.DictWriter(out_handle, fieldnames=[
-                'action', 'path', 'game_id', 'title', 'achievements', 'points', 'hash', 'score'
-            ])
-            writer.writeheader()
-            for r in results:
-                writer.writerow({k: r[k] for k in writer.fieldnames})
-            # Add unsupported with action='unsupported'
-            for u in unsupported:
-                writer.writerow({
-                    'action': 'unsupported', 'path': u['path'], 'game_id': '',
-                    'title': '', 'achievements': '', 'points': '', 'hash': u['hash'], 'score': ''
-                })
+        try:
+            # Output based on format
+            if output_format == 'json':
+                output_data = {
+                    'summary': summary,
+                    'results': results,
+                    'unsupported': unsupported,
+                }
+                print(json.dumps(output_data, indent=2), file=out_handle)
 
-        else:  # text format (default)
-            print("\n" + "=" * 70, file=out_handle)
-            print("RA-AWARE DEDUPLICATION REPORT", file=out_handle)
-            print("=" * 70, file=out_handle)
-            print(f"System: {system_id}", file=out_handle)
-            print(f"Directory: {rom_dir}", file=out_handle)
-            print(f"Total ROMs: {len(rom_files)}", file=out_handle)
-            print(f"Unique RA games found: {len(games_found)}", file=out_handle)
-            print(f"Unsupported ROMs: {len(unsupported)}", file=out_handle)
+            elif output_format == 'csv':
+                # CSV output - one row per ROM, easy to filter/sort
+                writer = csv.DictWriter(out_handle, fieldnames=[
+                    'action', 'path', 'game_id', 'title', 'achievements', 'points', 'hash', 'score'
+                ])
+                writer.writeheader()
+                for r in results:
+                    writer.writerow({k: r[k] for k in writer.fieldnames})
+                # Add unsupported with action='unsupported'
+                for u in unsupported:
+                    writer.writerow({
+                        'action': 'unsupported', 'path': u['path'], 'game_id': '',
+                        'title': '', 'achievements': '', 'points': '', 'hash': u['hash'], 'score': ''
+                    })
 
-            # Games with duplicates
-            duplicates = {gid: roms for gid, roms in games_found.items() if len(roms) > 1}
-
-            if duplicates:
+            else:  # text format (default)
                 print("\n" + "=" * 70, file=out_handle)
-                print(f"DUPLICATES FOUND ({len(duplicates)} games with multiple ROMs)", file=out_handle)
+                print("RA-AWARE DEDUPLICATION REPORT", file=out_handle)
                 print("=" * 70, file=out_handle)
+                print(f"System: {system_id}", file=out_handle)
+                print(f"Directory: {rom_dir}", file=out_handle)
+                print(f"Total ROMs: {len(rom_files)}", file=out_handle)
+                print(f"Unique RA games found: {len(games_found)}", file=out_handle)
+                print(f"Unsupported ROMs: {len(unsupported)}", file=out_handle)
 
-                for game_id, roms in sorted(duplicates.items(),
-                                            key=lambda x: game_info.get(x[0], {}).get('title', '')):
-                    info = game_info.get(game_id, {})
-                    title = info.get('title', f'Game {game_id}')
-                    achievements = info.get('achievements', 0)
-                    points = info.get('points', 0)
+                # Games with duplicates
+                duplicates = {gid: roms for gid, roms in games_found.items() if len(roms) > 1}
 
-                    print(f"\n{title}", file=out_handle)
-                    print(f"  ({achievements} achievements, {points} points)", file=out_handle)
-                    print(f"  https://retroachievements.org/game/{game_id}", file=out_handle)
+                if duplicates:
+                    print("\n" + "=" * 70, file=out_handle)
+                    print(f"DUPLICATES FOUND ({len(duplicates)} games with multiple ROMs)", file=out_handle)
+                    print("=" * 70, file=out_handle)
 
-                    sorted_roms = sorted(roms, key=lambda x: -x['score'])
-                    for j, rom in enumerate(sorted_roms):
-                        if j == 0:
-                            print(f"  ✓ KEEP: {rom['path']}", file=out_handle)
-                        else:
-                            print(f"  ✗ DUP:  {rom['path']}", file=out_handle)
+                    for game_id, roms in sorted(duplicates.items(),
+                                                key=lambda x: game_info.get(x[0], {}).get('title', '')):
+                        info = game_info.get(game_id, {})
+                        title = info.get('title', f'Game {game_id}')
+                        achievements = info.get('achievements', 0)
+                        points = info.get('points', 0)
 
-            # Summary
-            print("\n" + "=" * 70, file=out_handle)
-            print("SUMMARY", file=out_handle)
-            print("=" * 70, file=out_handle)
-            print(f"Total ROMs scanned: {len(rom_files)}", file=out_handle)
-            print(f"Unique RA games: {len(games_found)}", file=out_handle)
-            print(f"ROMs to KEEP: {len(keep_list)}", file=out_handle)
-            print(f"ROMs to DELETE (duplicates): {len(delete_list)}", file=out_handle)
-            print(f"Unsupported (no RA match): {len(unsupported)}", file=out_handle)
-            print(f"Achievable: {total_ach} achievements, {total_pts} points", file=out_handle)
+                        print(f"\n{title}", file=out_handle)
+                        print(f"  ({achievements} achievements, {points} points)", file=out_handle)
+                        print(f"  https://retroachievements.org/game/{game_id}", file=out_handle)
 
-    finally:
+                        sorted_roms = sorted(roms, key=lambda x: -x['score'])
+                        for j, rom in enumerate(sorted_roms):
+                            if j == 0:
+                                print(f"  ✓ KEEP: {rom['path']}", file=out_handle)
+                            else:
+                                print(f"  ✗ DUP:  {rom['path']}", file=out_handle)
+
+                # Summary
+                print("\n" + "=" * 70, file=out_handle)
+                print("SUMMARY", file=out_handle)
+                print("=" * 70, file=out_handle)
+                print(f"Total ROMs scanned: {len(rom_files)}", file=out_handle)
+                print(f"Unique RA games: {len(games_found)}", file=out_handle)
+                print(f"ROMs to KEEP: {len(keep_list)}", file=out_handle)
+                print(f"ROMs to DELETE (duplicates): {len(delete_list)}", file=out_handle)
+                print(f"Unsupported (no RA match): {len(unsupported)}", file=out_handle)
+                print(f"Achievable: {total_ach} achievements, {total_pts} points", file=out_handle)
+
+        finally:
+            if output_file:
+                out_handle.close()
+
         if output_file:
-            out_handle.close()
+            print(f"  Output saved to: {output_file}", file=sys.stderr)
 
     # Always print summary to stderr (visible even when output goes to file)
     duplicates = {gid: roms for gid, roms in games_found.items() if len(roms) > 1}
@@ -1380,9 +1387,6 @@ def cmd_dedup(args):
           f"{len(duplicates)} with duplicates, {len(unsupported)} unsupported", file=sys.stderr)
     print(f"  Keep: {len(keep_list)} | Delete: {len(delete_list)} | "
           f"Achievements: {total_ach} ({total_pts} pts)", file=sys.stderr)
-
-    if output_file:
-        print(f"  Output saved to: {output_file}", file=sys.stderr)
 
     # Output files if requested (works with any format)
     if args.keep_list:
@@ -1432,6 +1436,7 @@ Examples:
   %(prog)s check snes ~/roms/snes/      # Check SNES ROMs
   %(prog)s check psx ~/roms/psx/ -v     # Check PS1 ROMs with progress
   %(prog)s dedup snes ~/roms/snes/      # Find duplicates (human-readable)
+  %(prog)s dedup snes ~/roms/ -s        # Quick summary only
   %(prog)s dedup snes ~/roms/ -o report.txt    # Save report to file
   %(prog)s dedup snes ~/roms/ --format json -o results.json  # JSON to file
   %(prog)s dedup snes ~/roms/ --format csv     # CSV output for spreadsheets
@@ -1491,6 +1496,8 @@ Cache:
     sub_dedup.add_argument('system', help='System ID or name (e.g., 3, snes, "super nintendo")')
     sub_dedup.add_argument('rom_dir', help='ROM directory to scan')
     sub_dedup.add_argument('-v', '--verbose', action='store_true', help='Show progress')
+    sub_dedup.add_argument('-s', '--summary', action='store_true',
+                           help='Show only summary (no full report)')
     sub_dedup.add_argument('-o', '--output', help='Output file (default: stdout)')
     sub_dedup.add_argument('-f', '--force', action='store_true',
                            help='Force refresh hash database')
