@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
-# Recursively convert images to CHD with minimal chdman output by default.
-# - .iso  -> createdvd (DVD)
-# - .cue  -> createcd  (CD, multi-track aware)
-# - .gdi  -> createcd  (Dreamcast GDI descriptor)
+# Recursively convert images to CHD or RVZ with minimal output by default.
+# - .iso (GameCube/Wii) -> DolphinTool RVZ (zstd)
+# - .iso (other)        -> chdman createdvd (DVD)
+# - .cue                -> chdman createcd  (CD, multi-track aware)
+# - .gdi                -> chdman createcd  (Dreamcast GDI descriptor)
 #
 # Non-verbose: single-line global progress bar with adaptive ETA.
 #
-# Verbose (-v): print a header line matching non-verbose format, then CHDman's own dynamic bar.
+# Verbose (-v): print a header line matching non-verbose format, then tool's own dynamic bar.
 #
 
 set -euo pipefail
 
 ROOT="."
 VERBOSE=0
+RVZ_COMPRESSION="zstd"
+RVZ_LEVEL=22
+RVZ_BLOCK_SIZE=131072
 
 while getopts ":v" opt; do
   case "$opt" in
@@ -27,6 +31,14 @@ command -v chdman >/dev/null 2>&1 || {
   echo "Error: chdman not found in PATH." >&2
   exit 1
 }
+
+# Check for DolphinTool (optional, only needed if GC/Wii ISOs are present)
+DOLPHIN_TOOL=""
+if command -v DolphinTool >/dev/null 2>&1; then
+  DOLPHIN_TOOL="DolphinTool"
+elif command -v dolphin-tool >/dev/null 2>&1; then
+  DOLPHIN_TOOL="dolphin-tool"
+fi
 
 export LC_ALL=C
 
@@ -46,6 +58,31 @@ hsize() {
     done
     printf "%d%s" "$bytes" "${units[$i]}"
   fi
+}
+
+# Detect GameCube/Wii ISO by magic bytes
+# GC magic at 0x1C: 0xC2339F3D
+# Wii magic at 0x18: 0x5D1C9EA3
+iso_platform() {
+  local iso="$1"
+  local hdr
+  
+  # Read first 32 bytes
+  hdr=$(xxd -l 32 -p "$iso" 2>/dev/null | tr -d '\n')
+  
+  # Check GC magic at offset 0x1C (hex chars 56-63)
+  if [[ "${hdr:56:8}" == "c2339f3d" ]]; then
+    echo "gc"
+    return
+  fi
+  
+  # Check Wii magic at offset 0x18 (hex chars 48-55)
+  if [[ "${hdr:48:8}" == "5d1c9ea3" ]]; then
+    echo "wii"
+    return
+  fi
+  
+  echo "dvd"
 }
 
 cue_bytes() {
@@ -87,15 +124,16 @@ term_cols() { printf "%s" "${COLUMNS:-$(tput cols 2>/dev/null || echo 80)}"; }
 
 # Get conversion type display string
 get_conv_type() {
-  local typ src
-  typ="$1"; src="$2"
-  local ext_lc="${src##*.}"; ext_lc="${ext_lc,,}"
+  local typ
+  typ="$1"
   
-  case "$ext_lc" in
-    iso) echo "ISO" ;;
-    cue) echo "CD" ;;
-    gdi) echo "GDI" ;;
-    *) echo "CHD" ;;
+  case "$typ" in
+    gc)  echo "GC→RVZ" ;;
+    wii) echo "Wii→RVZ" ;;
+    dvd) echo "DVD→CHD" ;;
+    cd)  echo "CD→CHD" ;;
+    gdi) echo "GDI→CHD" ;;
+    *)   echo "→CHD" ;;
   esac
 }
 
@@ -193,28 +231,96 @@ run_chdman_verbose() {
   fi
 }
 
+# Run DolphinTool for RVZ conversion (verbose mode)
+run_dolphin_verbose() {
+  local src out
+  src="$1"; out="$2"
+
+  local cmd
+  cmd=("$DOLPHIN_TOOL" convert -i "$src" -o "$out" -f rvz -c "$RVZ_COMPRESSION" -l "$RVZ_LEVEL" -b "$RVZ_BLOCK_SIZE")
+
+  local cmd_str
+  cmd_str=$(quote_cmd "${cmd[@]}")
+
+  if command -v script >/dev/null 2>&1; then
+    set +o pipefail
+    script -qe -c "$cmd_str" /dev/null
+    local ec=$?
+    set -o pipefail
+    return "$ec"
+  else
+    "${cmd[@]}"
+  fi
+}
+
 # ---------- collect work ----------
 declare -a SRC PATHS TYPES BYTES OUTS
 SRC=(); PATHS=(); TYPES=(); BYTES=(); OUTS=()
 
+# Track GC/Wii ISOs that need DolphinTool
+declare -a SKIPPED_NO_DOLPHIN
+SKIPPED_NO_DOLPHIN=()
+
 mapfile -d '' PATHS < <(find "$ROOT" -type f \( -iname '*.cue' -o -iname '*.gdi' -o -iname '*.iso' \) -print0)
 
 for src in "${PATHS[@]}"; do
-  out="${src%.*}.chd"
-  [[ -e "$out" ]] && continue
   ext_lc="${src##*.}"; ext_lc="${ext_lc,,}"
+  
   case "$ext_lc" in
-    iso) TYPES+=("dvd"); BYTES+=("$(iso_bytes "$src")");;
-    cue) TYPES+=("cd");  BYTES+=("$(cue_bytes "$src")");;
-    gdi) TYPES+=("cd");  BYTES+=("$(gdi_bytes "$src")");;
-    *) continue ;;
+    iso)
+      platform=$(iso_platform "$src")
+      case "$platform" in
+        gc|wii)
+          out="${src%.*}.rvz"
+          [[ -e "$out" ]] && continue
+          if [[ -z "$DOLPHIN_TOOL" ]]; then
+            SKIPPED_NO_DOLPHIN+=("$src")
+            continue
+          fi
+          TYPES+=("$platform")
+          BYTES+=("$(iso_bytes "$src")")
+          ;;
+        *)
+          out="${src%.*}.chd"
+          [[ -e "$out" ]] && continue
+          TYPES+=("dvd")
+          BYTES+=("$(iso_bytes "$src")")
+          ;;
+      esac
+      ;;
+    cue)
+      out="${src%.*}.chd"
+      [[ -e "$out" ]] && continue
+      TYPES+=("cd")
+      BYTES+=("$(cue_bytes "$src")")
+      ;;
+    gdi)
+      out="${src%.*}.chd"
+      [[ -e "$out" ]] && continue
+      TYPES+=("gdi")
+      BYTES+=("$(gdi_bytes "$src")")
+      ;;
+    *)
+      continue
+      ;;
   esac
   OUTS+=("$out"); SRC+=("$src")
 done
 
 n=${#SRC[@]}
+
+# Report skipped GC/Wii ISOs
+if (( ${#SKIPPED_NO_DOLPHIN[@]} > 0 )); then
+  echo "Warning: DolphinTool not found. Skipping ${#SKIPPED_NO_DOLPHIN[@]} GameCube/Wii ISO(s):"
+  for f in "${SKIPPED_NO_DOLPHIN[@]}"; do
+    echo "  - $(basename "$f")"
+  done
+  echo "Install DolphinTool to convert these to RVZ format."
+  echo
+fi
+
 if (( n == 0 )); then
-  echo "Nothing to do. No convertible images without existing .chd found."
+  echo "Nothing to do. No convertible images without existing output found."
   exit 0
 fi
 
@@ -223,6 +329,7 @@ for b in "${BYTES[@]}"; do total_bytes=$(( total_bytes + b )); done
 
 if (( VERBOSE )); then
   echo "Planned conversions: $n files, $(hsize "$total_bytes") total."
+  echo "RVZ settings: $RVZ_COMPRESSION level $RVZ_LEVEL, block size $RVZ_BLOCK_SIZE"
 fi
 
 # ---------- run ----------
@@ -270,10 +377,10 @@ trap 'show_results' EXIT
 for i in "${!SRC[@]}"; do
   src="${SRC[$i]}"; out="${OUTS[$i]}"; typ="${TYPES[$i]}"; fbytes=${BYTES[$i]}
   base="$(basename "$src")"
-  conv_type=$(get_conv_type "$typ" "$src")
+  conv_type=$(get_conv_type "$typ")
 
   if (( VERBOSE )); then
-    # Print the same one-line header as non-verbose, then newline so CHDman's live bar follows
+    # Print the same one-line header as non-verbose, then newline so tool's live bar follows
     now=$(date +%s); elapsed=$(( now - start_ts ))
     prog_bytes=$done_bytes
     eta=$(( prog_bytes > 0 ? elapsed * (total_bytes - prog_bytes) / prog_bytes : 0 ))
@@ -281,13 +388,24 @@ for i in "${!SRC[@]}"; do
     print_bar "$global_pct" "$prog_bytes" "$total_bytes" "$eta" $((i+1)) "$n" "$base" "$conv_type"
     printf "\n"
 
-    if run_chdman_verbose "$typ" "$src" "$out"; then
-      done_bytes=$(( done_bytes + fbytes ))
-    else
-      FAILED_CONVERSIONS+=("$src")
-      # Remove partial output file if it exists
-      [[ -f "$out" ]] && rm -f "$out"
-    fi
+    case "$typ" in
+      gc|wii)
+        if run_dolphin_verbose "$src" "$out"; then
+          done_bytes=$(( done_bytes + fbytes ))
+        else
+          FAILED_CONVERSIONS+=("$src")
+          [[ -f "$out" ]] && rm -f "$out"
+        fi
+        ;;
+      *)
+        if run_chdman_verbose "$typ" "$src" "$out"; then
+          done_bytes=$(( done_bytes + fbytes ))
+        else
+          FAILED_CONVERSIONS+=("$src")
+          [[ -f "$out" ]] && rm -f "$out"
+        fi
+        ;;
+    esac
     continue
   fi
 
@@ -302,53 +420,71 @@ for i in "${!SRC[@]}"; do
   # Convert using appropriate method
   conversion_success=0
   
-  if [[ "$typ" == "dvd" ]]; then
-    # DVD/ISO conversion
-    set +e  # Temporarily disable exit on error
-    chdman createdvd -i "$src" -o "$out" 2>&1 | while IFS= read -r line; do
-      if [[ "$line" =~ ([0-9]{1,3})% ]]; then
-        p="${BASH_REMATCH[1]}"
-        (( p > 100 )) && p=100
-        now=$(date +%s); elapsed=$(( now - start_ts ))
-        prog_bytes=$(( done_bytes + fbytes*p/100 ))
-        global_pct=$(( (prog_bytes*100)/total_bytes ))
-        if (( global_pct != last_global_pct )); then
-          eta=$(( prog_bytes > 0 ? elapsed * (total_bytes - prog_bytes) / prog_bytes : 0 ))
-          print_bar "$global_pct" "$prog_bytes" "$total_bytes" "$eta" $((i+1)) "$n" "$base" "$conv_type"
-          last_global_pct=$global_pct
+  case "$typ" in
+    gc|wii)
+      # GameCube/Wii -> RVZ via DolphinTool
+      set +e
+      "$DOLPHIN_TOOL" convert -i "$src" -o "$out" -f rvz -c "$RVZ_COMPRESSION" -l "$RVZ_LEVEL" -b "$RVZ_BLOCK_SIZE" 2>&1 | while IFS= read -r line; do
+        if [[ "$line" =~ ([0-9]{1,3})% ]]; then
+          p="${BASH_REMATCH[1]}"
+          (( p > 100 )) && p=100
+          now=$(date +%s); elapsed=$(( now - start_ts ))
+          prog_bytes=$(( done_bytes + fbytes*p/100 ))
+          global_pct=$(( (prog_bytes*100)/total_bytes ))
+          if (( global_pct != last_global_pct )); then
+            eta=$(( prog_bytes > 0 ? elapsed * (total_bytes - prog_bytes) / prog_bytes : 0 ))
+            print_bar "$global_pct" "$prog_bytes" "$total_bytes" "$eta" $((i+1)) "$n" "$base" "$conv_type"
+            last_global_pct=$global_pct
+          fi
         fi
-      fi
-    done
-    cmd_exit_code=$?
-    set -e  # Re-enable exit on error
-    
-    if (( cmd_exit_code == 0 )); then
-      conversion_success=1
-    fi
-  else
-    # CD conversion (CUE/GDI)
-    set +e  # Temporarily disable exit on error
-    chdman createcd -i "$src" -o "$out" 2>&1 | while IFS= read -r line; do
-      if [[ "$line" =~ ([0-9]{1,3})% ]]; then
-        p="${BASH_REMATCH[1]}"
-        (( p > 100 )) && p=100
-        now=$(date +%s); elapsed=$(( now - start_ts ))
-        prog_bytes=$(( done_bytes + fbytes*p/100 ))
-        global_pct=$(( (prog_bytes*100)/total_bytes ))
-        if (( global_pct != last_global_pct )); then
-          eta=$(( prog_bytes > 0 ? elapsed * (total_bytes - prog_bytes) / prog_bytes : 0 ))
-          print_bar "$global_pct" "$prog_bytes" "$total_bytes" "$eta" $((i+1)) "$n" "$base" "$conv_type"
-          last_global_pct=$global_pct
+      done
+      cmd_exit_code=$?
+      set -e
+      (( cmd_exit_code == 0 )) && conversion_success=1
+      ;;
+    dvd)
+      # DVD/ISO conversion
+      set +e
+      chdman createdvd -i "$src" -o "$out" 2>&1 | while IFS= read -r line; do
+        if [[ "$line" =~ ([0-9]{1,3})% ]]; then
+          p="${BASH_REMATCH[1]}"
+          (( p > 100 )) && p=100
+          now=$(date +%s); elapsed=$(( now - start_ts ))
+          prog_bytes=$(( done_bytes + fbytes*p/100 ))
+          global_pct=$(( (prog_bytes*100)/total_bytes ))
+          if (( global_pct != last_global_pct )); then
+            eta=$(( prog_bytes > 0 ? elapsed * (total_bytes - prog_bytes) / prog_bytes : 0 ))
+            print_bar "$global_pct" "$prog_bytes" "$total_bytes" "$eta" $((i+1)) "$n" "$base" "$conv_type"
+            last_global_pct=$global_pct
+          fi
         fi
-      fi
-    done
-    cmd_exit_code=$?
-    set -e  # Re-enable exit on error
-    
-    if (( cmd_exit_code == 0 )); then
-      conversion_success=1
-    fi
-  fi
+      done
+      cmd_exit_code=$?
+      set -e
+      (( cmd_exit_code == 0 )) && conversion_success=1
+      ;;
+    *)
+      # CD/GDI conversion
+      set +e
+      chdman createcd -i "$src" -o "$out" 2>&1 | while IFS= read -r line; do
+        if [[ "$line" =~ ([0-9]{1,3})% ]]; then
+          p="${BASH_REMATCH[1]}"
+          (( p > 100 )) && p=100
+          now=$(date +%s); elapsed=$(( now - start_ts ))
+          prog_bytes=$(( done_bytes + fbytes*p/100 ))
+          global_pct=$(( (prog_bytes*100)/total_bytes ))
+          if (( global_pct != last_global_pct )); then
+            eta=$(( prog_bytes > 0 ? elapsed * (total_bytes - prog_bytes) / prog_bytes : 0 ))
+            print_bar "$global_pct" "$prog_bytes" "$total_bytes" "$eta" $((i+1)) "$n" "$base" "$conv_type"
+            last_global_pct=$global_pct
+          fi
+        fi
+      done
+      cmd_exit_code=$?
+      set -e
+      (( cmd_exit_code == 0 )) && conversion_success=1
+      ;;
+  esac
 
   if (( conversion_success )); then
     done_bytes=$(( done_bytes + fbytes ))
