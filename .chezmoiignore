@@ -30,7 +30,7 @@ bin/ESDE*
 bin/kernel-purge
 bin/steampull
 bin/ds3-search
-bin/chd-bulkconvert
+bin/rom-bulkconvert
 bin/ra_tool
 bin/rgt_downloader
 bin/ps2-bootcheck
