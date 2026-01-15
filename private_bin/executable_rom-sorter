@@ -1,9 +1,14 @@
 #!/bin/bash
 # =============================================================================
-# ROM Sorting Workflow Script v2.6.2
+# ROM Sorting Workflow Script v2.7.0
 # =============================================================================
 # Automated extraction, classification, and sorting of ROM files for ES-DE.
 # Supports nested archives up to configurable depth (default: 5 levels).
+#
+# v2.7.0: Source cleanup options
+#   - Added: --clean-source (-c) moves skipped files to _skipped/ folder
+#   - Added: --delete-junk (-D) deletes junk/source files instead of skipping
+#   - Fixed: Archives containing only source files now properly deleted with -d
 #
 # v2.6.2: Path-based system detection for ambiguous extensions
 #   - Added: guess_system_from_path() for .elf and other multi-system formats
@@ -15,15 +20,6 @@
 #   - Added: Atari 8-bit (.atr, .xex, .xfd, .dcm, .cas, .car)
 #   - Added: .tos (Atari ST)
 #   - Added: Wii/GC modding files to skip (.brres, .brstm, .gct, .sawnd, .pac)
-#   - Added: More dev files to skip (.sln, .vcxproj, .gitignore, .mml, .psg)
-#   - Added: More junk files to skip (.css, .js, .dat, .ods, .cache, .hcmask)
-#
-# v2.6.0: Enhanced console support for 5th-7th gen systems
-#   - Added: GBA (.agb, .mb), NDS (.srl, .ids), 3DS (.3dsx, .cci, .cxi)
-#   - Added: N64 (.ndd for 64DD), GC (.tgc, .dol), Wii (.wdf), Wii U (.wud, .wux)
-#   - Added: Switch (.nsz, .nro), PSP (.zso, .dax, .jso), Vita (.vpk, .mai)
-#   - Added: PS3 (.pkg, .self, .eboot), Xbox (.xbe, .xiso), Xbox 360 (.xex, .god, .live)
-#   - Enhanced disc detection for GC, Wii, Wii U, Xbox, Xbox 360, Vita
 #
 # USAGE:
 #   ./sort-roms-workflow.sh [OPTIONS] <source_dir> [dest_dir]
@@ -33,6 +29,8 @@
 #   -v, --verbose              Enable verbose output
 #   -k, --keep-archives        Copy archives to <dest>/archives/
 #   -d, --delete-source-archives  Delete source archives after successful extraction
+#   -c, --clean-source         Move skipped files to <dest>/_skipped/
+#   -D, --delete-junk          Delete junk/source files instead of skipping
 #   -h, --help                 Show this help message
 #
 # OUTPUT STRUCTURE:
@@ -48,7 +46,11 @@
 #   │   └── utilities/                  # Music players, test carts, BIOS
 #   ├── patches/                        # Patch files (.ips, .bps, etc.)
 #   ├── disc_images/                    # Unidentified disc images
-#   └── unsorted/                       # Unknown files
+#   ├── unsorted/                       # Unknown files
+#   └── _skipped/                       # (with -c flag only)
+#       ├── junk/                       # Non-ROM junk files
+#       ├── source/                     # Dev/source code files
+#       └── emulators/                  # Emulator binaries
 #
 # CHANGES IN v2.5.1:
 #   - BUGFIX: Fixed pattern for "Demos & Intros" folders (handles spaces around &)
@@ -78,6 +80,8 @@
 # EXAMPLE:
 #   ./sort-roms-workflow.sh ~/Downloads/unsorted-roms ~/Documents/rom-cleanup/SORTED
 #   ./sort-roms-workflow.sh --dry-run -d ~/Downloads/roms ~/Documents/rom-cleanup/SORTED
+#   ./sort-roms-workflow.sh -d -c ~/Downloads/roms  # Delete archives, move skipped files
+#   ./sort-roms-workflow.sh -d -D ~/Downloads/roms  # Delete archives AND junk files
 # =============================================================================
 
 set -euo pipefail
@@ -90,6 +94,8 @@ DRY_RUN=false
 VERBOSE=false
 KEEP_ARCHIVES=false
 DELETE_SOURCE_ARCHIVES=false
+CLEAN_SOURCE=false
+DELETE_JUNK=false
 
 # Default destination directory (relative to source_dir parent)
 # When dest_dir is not provided, output goes to: <source_parent>/$DEFAULT_DEST_SUFFIX
@@ -761,6 +767,12 @@ move_rom() {
     if is_emulator "$filename"; then
         log_verbose "Skipping emulator: $filename"
         ((STATS[junk]++)) || true
+        if [[ "$DELETE_JUNK" == true ]]; then
+            rm -f "$file" 2>/dev/null || true
+            log_verbose "  -> Deleted"
+        elif [[ "$CLEAN_SOURCE" == true ]]; then
+            do_move "$file" "$dest_base/_skipped/emulators"
+        fi
         return
     fi
     
@@ -768,6 +780,12 @@ move_rom() {
     if [[ -n "${JUNK_EXTS[$ext]:-}" ]]; then
         log_verbose "Skipping junk file: $filename"
         ((STATS[junk]++)) || true
+        if [[ "$DELETE_JUNK" == true ]]; then
+            rm -f "$file" 2>/dev/null || true
+            log_verbose "  -> Deleted"
+        elif [[ "$CLEAN_SOURCE" == true ]]; then
+            do_move "$file" "$dest_base/_skipped/junk"
+        fi
         return
     fi
     
@@ -775,6 +793,12 @@ move_rom() {
     if [[ -n "${SOURCE_EXTS[$ext]:-}" ]]; then
         log_verbose "Skipping source/dev file: $filename"
         ((STATS[source]++)) || true
+        if [[ "$DELETE_JUNK" == true ]]; then
+            rm -f "$file" 2>/dev/null || true
+            log_verbose "  -> Deleted"
+        elif [[ "$CLEAN_SOURCE" == true ]]; then
+            do_move "$file" "$dest_base/_skipped/source"
+        fi
         return
     fi
     
@@ -986,6 +1010,21 @@ process_archive() {
         if [[ $source_count -gt 0 ]]; then
             log_verbose "${depth_prefix}Archive contains only source/dev files: $archive_name"
             ((STATS[source]++)) || true
+            
+            # If --clean-source, move contents to _skipped/source
+            if [[ "$CLEAN_SOURCE" == true ]]; then
+                while IFS= read -r -d '' file; do
+                    do_move "$file" "$dest_base/_skipped/source"
+                done < <(find "$extract_dir" -type f -print0 2>/dev/null)
+            # If --delete-junk, don't bother moving (will be cleaned up)
+            elif [[ "$DELETE_JUNK" == true ]]; then
+                log_verbose "${depth_prefix}  -> Contents deleted"
+            fi
+            
+            # Mark for deletion (archive was successfully processed)
+            if [[ $depth -eq 0 ]]; then
+                EXTRACTED_ARCHIVES+=("$archive")
+            fi
         else
             log_verbose "${depth_prefix}No ROMs/patches found in $archive_name"
             do_copy "$archive" "$dest_base/unsorted"
@@ -1096,6 +1135,14 @@ main() {
                 DELETE_SOURCE_ARCHIVES=true
                 shift
                 ;;
+            -c|--clean-source)
+                CLEAN_SOURCE=true
+                shift
+                ;;
+            -D|--delete-junk)
+                DELETE_JUNK=true
+                shift
+                ;;
             -h|--help)
                 show_help
                 exit 0
@@ -1127,6 +1174,8 @@ main() {
         echo "  -v, --verbose              Enable verbose output"
         echo "  -k, --keep-archives        Keep original archives after extraction"
         echo "  -d, --delete-source-archives  Delete source archives after successful extraction"
+        echo "  -c, --clean-source         Move skipped files to <dest>/_skipped/"
+        echo "  -D, --delete-junk          Delete junk/source files instead of skipping"
         echo "  -h, --help                 Show full help"
         echo ""
         echo "Arguments:"
@@ -1174,7 +1223,7 @@ main() {
     # Create manifest file
     MANIFEST_FILE="$dest_dir/sort-manifest-$(date +%Y%m%d-%H%M%S).txt"
     
-    log_info "=== ROM Sorting Workflow Started (v2.5.1) ==="
+    log_info "=== ROM Sorting Workflow Started (v2.7.0) ==="
     log_info "Source: $source_dir"
     log_info "Destination: $dest_dir"
     if [[ "$DRY_RUN" == true ]]; then
@@ -1183,13 +1232,21 @@ main() {
     if [[ "$DELETE_SOURCE_ARCHIVES" == true ]]; then
         log_info "DELETE SOURCE ARCHIVES: Enabled"
     fi
+    if [[ "$CLEAN_SOURCE" == true ]]; then
+        log_info "CLEAN SOURCE: Enabled (skipped files -> _skipped/)"
+    fi
+    if [[ "$DELETE_JUNK" == true ]]; then
+        log_info "DELETE JUNK: Enabled (junk/source files will be deleted)"
+    fi
     
-    log_manifest "# ROM Sort Manifest (v2.5.1)"
+    log_manifest "# ROM Sort Manifest (v2.7.0)"
     log_manifest "# Generated: $(date)"
     log_manifest "# Source: $source_dir"
     log_manifest "# Destination: $dest_dir"
     log_manifest "# Dry Run: $DRY_RUN"
     log_manifest "# Delete Source Archives: $DELETE_SOURCE_ARCHIVES"
+    log_manifest "# Clean Source: $CLEAN_SOURCE"
+    log_manifest "# Delete Junk: $DELETE_JUNK"
     log_manifest ""
     log_manifest "# Subcategory folders (under <system>/):"
     log_manifest "#   hacks/        - Gameplay modifications, balance changes"
