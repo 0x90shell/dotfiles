@@ -1,0 +1,1355 @@
+#!/bin/bash
+# =============================================================================
+# ROM Sorting Workflow Script v2.6.2
+# =============================================================================
+# Automated extraction, classification, and sorting of ROM files for ES-DE.
+# Supports nested archives up to configurable depth (default: 5 levels).
+#
+# v2.6.2: Path-based system detection for ambiguous extensions
+#   - Added: guess_system_from_path() for .elf and other multi-system formats
+#   - .elf files now sorted by path context (e.g., /ps2/app.elf -> ps2/)
+#   - Falls back to unsorted/ only when no path hints available
+#
+# v2.6.1: Additional extension support
+#   - Added: .cgb (Game Boy Color alternate)
+#   - Added: Atari 8-bit (.atr, .xex, .xfd, .dcm, .cas, .car)
+#   - Added: .tos (Atari ST)
+#   - Added: Wii/GC modding files to skip (.brres, .brstm, .gct, .sawnd, .pac)
+#   - Added: More dev files to skip (.sln, .vcxproj, .gitignore, .mml, .psg)
+#   - Added: More junk files to skip (.css, .js, .dat, .ods, .cache, .hcmask)
+#
+# v2.6.0: Enhanced console support for 5th-7th gen systems
+#   - Added: GBA (.agb, .mb), NDS (.srl, .ids), 3DS (.3dsx, .cci, .cxi)
+#   - Added: N64 (.ndd for 64DD), GC (.tgc, .dol), Wii (.wdf), Wii U (.wud, .wux)
+#   - Added: Switch (.nsz, .nro), PSP (.zso, .dax, .jso), Vita (.vpk, .mai)
+#   - Added: PS3 (.pkg, .self, .eboot), Xbox (.xbe, .xiso), Xbox 360 (.xex, .god, .live)
+#   - Enhanced disc detection for GC, Wii, Wii U, Xbox, Xbox 360, Vita
+#
+# USAGE:
+#   ./sort-roms-workflow.sh [OPTIONS] <source_dir> [dest_dir]
+#
+# OPTIONS:
+#   -n, --dry-run              Show what would be done without moving files
+#   -v, --verbose              Enable verbose output
+#   -k, --keep-archives        Copy archives to <dest>/archives/
+#   -d, --delete-source-archives  Delete source archives after successful extraction
+#   -h, --help                 Show this help message
+#
+# OUTPUT STRUCTURE:
+#   <dest>/
+#   ├── nes/
+#   │   ├── Game.nes                    # Standard ROMs
+#   │   ├── hacks/                      # Gameplay modifications
+#   │   ├── translations/               # Language patches
+#   │   ├── prototypes/                 # Unreleased/beta versions
+#   │   └── homebrew/                   # Unlicensed games
+#   ├── _non_games/                     # Non-playable content (separate from ROMs)
+#   │   ├── demos/                      # Demoscene, intros, tech demos
+#   │   └── utilities/                  # Music players, test carts, BIOS
+#   ├── patches/                        # Patch files (.ips, .bps, etc.)
+#   ├── disc_images/                    # Unidentified disc images
+#   └── unsorted/                       # Unknown files
+#
+# CHANGES IN v2.5.1:
+#   - BUGFIX: Fixed pattern for "Demos & Intros" folders (handles spaces around &)
+#   - BUGFIX: Fixed pattern for "_Homebrew/" and "_Unlicensed/" folders (underscore prefix)
+#   - Improved regex: demos?[_[:space:]]*(\&|and)?[_[:space:]]*intros?
+#   - "Selections/" folders now correctly treated as normal ROMs
+#
+# CHANGES IN v2.5:
+#   - BUGFIX: Archive parent folder context now preserved during extraction
+#   - Demos/utilities now go to <dest>/_non_games/ (separate from game ROMs)
+#   - Duplicate file renames are now logged with notification
+#   - Added stats tracking for renamed files
+#   - Improved shellcheck compliance
+#
+# FEATURES:
+#   - Recursive archive extraction (handles nested .zip/.7z/.rar/.lzh/.lha/.gz)
+#   - Configurable nesting depth (MAX_ARCHIVE_DEPTH variable, default 5)
+#   - Pre-processing permission fix on source directory
+#   - Post-extraction permission fix on all extracted files
+#   - Empty directory cleanup after processing
+#   - Smart .bin detection (Genesis vs Atari 2600 vs disc images)
+#   - Path-aware subcategory sorting (checks folder names, not just filenames)
+#   - Automatic subcategory sorting (hacks, translations, prototypes, homebrew)
+#   - Non-game content isolated to _non_games folder
+#   - Filters out source code, dev files, and junk
+#
+# EXAMPLE:
+#   ./sort-roms-workflow.sh ~/Downloads/unsorted-roms ~/Documents/rom-cleanup/SORTED
+#   ./sort-roms-workflow.sh --dry-run -d ~/Downloads/roms ~/Documents/rom-cleanup/SORTED
+# =============================================================================
+
+set -euo pipefail
+
+# --- Configuration ---
+TEMP_EXTRACT="/tmp/rom-sort-extract-$$"
+LOG_FILE="sort-workflow-$(date +%Y%m%d-%H%M%S).log"
+MANIFEST_FILE=""
+DRY_RUN=false
+VERBOSE=false
+KEEP_ARCHIVES=false
+DELETE_SOURCE_ARCHIVES=false
+
+# Default destination directory (relative to source_dir parent)
+# When dest_dir is not provided, output goes to: <source_parent>/$DEFAULT_DEST_SUFFIX
+# Uses: ${source_dir%/*}/$DEFAULT_DEST_SUFFIX (equivalent to dirname + suffix)
+# Change this to customize default output location
+DEFAULT_DEST_SUFFIX="SORTED"
+
+# Non-games folder name (demos, utilities, etc.)
+# These are technically ROMs but not playable games
+NON_GAMES_FOLDER="_non_games"
+
+# Maximum nesting level for recursive archive extraction
+# Archives nested deeper than this will be skipped
+# Example: game.zip containing mod.7z containing patch.rar = 3 levels
+MAX_ARCHIVE_DEPTH=5
+
+# Track successfully extracted archives for deletion
+declare -a EXTRACTED_ARCHIVES=()
+
+# --- Patch extensions ---
+declare -A PATCH_EXTS=(
+    [ips]=1 [bps]=1 [ups]=1 [xdelta]=1 [xdelta3]=1 [ppf]=1
+    [rup]=1 [dps]=1 [aps]=1 [ninja]=1
+)
+
+# --- ROM extension to system mapping ---
+declare -A ROM_MAP=(
+    # Nintendo Handhelds
+    [gb]=gb [gbc]=gbc [cgb]=gbc [sgb]=sgb                  # .cgb = alternate GBC
+    [gba]=gba [agb]=gba [mb]=gba                           # .mb = multiboot GBA
+    [nds]=nds [dsi]=nds [srl]=nds [ids]=nds [app]=nds      # .ids = iQue DS
+    [3ds]=n3ds [cia]=n3ds [3dsx]=n3ds [cci]=n3ds [cxi]=n3ds # 3DS formats
+    
+    # Nintendo Home Consoles
+    [nes]=nes [unf]=nes [unif]=nes [fds]=fds
+    [smc]=snes [sfc]=snes [fig]=snes [swc]=snes [bs]=satellaview
+    [n64]=n64 [v64]=n64 [z64]=n64 [ndd]=64dd               # .ndd = 64DD disc
+    [gcm]=gc [gcz]=gc [ciso]=gc [dol]=gc [tgc]=gc           # GameCube formats
+    [rvz]=gc [wia]=gc                                       # Dolphin compressed (GC/Wii share these)
+    # Note: .elf is ambiguous (PS2/PSP/GC/Wii/DC homebrew) - handled via path context
+    [wbfs]=wii [wad]=wii [wdf]=wii                          # Wii formats
+    [wua]=wiiu [rpx]=wiiu [wud]=wiiu [wux]=wiiu            # Wii U formats
+    [nsp]=switch [xci]=switch [nro]=switch [nsz]=switch    # Switch + homebrew + compressed
+    
+    # Sega Handhelds
+    [gg]=gamegear
+    
+    # Sega Home Consoles (bin handled separately with heuristics)
+    [sms]=mastersystem [sg]=sg1000
+    [md]=genesis [gen]=genesis [smd]=genesis [sgd]=genesis [68k]=genesis
+    [32x]=sega32x
+    [cdi]=dreamcast [gdi]=dreamcast [cue]=dreamcast        # Dreamcast (cue needs path hint)
+    
+    # Sony Handhelds
+    [pbp]=psp [cso]=psp [zso]=psp [dax]=psp [jso]=psp      # PSP compressed formats
+    [vpk]=psvita [mai]=psvita                               # Vita package + DLC
+    
+    # Sony Home Consoles
+    [pkg]=ps3 [self]=ps3 [eboot]=ps3                        # PS3 formats
+    # Note: PSX/PS2/PS3 primarily use disc images (.iso, .bin, .chd) 
+    # which are handled by DISC_EXTS + guess_disc_system
+    
+    # Microsoft
+    [xbe]=xbox [xiso]=xbox                                  # Xbox executable + ISO
+    [xex]=xbox360 [god]=xbox360 [live]=xbox360              # Xbox 360 formats
+    # Note: Xbox/360 primarily use .iso handled by guess_disc_system
+    
+    # NEC / PC Engine / TurboGrafx
+    [pce]=pcengine [sgx]=supergrafx
+    [hcd]=pcenginecd                                        # PC Engine CD hint
+    
+    # SNK
+    [neo]=neogeo [ngp]=ngp [ngc]=ngpc
+    
+    # Sega CD / Saturn (mostly disc-based, handled by guess_disc_system)
+    # Saturn and Sega CD use standard disc formats
+    
+    # Atari consoles
+    [a26]=atari2600 [a52]=atari5200 [a78]=atari7800
+    [lnx]=atarilynx [j64]=atarijaguar [jag]=atarijaguar
+    
+    # Atari 8-bit computers (800/XL/XE)
+    [atr]=atari800 [xex]=atari800 [xfd]=atari800 [dcm]=atari800 [cas]=atari800 [car]=atari800
+    
+    # Atari ST / computers
+    [st]=atarist [msa]=atarist [stx]=atarist [tos]=atarist
+    
+    # Other consoles
+    [ws]=wonderswan [wsc]=wonderswancolor [pc2]=wonderswan
+    [vb]=virtualboy [vboy]=virtualboy
+    [vec]=vectrex [col]=colecovision
+    [int]=intellivision [o2]=odyssey2 [min]=pokemini
+    
+    # 3DO (mostly disc-based but has some specific extensions)
+    [3do]=3do
+    
+    # Commodore 64
+    [d64]=c64 [t64]=c64 [tap]=c64 [crt]=c64 [prg]=c64 [g64]=c64
+    
+    # MSX
+    [rom]=msx [mx1]=msx [mx2]=msx2
+    
+    # ZX Spectrum
+    [z80]=zxspectrum [tzx]=zxspectrum [sna]=zxspectrum
+    
+    # Amstrad
+    [dsk]=amstradcpc
+    
+    # Fantasy consoles
+    [p8]=pico8 [tic]=tic80
+)
+
+# --- Disc image extensions ---
+declare -A DISC_EXTS=(
+    [iso]=1 [img]=1 [mdf]=1 [cue]=1 [ccd]=1 [m3u]=1 [chd]=1 [nrg]=1 [ecm]=1
+    [bin]=1 [gdi]=1 [cdi]=1                              # Included for disc detection (bin also has special handling)
+)
+
+# --- Junk extensions to skip ---
+declare -A JUNK_EXTS=(
+    # Documentation
+    [txt]=1 [nfo]=1 [diz]=1 [doc]=1 [pdf]=1 [readme]=1 [rtf]=1 [docx]=1
+    # Images
+    [jpg]=1 [jpeg]=1 [png]=1 [gif]=1 [bmp]=1 [tga]=1 [tif]=1 [tiff]=1 [psd]=1 [ai]=1 [svg]=1
+    # Web files
+    [html]=1 [htm]=1 [url]=1 [lnk]=1 [css]=1 [js]=1
+    # Config/data
+    [ini]=1 [cfg]=1 [xml]=1 [json]=1 [dat]=1 [prefs]=1 [cache]=1
+    # Windows files
+    [log]=1 [bat]=1 [dll]=1 [ocx]=1 [vxd]=1 [sys]=1 [scr]=1 [pif]=1
+    [exe]=1 [com]=1 [msi]=1
+    # Database/checksum
+    [db]=1 [sfv]=1 [md5]=1 [sha1]=1 [crc]=1 [par]=1 [par2]=1
+    [sqlite]=1 [sqlite3]=1
+    # Save files (should stay with ROMs, not be sorted)
+    [srm]=1 [sav]=1 [rtc]=1 [state]=1
+    # Spreadsheets
+    [xls]=1 [xlsx]=1 [ods]=1
+    # Audio (non-game)
+    [mp3]=1 [wav]=1 [ogg]=1 [flac]=1 [mid]=1 [midi]=1
+    # Video
+    [avi]=1 [mpg]=1 [mpeg]=1 [wmv]=1 [mov]=1 [mkv]=1 [mp4]=1
+    # Security/misc tools
+    [hcmask]=1                # Hashcat mask files
+)
+
+# --- Source/dev file extensions (not playable) ---
+declare -A SOURCE_EXTS=(
+    # Assembly and low-level
+    [bas]=1 [asm]=1 [s]=1 [inc]=1 [lst]=1 [sym]=1
+    [p65]=1 [i]=1                 # 6502 assembly, C preprocessor output
+    # C/C++ source
+    [c]=1 [h]=1 [cpp]=1 [hpp]=1 [cc]=1 [hh]=1 [cxx]=1 [hxx]=1
+    [o]=1 [obj]=1 [lib]=1 [a]=1 [rel]=1
+    # Scripts
+    [py]=1 [rb]=1 [pl]=1 [sh]=1 [lua]=1
+    # Build/project files
+    [mak]=1 [makefile]=1 [cmake]=1
+    [sln]=1 [vcxproj]=1 [vcproj]=1  # Visual Studio
+    [gitignore]=1 [gitattributes]=1
+    # ROM dev tools
+    [ufo]=1 [nam]=1 [mhl]=1 [edg]=1 [chr]=1
+    [gbm]=1 [gbr]=1 [gbt]=1  # Game Boy map/tile editors
+    [tmx]=1 [tsx]=1           # Tiled map editor
+    [aseprite]=1 [ase]=1      # Aseprite
+    [pal]=1 [gpl]=1           # Palette files (GIMP palette)
+    [psgcompr]=1 [stmcompr]=1 # SMS compression formats
+    [nsf]=1 [nsfe]=1          # NES sound format (not playable as game)
+    [vgm]=1 [vgz]=1           # Video game music
+    [psg]=1                   # PSG audio format (SMS/GG)
+    [mml]=1                   # Music Macro Language
+    # Wii/GC modding assets
+    [brres]=1 [brstm]=1       # Wii resource/audio
+    [gct]=1                   # Gecko cheat codes
+    [sawnd]=1                 # Wii custom sound
+    [pac]=1                   # Package files (Smash Bros, etc.)
+    [msbin]=1                 # Microsoft binary resource
+    # Misc dev
+    [wiz]=1 [pat]=1 [nm]=1 [in]=1
+    [map]=1 [noi]=1 [ihx]=1 [hex]=1
+    [iff]=1                   # Amiga interchange format
+    [rbf]=1                   # FPGA bitstream
+    [src]=1 [src2]=1          # Generic source
+    [rule]=1                  # Rules files
+    [fns]=1 [pkb]=1 [pcs]=1   # Game-specific data
+    [til]=1                   # Tile data
+    [x]=1 [lk]=1              # Misc dev files
+)
+
+# --- Emulator patterns to skip ---
+EMULATOR_PATTERNS="zsnes|snes9x|fceu|nestopia|vba|visualboy|gens|fusion|kega|desmume|project64|mupen|dolphin|pcsx|epsxe|retroarch|mame|mednafen|higan|bsnes|gambatte"
+
+# --- Counters ---
+declare -A STATS=(
+    [roms]=0
+    [roms_main]=0
+    [roms_hacks]=0
+    [roms_translations]=0
+    [roms_prototypes]=0
+    [roms_homebrew]=0
+    [non_games_demos]=0
+    [non_games_utilities]=0
+    [patches]=0
+    [archives]=0
+    [archives_nested]=0
+    [archives_deleted]=0
+    [disc_images]=0
+    [source]=0
+    [junk]=0
+    [unknown]=0
+    [duplicates_renamed]=0
+)
+
+# --- Logging ---
+log_info() {
+    local msg
+    msg="[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+    echo "$msg"
+    echo "$msg" >> "$LOG_FILE"
+}
+
+log_verbose() {
+    if [[ "$VERBOSE" == true ]]; then
+        local msg
+        msg="[$(date '+%Y-%m-%d %H:%M:%S')] VERBOSE: $*"
+        echo "$msg"
+        echo "$msg" >> "$LOG_FILE"
+    fi
+}
+
+log_manifest() {
+    if [[ -n "$MANIFEST_FILE" ]]; then
+        echo "$*" >> "$MANIFEST_FILE"
+    fi
+}
+
+log_error() {
+    local msg
+    msg="[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*"
+    echo "$msg" >&2
+    echo "$msg" >> "$LOG_FILE"
+}
+
+# --- Helper Functions ---
+
+get_extension() {
+    local file="$1"
+    local ext="${file##*.}"
+    echo "${ext,,}"  # lowercase
+}
+
+get_filename() {
+    local file="$1"
+    basename "$file"
+}
+
+is_archive() {
+    local ext="$1"
+    [[ "$ext" == "zip" || "$ext" == "7z" || "$ext" == "rar" || "$ext" == "gz" || "$ext" == "tar" || "$ext" == "lzh" || "$ext" == "lha" ]]
+}
+
+is_emulator() {
+    local name="${1,,}"
+    [[ "$name" =~ $EMULATOR_PATTERNS ]]
+}
+
+# Extract an archive to a directory, returns 0 on success
+# Fixes permissions after extraction to ensure files are accessible
+extract_archive() {
+    local archive="$1"
+    local extract_dir="$2"
+    local ext
+    local result=1
+    ext=$(get_extension "$archive")
+    
+    case "$ext" in
+        zip)
+            unzip -q "$archive" -d "$extract_dir" 2>/dev/null
+            result=$?
+            ;;
+        7z)
+            7z x "$archive" -o"$extract_dir" -y >/dev/null 2>&1
+            result=$?
+            ;;
+        rar)
+            unrar x -y "$archive" "$extract_dir/" >/dev/null 2>&1
+            result=$?
+            ;;
+        gz)
+            local inner_name
+            inner_name=$(basename "${archive%.gz}")
+            gunzip -c "$archive" > "$extract_dir/$inner_name" 2>/dev/null
+            result=$?
+            ;;
+        tar)
+            tar -xf "$archive" -C "$extract_dir" 2>/dev/null
+            result=$?
+            ;;
+        lzh|lha)
+            # 7z can extract lzh/lha archives
+            7z x "$archive" -o"$extract_dir" -y >/dev/null 2>&1
+            result=$?
+            ;;
+    esac
+    
+    # Fix permissions on extracted files (handles archives with restrictive perms)
+    if [[ $result -eq 0 ]]; then
+        chmod -R u+rwX,g+rX,g-w,o-rwx "$extract_dir" 2>/dev/null || true
+    fi
+    
+    return $result
+}
+
+# --- .bin Heuristics ---
+# Determines what system a .bin file belongs to based on size and filename
+guess_bin_system() {
+    local filepath="$1"
+    local filename
+    local filesize
+    filename=$(get_filename "$filepath")
+    filename="${filename,,}"  # lowercase
+    
+    # Get file size
+    if [[ -f "$filepath" ]]; then
+        filesize=$(stat -c%s "$filepath" 2>/dev/null || stat -f%z "$filepath" 2>/dev/null || echo "0")
+    else
+        filesize=0
+    fi
+    
+    # Very small files (< 64KB) - likely Atari 2600
+    if [[ $filesize -lt 65536 ]]; then
+        # Check for Atari 2600 indicators in filename
+        if [[ "$filename" =~ (2600|a26|atari|stella) ]]; then
+            echo "atari2600"
+            return
+        fi
+        # 4KB is typical Atari 2600 size
+        if [[ $filesize -eq 4096 || $filesize -eq 8192 || $filesize -eq 16384 || $filesize -eq 32768 ]]; then
+            # Could be Atari 2600 or small GBA homebrew
+            if [[ "$filename" =~ (gba|advance|agb) ]]; then
+                echo "gba"
+            else
+                echo "atari2600"
+            fi
+            return
+        fi
+    fi
+    
+    # Check for Genesis indicators in filename
+    if [[ "$filename" =~ (genesis|megadrive|mega.?drive|md_|_md|sega|sonic|streets.?of.?rage|golden.?axe|shinobi|phantasy.?star|shining.?force) ]]; then
+        echo "genesis"
+        return
+    fi
+    
+    # Genesis Mini dumps have us_ prefix pattern
+    if [[ "$filename" =~ ^us_(us|jp|eu|de|fr|it|sp|ko)_ ]]; then
+        echo "genesis"
+        return
+    fi
+    
+    # Check for Sega CD indicator (very large .bin, often with .cue)
+    if [[ $filesize -gt 100000000 ]]; then
+        # > 100MB, likely a CD image
+        echo "disc"
+        return
+    fi
+    
+    # Check for GBA indicators
+    if [[ "$filename" =~ (gba|advance|agb) ]]; then
+        echo "gba"
+        return
+    fi
+    
+    # Typical Genesis ROM sizes: 256KB - 4MB (262144 - 4194304 bytes)
+    if [[ $filesize -ge 131072 && $filesize -le 8388608 ]]; then
+        # In the Genesis range, default to genesis
+        echo "genesis"
+        return
+    fi
+    
+    # Can't determine - let caller decide
+    echo "unknown"
+}
+
+# --- Subcategory Detection ---
+# Returns: demos, utilities, hacks, translations, prototypes, homebrew, or empty string
+# Checks both filename AND context path for category indicators
+# $1 = filepath (actual file location)
+# $2 = context_path (optional: original source path for folder context)
+detect_subcategory() {
+    local filepath="$1"
+    local context_path="${2:-$filepath}"  # Use filepath if no context provided
+    local name
+    local path_lower
+    local context_lower
+    
+    name=$(basename "$filepath")
+    name="${name,,}"
+    path_lower="${filepath,,}"
+    context_lower="${context_path,,}"
+    
+    # Check each category
+    local is_hack=false
+    local is_translation=false
+    local is_prototype=false
+    local is_homebrew=false
+    local is_demo=false
+    local is_utility=false
+    
+    # Demo/Intro indicators - demoscene, tech demos (NOT game demos - those are prototypes)
+    # Check context path for folder-based detection (e.g., archive was in demos/ folder)
+    # Pattern: "demos & intros", "demos and intros", "demos_intros", "demoscene", etc.
+    if [[ "$context_lower" =~ (demos?[_[:space:]]*(\&|and)?[_[:space:]]*intros?|demoscene|intro.?demo|scene.?release|cracktro|demo.?disc|tech.?demo) ]]; then
+        is_demo=true
+    fi
+    # Check current path too
+    if [[ "$path_lower" =~ (demos?[_[:space:]]*(\&|and)?[_[:space:]]*intros?|demoscene|intro.?demo|scene.?release|cracktro|demo.?disc|tech.?demo) ]]; then
+        is_demo=true
+    fi
+    # Check filename
+    if [[ "$name" =~ (demoscene|\(scene\)|\[scene\]|cracktro|intro.?demo) ]]; then
+        is_demo=true
+    fi
+    
+    # Utility/Non-game indicators - music players, test carts, utilities
+    # Check context path for folder-based detection
+    if [[ "$context_lower" =~ (music.?player|nsf.?to.?nes|nsf-to-nes|sound.?test|test.?cart|utilit|diagnostic|bios|firmware|system.?menu) ]]; then
+        is_utility=true
+    fi
+    # Check current path too
+    if [[ "$path_lower" =~ (music.?player|nsf.?to.?nes|nsf-to-nes|sound.?test|test.?cart|utilit|diagnostic|bios|firmware|system.?menu) ]]; then
+        is_utility=true
+    fi
+    # Check filename
+    if [[ "$name" =~ (music.?player|sound.?player|nsf.?player|nsf.?to.?nes|test.?cart|diagnostic|\(bios\)|\[bios\]|\(util\)|\[util\]) ]]; then
+        is_utility=true
+    fi
+    
+    # Hack indicators - gameplay modifications
+    if [[ "$name" =~ (hack|mod[^e]|redux|improvement|enhanced|plus|remix|rebalanced|uncensored|restored|kaizo|hard.?type|easy.?mode|quality.?of.?life|qol|balanced|revised|deluxe|complete|extended|widescreen|16.?9) ]]; then
+        is_hack=true
+    fi
+    # Check context path for hacks folder
+    if [[ "$context_lower" =~ /hacks?/ ]]; then
+        is_hack=true
+    fi
+    # Check current path for hacks folder
+    if [[ "$path_lower" =~ /hacks?/ ]]; then
+        is_hack=true
+    fi
+    
+    # Translation indicators - language patches
+    if [[ "$name" =~ (english|translation|translated|trans|localization|localized|\[t[-_]?en\]|\(t[-_]?en\)|\[en\]|\(en\)|\[t[-_]?eng\]|\(t[-_]?eng\)|\[t[-_]?english\]|\(t[-_]?english\)|\[t\+en|\(t\+en|_en\)|_eng\)|-en\)|-eng\)|spanish|french|german|italian|portugese|russian|chinese) ]]; then
+        is_translation=true
+    fi
+    # Check context path for translations folder
+    if [[ "$context_lower" =~ /translations?/ ]]; then
+        is_translation=true
+    fi
+    # Check current path for translations folder
+    if [[ "$path_lower" =~ /translations?/ ]]; then
+        is_translation=true
+    fi
+    
+    # Prototype indicators - unreleased/beta/demo versions (game demos, not demoscene)
+    if [[ "$name" =~ (proto|prototype|beta|alpha|sample|prerelease|pre-release|unreleased|preview|test|debug|\(proto\)|\[proto\]|\(beta\)|\[beta\]|\(alpha\)|\[alpha\]|\(sample\)|\[sample\]) ]]; then
+        is_prototype=true
+    fi
+    # Game demo in filename (not folder) = prototype
+    if [[ "$name" =~ (\(demo\)|\[demo\]) ]] && [[ "$is_demo" == false ]]; then
+        is_prototype=true
+    fi
+    # Check context path for prototypes folder
+    if [[ "$context_lower" =~ /prototypes?/ ]]; then
+        is_prototype=true
+    fi
+    # Check current path for prototypes folder
+    if [[ "$path_lower" =~ /prototypes?/ ]]; then
+        is_prototype=true
+    fi
+    
+    # Homebrew indicators - unlicensed/indie games
+    if [[ "$name" =~ (homebrew|unlicensed|unl|aftermarket|indie|public.?domain|\(unl\)|\[unl\]|\(pd\)|\[pd\]|\(aftermarket\)|\[aftermarket\]|\(homebrew\)|\[homebrew\]) ]]; then
+        is_homebrew=true
+    fi
+    # Check context path for homebrew/unlicensed folder (handles _Homebrew/, _Unlicensed/ prefixes)
+    if [[ "$context_lower" =~ /_?homebrew/|/_?unlicensed/ ]]; then
+        is_homebrew=true
+    fi
+    # Check current path for homebrew/unlicensed folder
+    if [[ "$path_lower" =~ /_?homebrew/|/_?unlicensed/ ]]; then
+        is_homebrew=true
+    fi
+    
+    # Priority order: demos > utilities > translation > prototype > homebrew > hack
+    # Demos and utilities are non-games, so they take priority
+    if [[ "$is_demo" == true ]]; then
+        echo "demos"
+    elif [[ "$is_utility" == true ]]; then
+        echo "utilities"
+    elif [[ "$is_translation" == true ]]; then
+        echo "translations"
+    elif [[ "$is_prototype" == true ]]; then
+        echo "prototypes"
+    elif [[ "$is_homebrew" == true ]]; then
+        echo "homebrew"
+    elif [[ "$is_hack" == true ]]; then
+        echo "hacks"
+    else
+        echo ""
+    fi
+}
+
+guess_disc_system() {
+    local path="${1,,}"
+    
+    # Sony systems
+    [[ "$path" =~ psx|ps1|playstation[^2-9] ]] && echo "psx" && return
+    [[ "$path" =~ ps2|playstation.?2 ]] && echo "ps2" && return
+    [[ "$path" =~ ps3|playstation.?3 ]] && echo "ps3" && return
+    [[ "$path" =~ psp|playstation.?portable ]] && echo "psp" && return
+    [[ "$path" =~ vita|psvita|ps.?vita ]] && echo "psvita" && return
+    
+    # Nintendo systems
+    [[ "$path" =~ gamecube|game.?cube|gcn|ngc|\/gc\/ ]] && echo "gc" && return
+    [[ "$path" =~ wiiu|wii.?u ]] && echo "wiiu" && return
+    [[ "$path" =~ wii[^u] ]] && echo "wii" && return
+    [[ "$path" =~ \/wii\/ ]] && echo "wii" && return
+    
+    # Sega systems
+    [[ "$path" =~ saturn ]] && echo "saturn" && return
+    [[ "$path" =~ segacd|sega.?cd|mega.?cd ]] && echo "segacd" && return
+    [[ "$path" =~ dreamcast|dc[^a-z] ]] && echo "dreamcast" && return
+    
+    # Microsoft systems
+    [[ "$path" =~ xbox.?360|360 ]] && echo "xbox360" && return
+    [[ "$path" =~ xbox|x.?box ]] && echo "xbox" && return
+    
+    # NEC systems
+    [[ "$path" =~ pcengine|turbografx|tg16|pce.?cd|tgcd ]] && echo "pcenginecd" && return
+    [[ "$path" =~ pcfx|pc-fx ]] && echo "pcfx" && return
+    
+    # Other systems
+    [[ "$path" =~ neogeo.?cd|ngcd ]] && echo "neogeocd" && return
+    [[ "$path" =~ 3do ]] && echo "3do" && return
+    [[ "$path" =~ amiga.?cd|cd32 ]] && echo "amigacd32" && return
+    [[ "$path" =~ cdi|cd-i|philips ]] && echo "cdimono1" && return
+    [[ "$path" =~ jaguar.?cd ]] && echo "atarijaguarcd" && return
+    
+    echo ""
+}
+
+# Guess system from path for ambiguous extensions (.elf, .bin, etc.)
+# This is used as a fallback when extension alone isn't enough
+guess_system_from_path() {
+    local path="${1,,}"
+    
+    # Sony systems
+    [[ "$path" =~ \/ps2\/|playstation.?2|ps2.?homebrew ]] && echo "ps2" && return
+    [[ "$path" =~ \/psp\/|playstation.?portable|psp.?homebrew ]] && echo "psp" && return
+    [[ "$path" =~ \/psx\/|\/ps1\/|playstation[^2-9] ]] && echo "psx" && return
+    [[ "$path" =~ \/ps3\/|playstation.?3 ]] && echo "ps3" && return
+    [[ "$path" =~ \/vita\/|psvita|ps.?vita ]] && echo "psvita" && return
+    
+    # Nintendo systems
+    [[ "$path" =~ \/gc\/|gamecube|game.?cube|gcn|ngc ]] && echo "gc" && return
+    [[ "$path" =~ \/wiiu\/|wii.?u ]] && echo "wiiu" && return
+    [[ "$path" =~ \/wii\/|wii.?homebrew ]] && echo "wii" && return
+    [[ "$path" =~ \/n64\/|nintendo.?64 ]] && echo "n64" && return
+    [[ "$path" =~ \/snes\/|super.?nintendo|super.?famicom ]] && echo "snes" && return
+    [[ "$path" =~ \/nes\/|nintendo.?entertainment ]] && echo "nes" && return
+    [[ "$path" =~ \/gba\/|game.?boy.?advance ]] && echo "gba" && return
+    [[ "$path" =~ \/nds\/|nintendo.?ds ]] && echo "nds" && return
+    [[ "$path" =~ \/3ds\/|nintendo.?3ds ]] && echo "n3ds" && return
+    
+    # Sega systems
+    [[ "$path" =~ \/dreamcast\/|dc.?homebrew ]] && echo "dreamcast" && return
+    [[ "$path" =~ \/saturn\/ ]] && echo "saturn" && return
+    [[ "$path" =~ \/genesis\/|mega.?drive|\/md\/ ]] && echo "genesis" && return
+    
+    # Microsoft systems
+    [[ "$path" =~ \/xbox360\/|xbox.?360 ]] && echo "xbox360" && return
+    [[ "$path" =~ \/xbox\/|x.?box.?homebrew ]] && echo "xbox" && return
+    
+    echo ""
+}
+
+# --- File Movement ---
+
+# Move file to destination, handling duplicates with _1, _2, etc.
+# Logs when duplicates are detected
+do_move() {
+    local src="$1"
+    local dest_dir="$2"
+    
+    mkdir -p "$dest_dir"
+    
+    local filename
+    filename=$(basename "$src")
+    local dest="$dest_dir/$filename"
+    
+    if [[ "$DRY_RUN" == true ]]; then
+        log_verbose "[DRY RUN] Would move: $src -> $dest"
+    else
+        if [[ -f "$dest" ]]; then
+            local base="${filename%.*}"
+            local ext="${filename##*.}"
+            local counter=1
+            while [[ -f "$dest_dir/${base}_${counter}.${ext}" ]]; do
+                ((counter++))
+            done
+            local new_dest="$dest_dir/${base}_${counter}.${ext}"
+            log_info "DUPLICATE: '$filename' already exists, renamed to '${base}_${counter}.${ext}'"
+            ((STATS[duplicates_renamed]++)) || true
+            dest="$new_dest"
+        fi
+        mv "$src" "$dest"
+        log_verbose "Moved: $src -> $dest"
+    fi
+}
+
+# Copy file to destination, handling duplicates with _1, _2, etc.
+# Logs when duplicates are detected
+do_copy() {
+    local src="$1"
+    local dest_dir="$2"
+    
+    mkdir -p "$dest_dir"
+    
+    local filename
+    filename=$(basename "$src")
+    local dest="$dest_dir/$filename"
+    
+    if [[ "$DRY_RUN" == true ]]; then
+        log_verbose "[DRY RUN] Would copy: $src -> $dest"
+    else
+        if [[ -f "$dest" ]]; then
+            local base="${filename%.*}"
+            local ext="${filename##*.}"
+            local counter=1
+            while [[ -f "$dest_dir/${base}_${counter}.${ext}" ]]; do
+                ((counter++))
+            done
+            local new_dest="$dest_dir/${base}_${counter}.${ext}"
+            log_info "DUPLICATE: '$filename' already exists, renamed to '${base}_${counter}.${ext}'"
+            ((STATS[duplicates_renamed]++)) || true
+            dest="$new_dest"
+        fi
+        cp "$src" "$dest"
+        log_verbose "Copied: $src -> $dest"
+    fi
+}
+
+# --- Main ROM Processing ---
+# $1 = file path
+# $2 = destination base directory
+# $3 = context path (optional: original source path for folder context detection)
+move_rom() {
+    local file="$1"
+    local dest_base="$2"
+    local context_path="${3:-$file}"  # Use file path if no context provided
+    
+    local filename
+    filename=$(basename "$file")
+    local ext
+    ext=$(get_extension "$file")
+    
+    # Skip emulators
+    if is_emulator "$filename"; then
+        log_verbose "Skipping emulator: $filename"
+        ((STATS[junk]++)) || true
+        return
+    fi
+    
+    # Handle junk files
+    if [[ -n "${JUNK_EXTS[$ext]:-}" ]]; then
+        log_verbose "Skipping junk file: $filename"
+        ((STATS[junk]++)) || true
+        return
+    fi
+    
+    # Handle source/dev files
+    if [[ -n "${SOURCE_EXTS[$ext]:-}" ]]; then
+        log_verbose "Skipping source/dev file: $filename"
+        ((STATS[source]++)) || true
+        return
+    fi
+    
+    # Handle patches
+    if [[ -n "${PATCH_EXTS[$ext]:-}" ]]; then
+        do_move "$file" "$dest_base/patches"
+        ((STATS[patches]++)) || true
+        log_manifest "PATCH: $filename -> patches/"
+        return
+    fi
+    
+    # Detect subcategory using both file path and context path
+    local subcategory
+    subcategory=$(detect_subcategory "$file" "$context_path")
+    
+    # Handle non-game content (demos, utilities) - goes to separate folder
+    if [[ "$subcategory" == "demos" || "$subcategory" == "utilities" ]]; then
+        do_move "$file" "$dest_base/$NON_GAMES_FOLDER/$subcategory"
+        local stat_key="non_games_${subcategory}"
+        ((STATS[$stat_key]++)) || true
+        log_manifest "NON-GAME: $filename -> $NON_GAMES_FOLDER/$subcategory/"
+        return
+    fi
+    
+    # Handle .bin files with heuristics
+    if [[ "$ext" == "bin" ]]; then
+        local bin_system
+        bin_system=$(guess_bin_system "$file")
+        
+        if [[ "$bin_system" == "disc" ]]; then
+            # Large file, treat as disc image
+            local system
+            system=$(guess_disc_system "$file")
+            if [[ -n "$system" ]]; then
+                if [[ -n "$subcategory" ]]; then
+                    do_move "$file" "$dest_base/$system/$subcategory"
+                    log_manifest "DISC: $filename -> $system/$subcategory/"
+                else
+                    do_move "$file" "$dest_base/$system"
+                    log_manifest "DISC: $filename -> $system/"
+                fi
+            else
+                do_move "$file" "$dest_base/disc_images"
+                log_manifest "DISC: $filename -> disc_images/"
+            fi
+            ((STATS[disc_images]++)) || true
+            return
+        elif [[ "$bin_system" != "unknown" ]]; then
+            # Recognized system
+            if [[ -n "$subcategory" ]]; then
+                do_move "$file" "$dest_base/$bin_system/$subcategory"
+                log_manifest "ROM: $filename -> $bin_system/$subcategory/"
+                local stat_key="roms_${subcategory}"
+                ((STATS[$stat_key]++)) || true
+            else
+                do_move "$file" "$dest_base/$bin_system"
+                log_manifest "ROM: $filename -> $bin_system/"
+                ((STATS[roms_main]++)) || true
+            fi
+            ((STATS[roms]++)) || true
+            return
+        else
+            # Unknown .bin - send to disc_images for manual review
+            do_move "$file" "$dest_base/disc_images"
+            log_manifest "DISC: $filename -> disc_images/ (unknown .bin)"
+            ((STATS[disc_images]++)) || true
+            return
+        fi
+    fi
+    
+    # Handle other disc images (non-.bin)
+    if [[ -n "${DISC_EXTS[$ext]:-}" ]]; then
+        local system
+        system=$(guess_disc_system "$file")
+        if [[ -n "$system" ]]; then
+            if [[ -n "$subcategory" ]]; then
+                do_move "$file" "$dest_base/$system/$subcategory"
+                log_manifest "DISC: $filename -> $system/$subcategory/"
+            else
+                do_move "$file" "$dest_base/$system"
+                log_manifest "DISC: $filename -> $system/"
+            fi
+        else
+            do_move "$file" "$dest_base/disc_images"
+            log_manifest "DISC: $filename -> disc_images/"
+        fi
+        ((STATS[disc_images]++)) || true
+        return
+    fi
+    
+    # Handle known ROM types
+    if [[ -n "${ROM_MAP[$ext]:-}" ]]; then
+        local system="${ROM_MAP[$ext]}"
+        
+        if [[ -n "$subcategory" ]]; then
+            do_move "$file" "$dest_base/$system/$subcategory"
+            log_manifest "ROM: $filename -> $system/$subcategory/"
+            local stat_key="roms_${subcategory}"
+            ((STATS[$stat_key]++)) || true
+        else
+            do_move "$file" "$dest_base/$system"
+            log_manifest "ROM: $filename -> $system/"
+            ((STATS[roms_main]++)) || true
+        fi
+        ((STATS[roms]++)) || true
+        return
+    fi
+    
+    # Try to guess system from path for ambiguous extensions (.elf, etc.)
+    local guessed_system
+    guessed_system=$(guess_system_from_path "$file")
+    if [[ -z "$guessed_system" ]] && [[ -n "$context_path" ]]; then
+        guessed_system=$(guess_system_from_path "$context_path")
+    fi
+    
+    if [[ -n "$guessed_system" ]]; then
+        if [[ -n "$subcategory" ]]; then
+            do_move "$file" "$dest_base/$guessed_system/$subcategory"
+            log_manifest "ROM: $filename -> $guessed_system/$subcategory/ (path-detected)"
+            local stat_key="roms_${subcategory}"
+            ((STATS[$stat_key]++)) || true
+        else
+            do_move "$file" "$dest_base/$guessed_system"
+            log_manifest "ROM: $filename -> $guessed_system/ (path-detected)"
+            ((STATS[roms_main]++)) || true
+        fi
+        ((STATS[roms]++)) || true
+        return
+    fi
+    
+    # Unknown file type
+    do_move "$file" "$dest_base/unsorted"
+    log_manifest "UNKNOWN: $filename -> unsorted/"
+    ((STATS[unknown]++)) || true
+}
+
+# --- Archive Processing ---
+# Process archive with optional recursion depth
+# Usage: process_archive <archive> <dest_base> [depth] [context_path]
+# context_path preserves the original source location for folder-based detection
+process_archive() {
+    local archive="$1"
+    local dest_base="$2"
+    local depth="${3:-0}"
+    local context_path="${4:-$archive}"  # Preserve original archive path for context
+    
+    local archive_name
+    archive_name=$(basename "$archive")
+    local ext
+    ext=$(get_extension "$archive")
+    
+    # Check recursion depth
+    if [[ $depth -ge $MAX_ARCHIVE_DEPTH ]]; then
+        log_verbose "Max archive depth reached ($depth), skipping: $archive_name"
+        do_copy "$archive" "$dest_base/unsorted"
+        ((STATS[unknown]++)) || true
+        return
+    fi
+    
+    local depth_prefix=""
+    if [[ $depth -gt 0 ]]; then
+        depth_prefix="[depth=$depth] "
+    fi
+    
+    log_verbose "${depth_prefix}Processing archive: $archive_name (context: $context_path)"
+    
+    # Create unique extraction directory
+    local extract_dir="$TEMP_EXTRACT/${archive_name%."${ext}"}_${depth}_$$"
+    mkdir -p "$extract_dir"
+    
+    # Extract the archive
+    if ! extract_archive "$archive" "$extract_dir"; then
+        log_verbose "${depth_prefix}Failed to extract: $archive_name"
+        do_copy "$archive" "$dest_base/unsorted"
+        rm -rf "$extract_dir"
+        ((STATS[unknown]++)) || true
+        return
+    fi
+    
+    # Count what's inside (including nested archives)
+    local rom_count=0
+    local patch_count=0
+    local disc_count=0
+    local source_count=0
+    local nested_archive_count=0
+    
+    while IFS= read -r -d '' file; do
+        local fext
+        fext=$(get_extension "$file")
+        
+        if is_archive "$fext"; then
+            ((nested_archive_count++)) || true
+        elif [[ -n "${ROM_MAP[$fext]:-}" ]] || [[ "$fext" == "bin" ]]; then
+            ((rom_count++)) || true
+        elif [[ -n "${PATCH_EXTS[$fext]:-}" ]]; then
+            ((patch_count++)) || true
+        elif [[ -n "${DISC_EXTS[$fext]:-}" ]]; then
+            ((disc_count++)) || true
+        elif [[ -n "${SOURCE_EXTS[$fext]:-}" ]]; then
+            ((source_count++)) || true
+        fi
+    done < <(find "$extract_dir" -type f -print0 2>/dev/null)
+    
+    log_verbose "${depth_prefix}Contents: $rom_count ROMs, $patch_count patches, $disc_count discs, $nested_archive_count nested archives"
+    
+    # Decide what to do
+    if [[ $rom_count -eq 0 && $patch_count -eq 0 && $disc_count -eq 0 && $nested_archive_count -eq 0 ]]; then
+        # Nothing useful found - might be source code or junk
+        if [[ $source_count -gt 0 ]]; then
+            log_verbose "${depth_prefix}Archive contains only source/dev files: $archive_name"
+            ((STATS[source]++)) || true
+        else
+            log_verbose "${depth_prefix}No ROMs/patches found in $archive_name"
+            do_copy "$archive" "$dest_base/unsorted"
+            ((STATS[unknown]++)) || true
+        fi
+    elif [[ $rom_count -eq 0 && $patch_count -gt 0 && $disc_count -eq 0 && $nested_archive_count -eq 0 ]]; then
+        # Only patches - copy whole archive to patches
+        log_verbose "${depth_prefix}Archive contains only patches: $archive_name"
+        do_copy "$archive" "$dest_base/patches"
+        # Mark as successfully processed for potential deletion
+        if [[ $depth -eq 0 ]]; then
+            EXTRACTED_ARCHIVES+=("$archive")
+        fi
+    else
+        # Process extracted files - pass context_path for folder detection
+        while IFS= read -r -d '' file; do
+            local fext
+            fext=$(get_extension "$file")
+            
+            # Handle nested archives recursively, preserving context
+            if is_archive "$fext"; then
+                log_verbose "${depth_prefix}Found nested archive: $(basename "$file")"
+                ((STATS[archives_nested]++)) || true
+                # Pass the original context path through nested archives
+                process_archive "$file" "$dest_base" $((depth + 1)) "$context_path"
+            else
+                # Pass context_path to move_rom for folder-based subcategory detection
+                move_rom "$file" "$dest_base" "$context_path"
+            fi
+        done < <(find "$extract_dir" -type f -print0 2>/dev/null)
+        
+        # Mark as successfully processed for potential deletion (only top-level)
+        if [[ $depth -eq 0 ]]; then
+            EXTRACTED_ARCHIVES+=("$archive")
+        fi
+        
+        # Optionally keep original archive (only top-level)
+        if [[ "$KEEP_ARCHIVES" == true && $depth -eq 0 ]]; then
+            do_copy "$archive" "$dest_base/archives"
+        fi
+    fi
+    
+    ((STATS[archives]++)) || true
+    
+    # Cleanup extraction directory
+    rm -rf "$extract_dir"
+}
+
+# --- Delete Source Archives ---
+delete_source_archives() {
+    if [[ "$DELETE_SOURCE_ARCHIVES" != true ]]; then
+        return
+    fi
+    
+    if [[ ${#EXTRACTED_ARCHIVES[@]} -eq 0 ]]; then
+        log_info "No archives to delete"
+        return
+    fi
+    
+    log_info ""
+    log_info "=== Deleting Successfully Extracted Source Archives ==="
+    
+    local deleted=0
+    for archive in "${EXTRACTED_ARCHIVES[@]}"; do
+        if [[ -f "$archive" ]]; then
+            if [[ "$DRY_RUN" == true ]]; then
+                log_verbose "[DRY RUN] Would delete: $archive"
+                ((deleted++)) || true
+            else
+                rm -f "$archive"
+                log_verbose "Deleted: $archive"
+                ((deleted++)) || true
+            fi
+        fi
+    done
+    
+    STATS[archives_deleted]=$deleted
+    log_info "Deleted $deleted source archives"
+}
+
+# --- Help ---
+show_help() {
+    head -n 50 "$0" | tail -n +2 | sed 's/^# //' | sed 's/^#//'
+}
+
+# --- Main ---
+
+main() {
+    local source_dir=""
+    local dest_dir=""
+    
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -n|--dry-run)
+                DRY_RUN=true
+                shift
+                ;;
+            -v|--verbose)
+                VERBOSE=true
+                shift
+                ;;
+            -k|--keep-archives)
+                KEEP_ARCHIVES=true
+                shift
+                ;;
+            -d|--delete-source-archives)
+                DELETE_SOURCE_ARCHIVES=true
+                shift
+                ;;
+            -h|--help)
+                show_help
+                exit 0
+                ;;
+            -*)
+                echo "Unknown option: $1" >&2
+                exit 1
+                ;;
+            *)
+                if [[ -z "$source_dir" ]]; then
+                    source_dir="$1"
+                elif [[ -z "$dest_dir" ]]; then
+                    dest_dir="$1"
+                else
+                    echo "Too many arguments" >&2
+                    exit 1
+                fi
+                shift
+                ;;
+        esac
+    done
+    
+    # Validate arguments
+    if [[ -z "$source_dir" ]]; then
+        echo "Usage: $0 [OPTIONS] <source_dir> [dest_dir]"
+        echo ""
+        echo "Options:"
+        echo "  -n, --dry-run              Show what would be done without moving files"
+        echo "  -v, --verbose              Enable verbose output"
+        echo "  -k, --keep-archives        Keep original archives after extraction"
+        echo "  -d, --delete-source-archives  Delete source archives after successful extraction"
+        echo "  -h, --help                 Show full help"
+        echo ""
+        echo "Arguments:"
+        echo "  source_dir    Directory containing ROMs to sort (required)"
+        echo "  dest_dir      Output directory (default: \${source_dir%/*}/$DEFAULT_DEST_SUFFIX)"
+        echo ""
+        echo "Output Structure:"
+        echo "  <dest>/<system>/             Main ROM folder"
+        echo "  <dest>/<system>/hacks/       Gameplay modifications"
+        echo "  <dest>/<system>/translations/ Language patches"
+        echo "  <dest>/<system>/prototypes/  Unreleased versions"
+        echo "  <dest>/<system>/homebrew/    Unlicensed games"
+        echo "  <dest>/$NON_GAMES_FOLDER/demos/      Demoscene, intros (non-games)"
+        echo "  <dest>/$NON_GAMES_FOLDER/utilities/  Music players, test carts (non-games)"
+        echo ""
+        echo "Note: Duplicate files are renamed with _1, _2, etc. suffixes."
+        echo "      Run jdupes after sorting to identify and remove true duplicates."
+        echo ""
+        echo "Example: $0 ~/Downloads/unsorted-roms"
+        echo "         $0 --dry-run -d ~/Downloads/roms ~/Documents/SORTED"
+        exit 1
+    fi
+    
+    if [[ ! -d "$source_dir" ]]; then
+        log_error "Source directory does not exist: $source_dir"
+        exit 1
+    fi
+    
+    # Resolve source to absolute path
+    source_dir="$(cd "$source_dir" && pwd)"
+    
+    # Set default destination if not provided: <source_parent>/SORTED
+    # Uses parameter expansion: ${var%/*} strips the last path component (like dirname)
+    if [[ -z "$dest_dir" ]]; then
+        dest_dir="${source_dir%/*}/${DEFAULT_DEST_SUFFIX}"
+        log_info "Using default destination: $dest_dir"
+    fi
+    
+    # Resolve dest to absolute path (create first if needed)
+    mkdir -p "$dest_dir"
+    dest_dir="$(cd "$dest_dir" && pwd)"
+    mkdir -p "$TEMP_EXTRACT"
+    rm -f "$LOG_FILE"
+    
+    # Create manifest file
+    MANIFEST_FILE="$dest_dir/sort-manifest-$(date +%Y%m%d-%H%M%S).txt"
+    
+    log_info "=== ROM Sorting Workflow Started (v2.5.1) ==="
+    log_info "Source: $source_dir"
+    log_info "Destination: $dest_dir"
+    if [[ "$DRY_RUN" == true ]]; then
+        log_info "MODE: DRY RUN (no files will be moved)"
+    fi
+    if [[ "$DELETE_SOURCE_ARCHIVES" == true ]]; then
+        log_info "DELETE SOURCE ARCHIVES: Enabled"
+    fi
+    
+    log_manifest "# ROM Sort Manifest (v2.5.1)"
+    log_manifest "# Generated: $(date)"
+    log_manifest "# Source: $source_dir"
+    log_manifest "# Destination: $dest_dir"
+    log_manifest "# Dry Run: $DRY_RUN"
+    log_manifest "# Delete Source Archives: $DELETE_SOURCE_ARCHIVES"
+    log_manifest ""
+    log_manifest "# Subcategory folders (under <system>/):"
+    log_manifest "#   hacks/        - Gameplay modifications, balance changes"
+    log_manifest "#   translations/ - Language patches, localizations"
+    log_manifest "#   prototypes/   - Unreleased, beta, game demo versions"
+    log_manifest "#   homebrew/     - Unlicensed, indie games"
+    log_manifest "#   (main folder) - Standard ROMs, undetermined category"
+    log_manifest ""
+    log_manifest "# Non-game content (under $NON_GAMES_FOLDER/):"
+    log_manifest "#   demos/        - Demoscene, intros, tech demos"
+    log_manifest "#   utilities/    - Music players, test carts, BIOS"
+    log_manifest ""
+    log_manifest "# Note: Duplicate files are renamed with _1, _2, etc."
+    log_manifest "#       Run jdupes to identify true duplicates after sorting."
+    log_manifest ""
+    
+    # Phase 0: Fix source permissions
+    log_info ""
+    log_info "=== Phase 0: Fixing source permissions ==="
+    if [[ "$DRY_RUN" == true ]]; then
+        log_info "[DRY RUN] Would fix permissions on: $source_dir"
+    else
+        chmod -R u+rwX,g+rX,g-w,o-rwx "$source_dir" 2>/dev/null || true
+        log_info "Permissions fixed on source directory"
+    fi
+    
+    # Phase 1: Process loose ROM files
+    log_info ""
+    log_info "=== Phase 1: Processing loose ROM files ==="
+    log_manifest "## Phase 1: Loose Files"
+    
+    local loose_count=0
+    while IFS= read -r -d '' file; do
+        local ext
+        ext=$(get_extension "$file")
+        
+        # Skip archives (handled in phase 2)
+        if is_archive "$ext"; then
+            continue
+        fi
+        
+        # For loose files, the file path IS the context path
+        move_rom "$file" "$dest_dir" "$file"
+        ((loose_count++)) || true
+    done < <(find "$source_dir" -type f -print0 2>/dev/null)
+    
+    log_info "Processed $loose_count loose files"
+    
+    # Phase 2: Process archives
+    log_info ""
+    log_info "=== Phase 2: Processing archives ==="
+    log_manifest ""
+    log_manifest "## Phase 2: Archives"
+    
+    local archive_count=0
+    while IFS= read -r -d '' archive; do
+        # Pass the archive path as context for folder detection
+        process_archive "$archive" "$dest_dir" 0 "$archive"
+        ((archive_count++)) || true
+    done < <(find "$source_dir" -type f \( -name "*.zip" -o -name "*.7z" -o -name "*.rar" -o -name "*.gz" -o -name "*.lzh" -o -name "*.lha" \) -print0 2>/dev/null)
+    
+    log_info "Processed $archive_count archives"
+    
+    # Phase 3: Delete source archives (if enabled)
+    delete_source_archives
+    
+    # Phase 4: Cleanup
+    log_info ""
+    log_info "=== Phase 4: Cleanup ==="
+    rm -rf "$TEMP_EXTRACT"
+    
+    # Remove empty directories from source and destination
+    if [[ "$DRY_RUN" == true ]]; then
+        local empty_src empty_dest
+        empty_src=$(find "$source_dir" -type d -empty 2>/dev/null | wc -l)
+        empty_dest=$(find "$dest_dir" -type d -empty 2>/dev/null | wc -l)
+        log_info "[DRY RUN] Would delete $empty_src empty folders in source"
+        log_info "[DRY RUN] Would delete $empty_dest empty folders in destination"
+    else
+        log_verbose "Removing empty directories from source..."
+        find "$source_dir" -type d -empty -delete 2>/dev/null || true
+        log_verbose "Removing empty directories from destination..."
+        find "$dest_dir" -type d -empty -delete 2>/dev/null || true
+        log_info "Empty directories cleaned up"
+    fi
+    
+    # Summary
+    log_info ""
+    log_info "=== Summary ==="
+    log_info "Total ROMs sorted:    ${STATS[roms]}"
+    log_info "  - Main folder:      ${STATS[roms_main]}"
+    log_info "  - Hacks:            ${STATS[roms_hacks]}"
+    log_info "  - Translations:     ${STATS[roms_translations]}"
+    log_info "  - Prototypes:       ${STATS[roms_prototypes]}"
+    log_info "  - Homebrew:         ${STATS[roms_homebrew]}"
+    log_info "Non-games sorted:     $((STATS[non_games_demos] + STATS[non_games_utilities]))"
+    log_info "  - Demos:            ${STATS[non_games_demos]}"
+    log_info "  - Utilities:        ${STATS[non_games_utilities]}"
+    log_info "Patches found:        ${STATS[patches]}"
+    log_info "Archives processed:   ${STATS[archives]}"
+    log_info "  - Nested archives:  ${STATS[archives_nested]}"
+    if [[ "$DELETE_SOURCE_ARCHIVES" == true ]]; then
+        log_info "Archives deleted:     ${STATS[archives_deleted]}"
+    fi
+    log_info "Disc images:          ${STATS[disc_images]}"
+    log_info "Source files:         ${STATS[source]}"
+    log_info "Junk skipped:         ${STATS[junk]}"
+    log_info "Unknown/unsorted:     ${STATS[unknown]}"
+    log_info ""
+    log_info "Duplicates renamed:   ${STATS[duplicates_renamed]}"
+    if [[ ${STATS[duplicates_renamed]} -gt 0 ]]; then
+        log_info "  ⚠ Run 'jdupes -r $dest_dir' to identify and remove true duplicates"
+    fi
+    
+    log_manifest ""
+    log_manifest "## Summary"
+    log_manifest "Total ROMs: ${STATS[roms]}"
+    log_manifest "  Main folder: ${STATS[roms_main]}"
+    log_manifest "  Hacks: ${STATS[roms_hacks]}"
+    log_manifest "  Translations: ${STATS[roms_translations]}"
+    log_manifest "  Prototypes: ${STATS[roms_prototypes]}"
+    log_manifest "  Homebrew: ${STATS[roms_homebrew]}"
+    log_manifest "Non-games: $((STATS[non_games_demos] + STATS[non_games_utilities]))"
+    log_manifest "  Demos: ${STATS[non_games_demos]}"
+    log_manifest "  Utilities: ${STATS[non_games_utilities]}"
+    log_manifest "Patches: ${STATS[patches]}"
+    log_manifest "Archives: ${STATS[archives]}"
+    log_manifest "  Nested: ${STATS[archives_nested]}"
+    if [[ "$DELETE_SOURCE_ARCHIVES" == true ]]; then
+        log_manifest "Archives deleted: ${STATS[archives_deleted]}"
+    fi
+    log_manifest "Disc images: ${STATS[disc_images]}"
+    log_manifest "Source files: ${STATS[source]}"
+    log_manifest "Junk: ${STATS[junk]}"
+    log_manifest "Unknown: ${STATS[unknown]}"
+    log_manifest ""
+    log_manifest "Duplicates renamed: ${STATS[duplicates_renamed]}"
+    
+    if [[ "$DRY_RUN" == false ]]; then
+        log_info ""
+        log_info "Output directories created:"
+        find "$dest_dir" -type d 2>/dev/null | sort | while read -r dir; do
+            local count
+            count=$(find "$dir" -maxdepth 1 -type f 2>/dev/null | wc -l)
+            if [[ $count -gt 0 ]]; then
+                log_info "  $dir: $count files"
+            fi
+        done
+    fi
+    
+    log_info ""
+    log_info "=== Workflow Complete ==="
+    log_info "Log file: $LOG_FILE"
+    log_info "Manifest: $MANIFEST_FILE"
+    
+    if [[ "$DRY_RUN" == true ]]; then
+        log_info ""
+        log_info "This was a dry run. Run without --dry-run to actually move files."
+    fi
+}
+
+# Run main
+main "$@"
