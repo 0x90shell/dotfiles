@@ -1,9 +1,25 @@
 #!/bin/bash
 # =============================================================================
-# ROM Sorting Workflow Script v2.7.0
+# ROM Sorting Workflow Script v2.7.2
 # =============================================================================
 # Automated extraction, classification, and sorting of ROM files for ES-DE.
 # Supports nested archives up to configurable depth (default: 5 levels).
+#
+# v2.7.2: Complete disc system header detection
+#   - Added: Dreamcast detection ("SEGA SEGAKATANA")
+#   - Added: PS2 detection ("PlayStation 2")
+#   - Added: PC Engine CD detection
+#   - Added: 3DO detection
+#   - Improved: Now reads 64KB and uses strings (handles MODE1/MODE2 sectors)
+#   - Improved: .cue files recursively check their .bin files
+#   - Removed: xxd dependency (now uses head + strings)
+#
+# v2.7.1: Improved disc detection
+#   - Added: Sega CD header detection (SEGADISCSYSTEM at 0x00 or 0x10)
+#   - Added: Asset .bin detection (palette, tilemap, samples, etc. → skipped)
+#   - Added: CD track .bin detection (Track 01.bin patterns → stays with .cue)
+#   - Fixed: guess_disc_system now checks file headers, not just path patterns
+#   - Fixed: Small data .bin files no longer go to disc_images/
 #
 # v2.7.0: Source cleanup options
 #   - Added: --clean-source (-c) moves skipped files to _skipped/ folder
@@ -425,6 +441,32 @@ guess_bin_system() {
         filesize=0
     fi
     
+    # FIRST: Detect development/asset .bin files - these are NOT ROMs
+    # Common patterns: palette, tilemap, samples, music data, sprite sheets
+    if [[ "$filename" =~ (palette|tilemap|tiles|sprites|samples|_music|_sfx|_audio|_sound|_gfx|_data)\.bin$ ]]; then
+        echo "asset"
+        return
+    fi
+    # Also catch freq tables, frame data, stage data
+    if [[ "$filename" =~ ^(freq_|frame_|stage_|level_|bg_|fg_) ]]; then
+        echo "asset"
+        return
+    fi
+    # Parenthetical descriptors often indicate assets
+    if [[ "$filename" =~ \((palette|tilemap|tiles)\)\.bin$ ]]; then
+        echo "asset"
+        return
+    fi
+    
+    # SECOND: Detect CD audio track .bin files - these go with their .cue
+    # Common patterns: "(Track 01)", "(Track01)", "- Track 01", "_Track01", "[Track 5]"
+    if [[ "$filename" =~ \(track[[:space:]_]*[0-9]+\)\.bin$ ]] || \
+       [[ "$filename" =~ \[track[[:space:]_]*[0-9]+\]\.bin$ ]] || \
+       [[ "$filename" =~ [-_[:space:]]track[[:space:]_-]*[0-9]+\.bin$ ]]; then
+        echo "cd_track"
+        return
+    fi
+    
     # Very small files (< 64KB) - likely Atari 2600
     if [[ $filesize -lt 65536 ]]; then
         # Check for Atari 2600 indicators in filename
@@ -440,6 +482,11 @@ guess_bin_system() {
             else
                 echo "atari2600"
             fi
+            return
+        fi
+        # Very small non-standard sizes are probably data files, not ROMs
+        if [[ $filesize -lt 4096 ]]; then
+            echo "asset"
             return
         fi
     fi
@@ -610,40 +657,125 @@ detect_subcategory() {
 }
 
 guess_disc_system() {
-    local path="${1,,}"
+    local filepath="$1"
+    local context_path="${2:-}"
+    local path="${filepath,,}"
+    local context="${context_path,,}"
+    local filename
+    filename=$(basename "$filepath")
+    filename="${filename,,}"
     
+    # Combine path and context for pattern matching
+    local combined="$path $context $filename"
+    
+    # First: Try to detect via file header (most reliable)
+    if [[ -f "$filepath" && -r "$filepath" ]]; then
+        # Read first 64KB for string detection (covers various sector formats)
+        # MODE1/2048: data starts at 0, MODE2/2352: data at offset 16 or 24
+        local header_ascii
+        header_ascii=$(head -c 65536 "$filepath" 2>/dev/null | strings -n 6 2>/dev/null | head -50)
+        
+        # Sega CD: "SEGADISCSYSTEM" - appears early in disc
+        if [[ "$header_ascii" =~ SEGADISCSYSTEM|SEGADISC ]]; then
+            echo "segacd"
+            return
+        fi
+        
+        # Saturn: "SEGA SEGASATURN" in IP.BIN header area
+        if [[ "$header_ascii" =~ "SEGA SEGASATURN"|SEGASATURN ]]; then
+            echo "saturn"
+            return
+        fi
+        
+        # Dreamcast: "SEGA SEGAKATANA" (dev name) in IP.BIN
+        # Some also have "SEGA ENTERPRISES" 
+        if [[ "$header_ascii" =~ "SEGA SEGAKATANA"|SEGAKATANA ]]; then
+            echo "dreamcast"
+            return
+        fi
+        
+        # PSX: "PlayStation" or "Sony Computer Entertainment" license text
+        # Note: Case sensitive - official discs use "PlayStation" not "PLAYSTATION"
+        if [[ "$header_ascii" =~ "PlayStation"|"Sony Computer Entertainment"|PLAYSTATION ]]; then
+            # Check if it's PS2 (has "PlayStation 2" or "PS2")
+            if [[ "$header_ascii" =~ "PlayStation 2"|"PLAYSTATION 2"|"PS2 " ]]; then
+                echo "ps2"
+                return
+            fi
+            echo "psx"
+            return
+        fi
+        
+        # PC Engine CD: Look for "PC Engine CD-ROM SYSTEM" or specific markers
+        if [[ "$header_ascii" =~ "PC Engine"|"PC-Engine"|"NEC " ]]; then
+            echo "pcenginecd"
+            return
+        fi
+        
+        # 3DO: Look for "3DO" marker in header
+        if [[ "$header_ascii" =~ "3DO Company"|"3DO COMPANY" ]]; then
+            echo "3do"
+            return
+        fi
+    fi
+    
+    # Second: For .cue files, check the associated .bin file
+    if [[ "$filename" =~ \.cue$ ]]; then
+        local dir
+        dir=$(dirname "$filepath")
+        local base="${filename%.cue}"
+        
+        # Try main .bin file first
+        local bin_candidates=("$dir/$base.bin")
+        # Add Track 01 patterns
+        bin_candidates+=("$dir/$base (Track 01).bin" "$dir/$base (Track 1).bin")
+        bin_candidates+=("$dir/${base}_Track01.bin" "$dir/${base} - Track 01.bin")
+        
+        for binfile in "${bin_candidates[@]}"; do
+            if [[ -f "$binfile" ]]; then
+                # Recursively call ourselves on the bin file
+                local detected
+                detected=$(guess_disc_system "$binfile" "$context_path")
+                if [[ -n "$detected" ]]; then
+                    echo "$detected"
+                    return
+                fi
+            fi
+        done
+    fi
+    
+    # Third: Fall back to path/context pattern matching
     # Sony systems
-    [[ "$path" =~ psx|ps1|playstation[^2-9] ]] && echo "psx" && return
-    [[ "$path" =~ ps2|playstation.?2 ]] && echo "ps2" && return
-    [[ "$path" =~ ps3|playstation.?3 ]] && echo "ps3" && return
-    [[ "$path" =~ psp|playstation.?portable ]] && echo "psp" && return
-    [[ "$path" =~ vita|psvita|ps.?vita ]] && echo "psvita" && return
+    [[ "$combined" =~ psx|ps1|playstation[^2-9] ]] && echo "psx" && return
+    [[ "$combined" =~ ps2|playstation.?2 ]] && echo "ps2" && return
+    [[ "$combined" =~ ps3|playstation.?3 ]] && echo "ps3" && return
+    [[ "$combined" =~ psp|playstation.?portable ]] && echo "psp" && return
+    [[ "$combined" =~ vita|psvita|ps.?vita ]] && echo "psvita" && return
     
     # Nintendo systems
-    [[ "$path" =~ gamecube|game.?cube|gcn|ngc|\/gc\/ ]] && echo "gc" && return
-    [[ "$path" =~ wiiu|wii.?u ]] && echo "wiiu" && return
-    [[ "$path" =~ wii[^u] ]] && echo "wii" && return
-    [[ "$path" =~ \/wii\/ ]] && echo "wii" && return
+    [[ "$combined" =~ gamecube|game.?cube|gcn|ngc|\/gc\/ ]] && echo "gc" && return
+    [[ "$combined" =~ wiiu|wii.?u ]] && echo "wiiu" && return
+    [[ "$combined" =~ wii[^u]|\/wii\/ ]] && echo "wii" && return
     
     # Sega systems
-    [[ "$path" =~ saturn ]] && echo "saturn" && return
-    [[ "$path" =~ segacd|sega.?cd|mega.?cd ]] && echo "segacd" && return
-    [[ "$path" =~ dreamcast|dc[^a-z] ]] && echo "dreamcast" && return
+    [[ "$combined" =~ saturn ]] && echo "saturn" && return
+    [[ "$combined" =~ segacd|sega.?cd|mega.?cd ]] && echo "segacd" && return
+    [[ "$combined" =~ dreamcast|dc[^a-z] ]] && echo "dreamcast" && return
     
     # Microsoft systems
-    [[ "$path" =~ xbox.?360|360 ]] && echo "xbox360" && return
-    [[ "$path" =~ xbox|x.?box ]] && echo "xbox" && return
+    [[ "$combined" =~ xbox.?360|360 ]] && echo "xbox360" && return
+    [[ "$combined" =~ xbox|x.?box ]] && echo "xbox" && return
     
     # NEC systems
-    [[ "$path" =~ pcengine|turbografx|tg16|pce.?cd|tgcd ]] && echo "pcenginecd" && return
-    [[ "$path" =~ pcfx|pc-fx ]] && echo "pcfx" && return
+    [[ "$combined" =~ pcengine|turbografx|tg16|pce.?cd|tgcd ]] && echo "pcenginecd" && return
+    [[ "$combined" =~ pcfx|pc-fx ]] && echo "pcfx" && return
     
     # Other systems
-    [[ "$path" =~ neogeo.?cd|ngcd ]] && echo "neogeocd" && return
-    [[ "$path" =~ 3do ]] && echo "3do" && return
-    [[ "$path" =~ amiga.?cd|cd32 ]] && echo "amigacd32" && return
-    [[ "$path" =~ cdi|cd-i|philips ]] && echo "cdimono1" && return
-    [[ "$path" =~ jaguar.?cd ]] && echo "atarijaguarcd" && return
+    [[ "$combined" =~ neogeo.?cd|ngcd ]] && echo "neogeocd" && return
+    [[ "$combined" =~ 3do ]] && echo "3do" && return
+    [[ "$combined" =~ amiga.?cd|cd32 ]] && echo "amigacd32" && return
+    [[ "$combined" =~ cdi|cd-i|philips ]] && echo "cdimono1" && return
+    [[ "$combined" =~ jaguar.?cd ]] && echo "atarijaguarcd" && return
     
     echo ""
 }
@@ -828,10 +960,39 @@ move_rom() {
         local bin_system
         bin_system=$(guess_bin_system "$file")
         
+        # Asset/data files - skip them like source files
+        if [[ "$bin_system" == "asset" ]]; then
+            log_verbose "Skipping asset .bin file: $filename"
+            ((STATS[source]++)) || true
+            if [[ "$DELETE_JUNK" == true ]]; then
+                rm -f "$file" 2>/dev/null || true
+                log_verbose "  -> Deleted"
+            elif [[ "$CLEAN_SOURCE" == true ]]; then
+                do_move "$file" "$dest_base/_skipped/source"
+            fi
+            return
+        fi
+        
+        # CD track files - send to disc_images (will be with their .cue)
+        if [[ "$bin_system" == "cd_track" ]]; then
+            # Try to detect system from path context or filename
+            local system
+            system=$(guess_disc_system "$file" "$context_path")
+            if [[ -n "$system" ]]; then
+                do_move "$file" "$dest_base/$system"
+                log_manifest "DISC: $filename -> $system/ (CD track)"
+            else
+                do_move "$file" "$dest_base/disc_images"
+                log_manifest "DISC: $filename -> disc_images/ (CD track)"
+            fi
+            ((STATS[disc_images]++)) || true
+            return
+        fi
+        
         if [[ "$bin_system" == "disc" ]]; then
             # Large file, treat as disc image
             local system
-            system=$(guess_disc_system "$file")
+            system=$(guess_disc_system "$file" "$context_path")
             if [[ -n "$system" ]]; then
                 if [[ -n "$subcategory" ]]; then
                     do_move "$file" "$dest_base/$system/$subcategory"
@@ -872,7 +1033,7 @@ move_rom() {
     # Handle other disc images (non-.bin)
     if [[ -n "${DISC_EXTS[$ext]:-}" ]]; then
         local system
-        system=$(guess_disc_system "$file")
+        system=$(guess_disc_system "$file" "$context_path")
         if [[ -n "$system" ]]; then
             if [[ -n "$subcategory" ]]; then
                 do_move "$file" "$dest_base/$system/$subcategory"
@@ -1223,7 +1384,7 @@ main() {
     # Create manifest file
     MANIFEST_FILE="$dest_dir/sort-manifest-$(date +%Y%m%d-%H%M%S).txt"
     
-    log_info "=== ROM Sorting Workflow Started (v2.7.0) ==="
+    log_info "=== ROM Sorting Workflow Started (v2.7.2) ==="
     log_info "Source: $source_dir"
     log_info "Destination: $dest_dir"
     if [[ "$DRY_RUN" == true ]]; then
@@ -1239,7 +1400,7 @@ main() {
         log_info "DELETE JUNK: Enabled (junk/source files will be deleted)"
     fi
     
-    log_manifest "# ROM Sort Manifest (v2.7.0)"
+    log_manifest "# ROM Sort Manifest (v2.7.2)"
     log_manifest "# Generated: $(date)"
     log_manifest "# Source: $source_dir"
     log_manifest "# Destination: $dest_dir"
