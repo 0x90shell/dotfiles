@@ -47,113 +47,482 @@ CACHE_DIR = Path.home() / ".cache" / "ra_tool"
 # Cache expiry in days (6 months)
 CACHE_EXPIRY_DAYS = 180
 
-# ROM file extensions by category
-CARTRIDGE_EXTENSIONS = (
-    '.sfc', '.smc', '.nes', '.gba', '.gb', '.gbc', '.md', '.gen',
-    '.sms', '.gg', '.n64', '.z64', '.v64', '.nds', '.pce', '.a26',
-    '.a78', '.lnx', '.ngp', '.ngc', '.ws', '.wsc', '.vb', '.sg',
-    '.col', '.int', '.vec', '.bin',
-    # Additional formats
-    '.bs',   # Satellaview (SNES)
-    '.st',   # Sufami Turbo (SNES)
-    '.fds',  # Famicom Disk System
-    '.fig',  # SNES (rare)
-    '.swc',  # SNES (Super Wild Card)
-    '.mgd',  # Mega Drive (alternate dump format)
-    '.32x',  # Sega 32X
-    '.min',  # Pokemon Mini
-    '.mx1', '.mx2',  # MSX
-    '.dsk',  # Various disk formats (Amstrad CPC, MSX, etc.)
-    '.tap', '.tzx',  # ZX Spectrum tape formats
-    '.cdt',  # Amstrad CPC tape
-    '.d64', '.t64', '.prg', '.crt',  # Commodore 64
-    '.a52',  # Atari 5200
-    '.j64',  # Atari Jaguar
-    '.rom',  # Generic ROM extension
+# ============================================================================
+# ROM FILE EXTENSIONS - Comprehensive support for No-Intro, Redump, and more
+# ============================================================================
+
+# --- Nintendo Cartridge Extensions ---
+NINTENDO_CART_EXTENSIONS = (
+    # NES / Famicom
+    '.nes',    # Standard iNES/NES 2.0 format
+    '.unf',    # UNIF format (Universal NES Image Format)
+    '.unif',   # UNIF format alternate
+    '.fds',    # Famicom Disk System
+    # SNES / Super Famicom
+    '.sfc',    # Super Famicom (No-Intro standard)
+    '.smc',    # Super Magicom (copier format with header)
+    '.fig',    # Pro Fighter / Super Magicom
+    '.swc',    # Super Wild Card
+    '.bs',     # Satellaview (SNES addon)
+    '.st',     # Sufami Turbo (SNES addon)
+    # Game Boy family
+    '.gb',     # Game Boy
+    '.gbc',    # Game Boy Color
+    '.cgb',    # Game Boy Color (alternate extension)
+    '.sgb',    # Super Game Boy
+    '.gba',    # Game Boy Advance
+    '.agb',    # Game Boy Advance (alternate)
+    '.mb',     # GBA Multiboot
+    # Nintendo 64 / 64DD
+    '.n64',    # N64 (byte-swapped)
+    '.z64',    # N64 (big endian - native format)
+    '.v64',    # N64 (little endian)
+    '.ndd',    # 64DD disk image
+    # Nintendo DS / DSi
+    '.nds',    # Nintendo DS ROM
+    '.dsi',    # DSi ROM / DSi-Enhanced
+    '.srl',    # DS ROM (alternate)
+    '.ids',    # iQue DS
+    '.app',    # DS app (used in some contexts)
+    # Nintendo 3DS
+    '.3ds',    # 3DS cartridge dump
+    '.cia',    # 3DS installable title
+    '.3dsx',   # 3DS homebrew
+    '.cci',    # CTR Card Image (3DS cartridge)
+    '.cxi',    # CTR Executable Image (3DS executable)
+    # Virtual Boy
+    '.vb',     # Virtual Boy
+    '.vboy',   # Virtual Boy (alternate)
+    # Pokemon Mini
+    '.min',    # Pokemon Mini
 )
 
-# NOTE: CSO (Compressed ISO) is NOT directly supported by RAHasher.
-# CSO files must be decompressed to ISO first, or used with an emulator
-# that handles decompression (like PPSSPP standalone for PSP).
-# We include .cso in the list to detect these files and warn users.
+# --- Nintendo Disc Extensions (GameCube, Wii, Wii U) ---
+NINTENDO_DISC_EXTENSIONS = (
+    # GameCube
+    '.gcm',    # GC Master disc image (Redump standard)
+    '.gcz',    # Dolphin compressed GC
+    '.dol',    # GC/Wii executable (homebrew)
+    '.tgc',    # Embedded GC game
+    # Wii
+    '.wbfs',   # Wii Backup File System
+    '.wad',    # Wii installable channel/game
+    '.wdf',    # Wii Disc Format (compressed)
+    '.wia',    # Wii/GC compressed (Dolphin)
+    '.rvz',    # Wii/GC compressed (Dolphin, improved)
+    # Wii U
+    '.wua',    # Wii U Archive (Cemu)
+    '.rpx',    # Wii U executable
+    '.wud',    # Wii U Disc
+    '.wux',    # Wii U Disc (compressed)
+    # Switch
+    '.nsp',    # Switch installable title
+    '.xci',    # Switch cartridge dump
+    '.nro',    # Switch homebrew
+    '.nsz',    # Switch compressed
+)
+
+# --- Sega Cartridge Extensions ---
+SEGA_CART_EXTENSIONS = (
+    # SG-1000
+    '.sg',     # SG-1000
+    # Master System
+    '.sms',    # Master System
+    # Game Gear
+    '.gg',     # Game Gear
+    # Genesis / Mega Drive
+    '.md',     # Mega Drive (No-Intro standard)
+    '.gen',    # Genesis (common US extension)
+    '.smd',    # Super Magic Drive (copier format)
+    '.sgd',    # Mega Drive (alternate)
+    '.68k',    # Mega Drive (raw 68K binary)
+    '.bin',    # Generic binary (also used by Genesis - context dependent)
+    # Sega 32X
+    '.32x',    # Sega 32X
+)
+
+# --- Sega Disc Extensions ---
+SEGA_DISC_EXTENSIONS = (
+    # Sega CD / Mega CD
+    # (uses standard disc formats: .cue, .iso, .chd, .bin)
+    # Saturn
+    # (uses standard disc formats: .cue, .iso, .chd, .bin)
+    # Dreamcast
+    '.gdi',    # Dreamcast GD-ROM disc image
+    '.cdi',    # DiscJuggler image (common for DC)
+)
+
+# --- Sony Cartridge/ROM Extensions ---
+SONY_ROM_EXTENSIONS = (
+    # PS Vita
+    '.vpk',    # Vita installable package
+    '.mai',    # Vita DLC/update
+    # NOTE: PSP .pbp moved to SONY_DISC_EXTENSIONS - it contains disc images
+)
+
+# --- Sony Disc Extensions ---
+SONY_DISC_EXTENSIONS = (
+    # PSP
+    '.pbp',    # PSP EBOOT.PBP (contains disc image inside)
+    # PS3 specific
+    '.pkg',    # PS3 installable package
+    '.self',   # PS3 executable
+    '.eboot',  # PS3/PSP executable
+    # NOTE: PSX, PS2, PS3 primarily use standard disc formats in DISC_EXTENSIONS
+    # (.iso, .bin, .cue, .chd)
+)
+
+# --- Microsoft Extensions ---
+MICROSOFT_EXTENSIONS = (
+    # Original Xbox
+    '.xbe',    # Xbox executable
+    '.xiso',   # Xbox ISO (specific format)
+    # Xbox 360
+    '.xex',    # Xbox 360 executable (NOTE: also used by Atari 800)
+    '.god',    # Games on Demand
+    '.live',   # Xbox Live Arcade
+)
+
+# --- NEC PC Engine / TurboGrafx Extensions ---
+NEC_EXTENSIONS = (
+    '.pce',    # PC Engine / TurboGrafx-16
+    '.sgx',    # SuperGrafx
+    '.hcd',    # PC Engine CD (hint file)
+)
+
+# --- SNK Extensions ---
+SNK_EXTENSIONS = (
+    '.neo',    # Neo Geo (newer dump format)
+    '.ngp',    # Neo Geo Pocket
+    '.ngc',    # Neo Geo Pocket Color
+)
+
+# --- Atari Extensions ---
+ATARI_EXTENSIONS = (
+    # Atari 2600
+    '.a26',    # Atari 2600
+    # Atari 5200
+    '.a52',    # Atari 5200
+    # Atari 7800
+    '.a78',    # Atari 7800
+    # Atari Lynx
+    '.lnx',    # Atari Lynx
+    # Atari Jaguar
+    '.j64',    # Atari Jaguar
+    '.jag',    # Atari Jaguar (alternate)
+    # Atari 8-bit computers (800/XL/XE)
+    '.atr',    # Atari 8-bit disk image
+    '.xex',    # Atari 8-bit executable (conflicts with Xbox 360)
+    '.xfd',    # Atari 8-bit disk image
+    '.dcm',    # Atari 8-bit compressed disk
+    '.cas',    # Atari 8-bit cassette
+    '.car',    # Atari 8-bit cartridge
+    # Atari ST
+    '.st',     # Atari ST disk (NOTE: also used by Sufami Turbo)
+    '.msa',    # Atari ST compressed disk
+    '.stx',    # Atari ST extended disk
+    '.tos',    # Atari ST system
+)
+
+# --- Other Consoles Extensions ---
+OTHER_CONSOLE_EXTENSIONS = (
+    # ColecoVision
+    '.col',    # ColecoVision
+    # Intellivision
+    '.int',    # Intellivision
+    # Odyssey 2
+    '.o2',     # Odyssey 2 / Videopac
+    # Vectrex
+    '.vec',    # Vectrex
+    # WonderSwan
+    '.ws',     # WonderSwan
+    '.wsc',    # WonderSwan Color
+    '.pc2',    # WonderSwan (alternate, based on CPU)
+    # NOTE: .3do moved to DISC_EXTENSIONS - 3DO is disc-based
+    # Fairchild Channel F
+    '.chf',    # Channel F
+    # Watara Supervision
+    '.sv',     # Supervision
+    # NOTE: .bin is handled separately as a context-dependent format
+)
+
+# --- Computer Extensions ---
+COMPUTER_EXTENSIONS = (
+    # MSX
+    '.rom',    # MSX cartridge (generic)
+    '.mx1',    # MSX1
+    '.mx2',    # MSX2
+    # Commodore 64
+    '.d64',    # C64 disk image (1541)
+    '.t64',    # C64 tape image
+    '.tap',    # C64/Spectrum tape
+    '.crt',    # C64 cartridge
+    '.prg',    # C64 program
+    '.g64',    # C64 GCR disk image
+    # ZX Spectrum
+    '.z80',    # Spectrum snapshot
+    '.tzx',    # Spectrum tape
+    '.sna',    # Spectrum snapshot
+    # Amstrad CPC
+    '.dsk',    # Amstrad CPC / MSX disk
+    '.cdt',    # Amstrad CPC tape
+    # BBC Micro
+    '.ssd',    # BBC Micro single-sided disk
+    '.dsd',    # BBC Micro double-sided disk
+    # Apple II
+    '.do',     # Apple II DOS order
+    '.po',     # Apple II ProDOS order
+    '.woz',    # Apple II WOZ format (flux-level)
+    '.2mg',    # Apple II 2IMG format
+    '.nib',    # Apple II nibble format
+    # PC-88
+    '.d88',    # PC-88 disk image
+    # PC-98
+    '.hdm',    # PC-98 hard disk image
+    '.fdi',    # PC-98 floppy disk image
+    # Sharp X68000
+    '.xdf',    # X68000 disk image
+    '.dim',    # X68000 disk image
+    # FM Towns
+    '.fmtowns',  # FM Towns (rare extension)
+)
+
+# --- Fantasy Console Extensions ---
+FANTASY_CONSOLE_EXTENSIONS = (
+    '.p8',     # PICO-8 cartridge
+    '.tic',    # TIC-80 cartridge
+)
+
+# --- Arcade Extensions ---
+ARCADE_EXTENSIONS = (
+    # MAME/FBNeo typically use .zip containing multiple ROM files
+    # Individual ROM chips don't have standard extensions
+    # CHD is used for hard drive/CD content in arcade
+)
+
+# ============================================================================
+# DISC IMAGE EXTENSIONS (require special handling by RAHasher)
+# ============================================================================
+
+# Core disc formats used across multiple systems
+# Console-specific formats are in NINTENDO_DISC_EXTENSIONS, SEGA_DISC_EXTENSIONS, etc.
 DISC_EXTENSIONS = (
-    '.cue', '.iso', '.chd', '.pbp', '.gdi', '.m3u'
+    # Standard disc image formats (used by PSX, PS2, Saturn, Sega CD, etc.)
+    '.cue',    # Cue sheet (points to .bin)
+    '.iso',    # ISO 9660 disc image
+    '.bin',    # Binary disc image (usually paired with .cue, also cartridge for some)
+    '.chd',    # MAME compressed disc (supports CD, DVD, GD-ROM, etc.)
+    '.img',    # Raw disc image
+    '.mdf',    # Alcohol 120% disc image
+    '.ccd',    # CloneCD control file
+    '.nrg',    # Nero disc image
+    '.ecm',    # Error Code Modeler compressed
+    # Multi-disc playlist
+    '.m3u',    # Playlist for multi-disc games
+    # Compressed ISO (not PSP-specific CSO which is in UNSUPPORTED)
+    '.ciso',   # Compressed ISO (general purpose)
+    # 3DO (disc-based console)
+    '.3do',    # 3DO disc image
 )
 
-# Compressed formats that need special handling
-# CSO: Compressed ISO (PSP) - NOT supported by RAHasher, needs decompression
-# ZSO: Alternative compressed ISO format - NOT supported
-UNSUPPORTED_DISC_FORMATS = ('.cso', '.zso', '.dax', '.jso')
+# ============================================================================
+# UNSUPPORTED/COMPRESSED FORMATS (need decompression before RAHasher)
+# ============================================================================
 
-ARCHIVE_EXTENSIONS = ('.zip', '.7z')
+# These compressed disc formats are NOT directly supported by RAHasher.
+# They must be decompressed to ISO/BIN first, or used with an emulator
+# that handles decompression on-the-fly.
+UNSUPPORTED_DISC_FORMATS = (
+    # PSP compressed formats
+    '.cso',    # Compressed ISO (PSP) - common but NOT RAHasher supported
+    '.zso',    # ZISO compressed ISO
+    '.dax',    # DAX compressed ISO
+    '.jso',    # JISO compressed ISO
+    # Other compressed formats that may need handling
+    '.rar',    # RAR archive (not directly supported)
+)
 
-ALL_ROM_EXTENSIONS = CARTRIDGE_EXTENSIONS + DISC_EXTENSIONS + ARCHIVE_EXTENSIONS + UNSUPPORTED_DISC_FORMATS
+# ============================================================================
+# ARCHIVE EXTENSIONS (RAHasher can handle ZIP internally for many systems)
+# ============================================================================
 
-# Systems that particularly need RAHasher (disc-based or special headers)
-# Used for display purposes - RAHasher is preferred for ALL systems when available
+ARCHIVE_EXTENSIONS = (
+    '.zip',    # ZIP archive - RAHasher handles for most cartridge systems
+    '.7z',     # 7-Zip archive - may need extraction
+)
+
+# ============================================================================
+# COMBINED EXTENSION LISTS
+# ============================================================================
+
+# All cartridge/ROM extensions (non-disc)
+CARTRIDGE_EXTENSIONS = (
+    NINTENDO_CART_EXTENSIONS +
+    SEGA_CART_EXTENSIONS +
+    SONY_ROM_EXTENSIONS +
+    NEC_EXTENSIONS +
+    SNK_EXTENSIONS +
+    ATARI_EXTENSIONS +
+    OTHER_CONSOLE_EXTENSIONS +
+    COMPUTER_EXTENSIONS +
+    FANTASY_CONSOLE_EXTENSIONS
+)
+
+# All ROM extensions including discs and archives
+ALL_ROM_EXTENSIONS = (
+    CARTRIDGE_EXTENSIONS +
+    DISC_EXTENSIONS +
+    NINTENDO_DISC_EXTENSIONS +
+    SEGA_DISC_EXTENSIONS +
+    SONY_DISC_EXTENSIONS +
+    MICROSOFT_EXTENSIONS +
+    ARCHIVE_EXTENSIONS +
+    UNSUPPORTED_DISC_FORMATS
+)
+
+# ============================================================================
+# SYSTEMS REQUIRING RAHASHER
+# ============================================================================
+
+# Systems that REQUIRE RAHasher for accurate hashing:
+# - Disc-based systems (need sector-level hashing, CHD extraction)
+# - Systems with special headers (need header detection/removal)
+# - Systems with complex ROM layouts
+#
+# RAHasher performs console-specific hash algorithms that differ from simple MD5.
+# For disc-based systems, it extracts and hashes specific tracks/data sectors.
+
 RAHASHER_REQUIRED = {
-    7,   # NES (headerless)
-    12,  # PlayStation
-    13,  # Atari Lynx (header detection)
+    # --- Systems with special header handling ---
+    7,   # NES - needs iNES/NES 2.0 header removal
+    13,  # Atari Lynx - has header that needs detection
+
+    # --- CD-based systems (use track/sector hashing) ---
+    12,  # PlayStation (PSX)
     21,  # PlayStation 2
-    39,  # Saturn
-    40,  # Dreamcast
-    41,  # PlayStation Portable
-    49,  # PC-FX
+    41,  # PlayStation Portable (PSP)
     56,  # Mega CD / Sega CD
+    39,  # Sega Saturn
+    40,  # Sega Dreamcast
     76,  # PC Engine CD / TurboGrafx-CD
     77,  # Atari Jaguar CD
+    49,  # PC-FX
+    43,  # 3DO Interactive Multiplayer
+
+    # --- Optical/disc-based newer systems ---
+    # These require RAHasher for proper disc image handling:
+    16,  # GameCube (mini-DVD based)
+    19,  # Wii (DVD based)
+    # Note: Wii U and Switch don't have official RA support yet but may need special handling
+
+    # --- Systems with complex ROM structures ---
+    # Neo Geo CD, etc. if they use disc images
+
+    # --- N64 DD (disk-based addon) ---
+    # Uses system ID 2 (N64) but .ndd files need special handling
 }
+
+# Additional notes for RAHasher behavior:
+# - For CHD files: RAHasher extracts and hashes the relevant data
+# - For CUE/BIN: Hashes track 1 data or specific sectors based on system
+# - For M3U (multi-disc): Hashes first disc
+# - For archives: Extracts and hashes contents (ZIP supported for most systems)
+# - For PSP PBP: Extracts and hashes the ISO inside
 
 # System name aliases - maps common names to system ID
 # These are used for user-friendly lookups
 SYSTEM_ALIASES = {
-    # SNES variants
-    'snes': 3, 'super nintendo': 3, 'super famicom': 3, 'sfc': 3,
-    # Genesis/Mega Drive
-    'genesis': 1, 'mega drive': 1, 'megadrive': 1, 'md': 1,
-    # NES variants
-    'nes': 7, 'famicom': 7, 'fc': 7,
-    # Game Boy variants
+    # === Nintendo Home Consoles ===
+    'nes': 7, 'famicom': 7, 'fc': 7, 'nintendo': 7,
+    'fds': 7,  # FDS uses NES system ID in RA
+    'snes': 3, 'super nintendo': 3, 'super famicom': 3, 'sfc': 3, 'super nes': 3,
+    'satellaview': 3, 'bs-x': 3,  # Satellaview uses SNES ID
+    'n64': 2, 'nintendo 64': 2, 'nintendo64': 2,
+    '64dd': 2,  # 64DD uses N64 system ID
+    'gc': 16, 'gamecube': 16, 'ngc': 16, 'nintendo gamecube': 16,
+    'wii': 19, 'nintendo wii': 19,
+    # Note: Wii U (101) and Switch don't have full RA support yet
+
+    # === Nintendo Handhelds ===
     'gb': 4, 'game boy': 4, 'gameboy': 4,
     'gbc': 6, 'game boy color': 6, 'gameboy color': 6,
     'gba': 5, 'game boy advance': 5, 'gameboy advance': 5,
-    # PlayStation variants
-    'ps1': 12, 'psx': 12, 'playstation': 12, 'playstation 1': 12,
-    'ps2': 21, 'playstation 2': 21,
-    'psp': 41, 'playstation portable': 41,
-    # Nintendo handhelds
+    'vb': 28, 'virtual boy': 28, 'virtualboy': 28,
     'nds': 18, 'ds': 18, 'nintendo ds': 18,
-    'n64': 2, 'nintendo 64': 2,
-    # Sega
+    'dsi': 18,  # DSi uses DS system ID
+    '3ds': 78, 'n3ds': 78, 'nintendo 3ds': 78,
+    'pokemon mini': 24, 'pokemini': 24, 'pm': 24,
+
+    # === Sega Home Consoles ===
+    'sg1000': 33, 'sg-1000': 33, 'sg 1000': 33,
+    'sms': 11, 'master system': 11, 'mastersystem': 11, 'sega master system': 11,
+    'genesis': 1, 'mega drive': 1, 'megadrive': 1, 'md': 1, 'sega genesis': 1,
+    '32x': 10, 'sega 32x': 10, 'super 32x': 10, 'mega 32x': 10,
+    'sega cd': 56, 'mega cd': 56, 'segacd': 56, 'megacd': 56, 'mcd': 56,
     'saturn': 39, 'sega saturn': 39,
-    'dreamcast': 40, 'dc': 40,
-    'sega cd': 56, 'mega cd': 56, 'segacd': 56, 'megacd': 56,
-    'master system': 11, 'sms': 11,
-    'game gear': 15, 'gg': 15,
-    '32x': 10, 'sega 32x': 10,
-    # Atari
-    'atari 2600': 25, '2600': 25, 'a2600': 25,
-    'atari 7800': 51, '7800': 51, 'a7800': 51,
-    'lynx': 13, 'atari lynx': 13,
-    'jaguar': 17, 'atari jaguar': 17,
-    # PC Engine / TurboGrafx
-    'pce': 8, 'pc engine': 8, 'turbografx': 8, 'tg16': 8,
-    'pce cd': 76, 'pc engine cd': 76, 'turbografx cd': 76,
-    # Neo Geo
-    'neo geo': 14, 'neogeo': 14, 'ng': 14,
-    'neo geo pocket': 53, 'ngp': 53,
-    'neo geo pocket color': 80, 'ngpc': 80,
-    # Other
-    'msx': 29,
-    'colecovision': 44, 'coleco': 44,
-    'intellivision': 45,
+    'dreamcast': 40, 'dc': 40, 'sega dreamcast': 40,
+
+    # === Sega Handhelds ===
+    'gg': 15, 'game gear': 15, 'gamegear': 15, 'sega game gear': 15,
+
+    # === Sony ===
+    'ps1': 12, 'psx': 12, 'playstation': 12, 'playstation 1': 12, 'psone': 12,
+    'ps2': 21, 'playstation 2': 21, 'playstation2': 21,
+    'psp': 41, 'playstation portable': 41,
+    # Note: PS Vita (63), PS3 (not supported with achievements)
+
+    # === NEC / PC Engine / TurboGrafx ===
+    'pce': 8, 'pc engine': 8, 'pcengine': 8, 'turbografx': 8, 'tg16': 8,
+    'turbografx-16': 8, 'turbografx 16': 8,
+    'supergrafx': 8, 'sgx': 8,  # SuperGrafx uses PCE ID
+    'pce cd': 76, 'pc engine cd': 76, 'turbografx cd': 76, 'pcecd': 76,
+    'pcfx': 49, 'pc-fx': 49, 'pc fx': 49,
+
+    # === SNK / Neo Geo ===
+    'neogeo': 14, 'neo geo': 14, 'ng': 14, 'aes': 14, 'mvs': 14,
+    'neo geo cd': 56, 'neogeocd': 56, 'ngcd': 56,  # Check actual ID
+    'ngp': 14, 'neo geo pocket': 14, 'neogeopocket': 14,  # Check actual ID
+    'ngpc': 14, 'neo geo pocket color': 14,  # Check actual ID
+
+    # === Atari ===
+    'atari 2600': 25, '2600': 25, 'a2600': 25, 'vcs': 25, 'atari2600': 25,
+    'atari 5200': 79, '5200': 79, 'a5200': 79, 'atari5200': 79,
+    'atari 7800': 51, '7800': 51, 'a7800': 51, 'atari7800': 51,
+    'lynx': 13, 'atari lynx': 13, 'atarilynx': 13,
+    'jaguar': 17, 'atari jaguar': 17, 'atarijaguar': 17, 'jag': 17,
+    'jaguar cd': 77, 'jaguarcd': 77,
+    'atari st': 42, 'atarist': 42, 'st': 42,
+    'atari 800': 25,  # Check actual ID - might share with 2600 or separate
+
+    # === Other Consoles ===
+    '3do': 43, '3do interactive': 43,
+    'coleco': 44, 'colecovision': 44, 'coleco vision': 44,
+    'intellivision': 45, 'intv': 45,
+    'vectrex': 46, 'gce vectrex': 46,
+    'odyssey2': 23, 'odyssey 2': 23, 'o2': 23, 'videopac': 23,
+    'channel f': 57, 'fairchild': 57, 'fairchild channel f': 57,
+
+    # === WonderSwan ===
     'wonderswan': 53, 'ws': 53,
-    'wonderswan color': 63, 'wsc': 63,
-    'virtual boy': 28, 'vb': 28,
+    'wonderswancolor': 53, 'wsc': 53, 'wonderswan color': 53,  # Uses same ID
+
+    # === Computers ===
+    'msx': 29, 'msx1': 29,
+    'msx2': 29,  # Shares ID with MSX
+    'apple2': 38, 'apple ii': 38, 'appleii': 38, 'apple 2': 38,
+    'c64': 37, 'commodore 64': 37, 'commodore64': 37,
+    'zx spectrum': 80, 'zxspectrum': 80, 'spectrum': 80, 'speccy': 80,
+    'amstrad cpc': 47, 'amstradcpc': 47, 'cpc': 47,
+    'pc8800': 47,  # Check actual ID
+    'pc9800': 47,  # Check actual ID
+
+    # === Arcade ===
     'arcade': 27,
-    'pokemon mini': 24,
+
+    # === Fantasy Consoles ===
+    # Note: PICO-8 and TIC-80 may not have RA support
 }
+
 
 # ============================================================================
 # SYSTEMS CACHE
@@ -510,72 +879,129 @@ def hash_rom(filepath: Path, system_id: int, rahasher_path: Optional[str] = None
     """
     Hash a ROM file using RAHasher (preferred) or fallback MD5.
     Returns list of (hash_type, hash_value) tuples.
+
+    RAHasher is REQUIRED for disc-based formats as they use sector-level hashing.
+    For cartridge ROMs, RAHasher is preferred but MD5 fallback works for most.
     """
     results = []
     suffix = filepath.suffix.lower()
 
-    # Handle ZIP files - extract and hash contents
+    # Build combined sets for efficient lookup
+    all_disc_extensions = set(
+        DISC_EXTENSIONS +
+        NINTENDO_DISC_EXTENSIONS +
+        SEGA_DISC_EXTENSIONS +
+        SONY_DISC_EXTENSIONS +
+        MICROSOFT_EXTENSIONS  # Xbox formats are essentially disc-based
+    )
+
+    all_cart_extensions = set(CARTRIDGE_EXTENSIONS)
+
+    # Handle ZIP files - RAHasher can handle these directly for most systems
     if suffix == ".zip":
-        try:
-            with zipfile.ZipFile(filepath, 'r') as zf:
-                for name in zf.namelist():
-                    name_lower = name.lower()
-                    if any(name_lower.endswith(ext) for ext in CARTRIDGE_EXTENSIONS + DISC_EXTENSIONS):
-                        # Extract to temp, hash with RAHasher, cleanup
-                        if rahasher_path:
-                            import tempfile
-                            with tempfile.TemporaryDirectory() as tmpdir:
-                                extracted = Path(tmpdir) / name
-                                extracted.parent.mkdir(parents=True, exist_ok=True)
-                                with open(extracted, 'wb') as f:
-                                    f.write(zf.read(name))
-                                ra_hash = hash_with_rahasher(extracted, system_id, rahasher_path)
-                                if ra_hash:
-                                    results.append(('rahasher', ra_hash))
-                                    return results
-
-                        # Fallback: direct MD5 of extracted content
-                        data = zf.read(name)
-                        results.append(('md5', hashlib.md5(data).hexdigest()))
-                        return results
-        except zipfile.BadZipFile:
-            results.append(('error', 'bad_zip'))
-            return results
-
-    # Handle 7z files
-    elif suffix == ".7z":
         if rahasher_path:
-            # RAHasher might handle 7z directly in newer versions
+            # Try RAHasher directly first - it handles ZIP for cartridge systems
             ra_hash = hash_with_rahasher(filepath, system_id, rahasher_path)
             if ra_hash:
                 results.append(('rahasher', ra_hash))
                 return results
+
+        # RAHasher didn't work, try manual extraction
+        try:
+            with zipfile.ZipFile(filepath, 'r') as zf:
+                for name in zf.namelist():
+                    name_lower = name.lower()
+                    # Check if any file inside matches known ROM extensions
+                    for ext in (all_cart_extensions | all_disc_extensions):
+                        if name_lower.endswith(ext):
+                            if rahasher_path:
+                                import tempfile
+                                with tempfile.TemporaryDirectory() as tmpdir:
+                                    extracted = Path(tmpdir) / name
+                                    extracted.parent.mkdir(parents=True, exist_ok=True)
+                                    with open(extracted, 'wb') as f:
+                                        f.write(zf.read(name))
+                                    ra_hash = hash_with_rahasher(
+                                        extracted, system_id, rahasher_path
+                                    )
+                                    if ra_hash:
+                                        results.append(('rahasher', ra_hash))
+                                        return results
+
+                            # Fallback: direct MD5 of extracted content
+                            # Only valid for cartridge formats
+                            if ext in all_cart_extensions:
+                                data = zf.read(name)
+                                results.append(('md5', hashlib.md5(data).hexdigest()))
+                                return results
+                            else:
+                                # Disc format in ZIP without RAHasher
+                                results.append(('error', 'rahasher_required_for_disc'))
+                                return results
+        except zipfile.BadZipFile:
+            results.append(('error', 'bad_zip'))
+            return results
+
+        # No recognized ROM found in ZIP
+        results.append(('error', 'no_rom_in_zip'))
+        return results
+
+    # Handle 7z files
+    elif suffix == ".7z":
+        if rahasher_path:
+            # Try RAHasher directly - newer versions may handle 7z
+            ra_hash = hash_with_rahasher(filepath, system_id, rahasher_path)
+            if ra_hash:
+                results.append(('rahasher', ra_hash))
+                return results
+        # 7z manual extraction would require py7zr or similar
         results.append(('error', '7z_not_supported'))
         return results
 
-    # Check for unsupported compressed disc formats (CSO, ZSO, DAX, JSO)
-    # These need to be decompressed to ISO first, or used with an emulator
-    # that handles decompression on-the-fly (like standalone PPSSPP)
+    # Handle RAR files (not supported)
+    elif suffix == ".rar":
+        results.append(('error', 'rar_not_supported'))
+        return results
+
+    # Check for unsupported compressed disc formats
+    # These MUST be decompressed to ISO first - RAHasher cannot handle them
     elif suffix in UNSUPPORTED_DISC_FORMATS:
         results.append(('error', f'unsupported_format:{suffix}'))
         return results
 
-    # All other files: use RAHasher (handles CHD, CUE, ISO, cartridge ROMs, etc.)
+    # All other files: prefer RAHasher
     else:
         if rahasher_path:
             ra_hash = hash_with_rahasher(filepath, system_id, rahasher_path)
             if ra_hash:
                 results.append(('rahasher', ra_hash))
                 return results
-            # RAHasher failed, fall through to MD5 for non-disc formats
+            # RAHasher failed - check if this format requires it
 
-        # Fallback MD5 for cartridge formats only (disc formats need RAHasher)
-        if suffix in CARTRIDGE_EXTENSIONS or suffix == '.bin':
-            results.append(('md5', md5_file(filepath)))
-        elif suffix in DISC_EXTENSIONS:
+        # Determine if this is a disc format that REQUIRES RAHasher
+        is_disc_format = suffix in all_disc_extensions
+
+        # Special case: .bin can be either disc or cartridge
+        # Without RAHasher, we can try MD5 but it may not match RA hashes
+        if suffix == '.bin':
+            if not rahasher_path:
+                # Try MD5 as fallback - may work for cartridge systems
+                results.append(('md5', md5_file(filepath)))
+            else:
+                results.append(('error', 'rahasher_failed'))
+            return results
+
+        if is_disc_format:
             results.append(('error', 'rahasher_required'))
-        else:
+            return results
+
+        # Cartridge format - MD5 fallback is acceptable
+        if suffix in all_cart_extensions:
             results.append(('md5', md5_file(filepath)))
+            return results
+
+        # Unknown extension - try MD5 anyway
+        results.append(('md5', md5_file(filepath)))
 
     return results
 
@@ -858,7 +1284,7 @@ def cmd_check(args):
     output_file = None
     output = sys.stdout
     summary_only = getattr(args, 'summary', False)
-    
+
     if args.output:
         output_file = open(args.output, 'w')
         output = output_file
