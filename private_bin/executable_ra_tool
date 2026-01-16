@@ -29,6 +29,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 
 import urllib.request
 import urllib.error
@@ -877,133 +878,103 @@ def md5_file(filepath: Path) -> str:
 
 def hash_rom(filepath: Path, system_id: int, rahasher_path: Optional[str] = None) -> list:
     """
-    Hash a ROM file using RAHasher (preferred) or fallback MD5.
+    Hash a ROM file for RetroAchievements comparison.
     Returns list of (hash_type, hash_value) tuples.
 
-    RAHasher is REQUIRED for disc-based formats as they use sector-level hashing.
-    For cartridge ROMs, RAHasher is preferred but MD5 fallback works for most.
+    Strategy:
+    - For most cartridge systems: RA uses plain MD5 of ROM data (no RAHasher needed)
+    - For systems in RAHASHER_REQUIRED: RAHasher computes special hashes
+      (header stripping for NES/Lynx, sector hashing for disc systems)
     """
-    results = []
     suffix = filepath.suffix.lower()
 
-    # Build combined sets for efficient lookup
+    # Check if this system requires RAHasher (disc-based or has headers to strip)
+    needs_rahasher = system_id in RAHASHER_REQUIRED
+
+    # Build combined sets for extension detection
     all_disc_extensions = set(
         DISC_EXTENSIONS +
         NINTENDO_DISC_EXTENSIONS +
         SEGA_DISC_EXTENSIONS +
         SONY_DISC_EXTENSIONS +
-        MICROSOFT_EXTENSIONS  # Xbox formats are essentially disc-based
+        MICROSOFT_EXTENSIONS
     )
-
     all_cart_extensions = set(CARTRIDGE_EXTENSIONS)
+    all_rom_extensions = all_cart_extensions | all_disc_extensions
 
-    # Handle ZIP files - RAHasher can handle these directly for most systems
+    # --- Handle ZIP files ---
     if suffix == ".zip":
-        if rahasher_path:
-            # Try RAHasher directly first - it handles ZIP for cartridge systems
-            ra_hash = hash_with_rahasher(filepath, system_id, rahasher_path)
-            if ra_hash:
-                results.append(('rahasher', ra_hash))
-                return results
-
-        # RAHasher didn't work, try manual extraction
         try:
             with zipfile.ZipFile(filepath, 'r') as zf:
+                # Find the ROM file inside the ZIP
+                rom_file = None
                 for name in zf.namelist():
                     name_lower = name.lower()
-                    # Check if any file inside matches known ROM extensions
-                    for ext in (all_cart_extensions | all_disc_extensions):
+                    # Skip directories and common non-ROM files
+                    if name.endswith('/') or name_lower.endswith((
+                            '.txt', '.nfo', '.diz', '.doc', '.rtf',
+                            '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.pdf',
+                            '.htm', '.html', '.xml', '.url',
+                            '.ips', '.bps', '.ups', '.xdelta', '.ppf', '.aps',
+                            '.asm', '.src', '.bat', '.sh', '.exe')):
+                        continue
+                    # Check if file matches known ROM extensions
+                    for ext in all_rom_extensions:
                         if name_lower.endswith(ext):
-                            if rahasher_path:
-                                import tempfile
-                                with tempfile.TemporaryDirectory() as tmpdir:
-                                    extracted = Path(tmpdir) / name
-                                    extracted.parent.mkdir(parents=True, exist_ok=True)
-                                    with open(extracted, 'wb') as f:
-                                        f.write(zf.read(name))
-                                    ra_hash = hash_with_rahasher(
-                                        extracted, system_id, rahasher_path
-                                    )
-                                    if ra_hash:
-                                        results.append(('rahasher', ra_hash))
-                                        return results
+                            rom_file = name
+                            break
+                    if rom_file:
+                        break
 
-                            # Fallback: direct MD5 of extracted content
-                            # Only valid for cartridge formats
-                            if ext in all_cart_extensions:
-                                data = zf.read(name)
-                                results.append(('md5', hashlib.md5(data).hexdigest()))
-                                return results
-                            else:
-                                # Disc format in ZIP without RAHasher
-                                results.append(('error', 'rahasher_required_for_disc'))
-                                return results
+                if not rom_file:
+                    return [('error', 'no_rom_in_zip')]
+
+                # For systems requiring RAHasher: extract to temp, run RAHasher
+                if needs_rahasher:
+                    if not rahasher_path:
+                        return [('error', 'rahasher_required')]
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        extracted = Path(tmpdir) / Path(rom_file).name
+                        extracted.write_bytes(zf.read(rom_file))
+                        ra_hash = hash_with_rahasher(extracted, system_id, rahasher_path)
+                        if ra_hash:
+                            return [('rahasher', ra_hash)]
+                        return [('error', 'rahasher_failed')]
+
+                # For cartridge systems: MD5 the ROM data directly (no extraction needed)
+                data = zf.read(rom_file)
+                return [('md5', hashlib.md5(data).hexdigest())]
+
         except zipfile.BadZipFile:
-            results.append(('error', 'bad_zip'))
-            return results
+            return [('error', 'bad_zip')]
 
-        # No recognized ROM found in ZIP
-        results.append(('error', 'no_rom_in_zip'))
-        return results
-
-    # Handle 7z files
+    # --- Handle 7z files ---
     elif suffix == ".7z":
-        if rahasher_path:
-            # Try RAHasher directly - newer versions may handle 7z
-            ra_hash = hash_with_rahasher(filepath, system_id, rahasher_path)
-            if ra_hash:
-                results.append(('rahasher', ra_hash))
-                return results
-        # 7z manual extraction would require py7zr or similar
-        results.append(('error', '7z_not_supported'))
-        return results
+        # 7z requires external library (py7zr) for extraction
+        # For now, suggest converting to zip
+        return [('error', '7z_extract_required')]
 
-    # Handle RAR files (not supported)
+    # --- Handle RAR files (not supported) ---
     elif suffix == ".rar":
-        results.append(('error', 'rar_not_supported'))
-        return results
+        return [('error', 'rar_not_supported')]
 
-    # Check for unsupported compressed disc formats
-    # These MUST be decompressed to ISO first - RAHasher cannot handle them
+    # --- Handle unsupported compressed disc formats ---
     elif suffix in UNSUPPORTED_DISC_FORMATS:
-        results.append(('error', f'unsupported_format:{suffix}'))
-        return results
+        return [('error', f'unsupported_format:{suffix}')]
 
-    # All other files: prefer RAHasher
+    # --- Handle regular (non-archive) files ---
     else:
-        if rahasher_path:
+        # Systems requiring RAHasher (disc/header systems)
+        if needs_rahasher:
+            if not rahasher_path:
+                return [('error', 'rahasher_required')]
             ra_hash = hash_with_rahasher(filepath, system_id, rahasher_path)
             if ra_hash:
-                results.append(('rahasher', ra_hash))
-                return results
-            # RAHasher failed - check if this format requires it
+                return [('rahasher', ra_hash)]
+            return [('error', 'rahasher_failed')]
 
-        # Determine if this is a disc format that REQUIRES RAHasher
-        is_disc_format = suffix in all_disc_extensions
-
-        # Special case: .bin can be either disc or cartridge
-        # Without RAHasher, we can try MD5 but it may not match RA hashes
-        if suffix == '.bin':
-            if not rahasher_path:
-                # Try MD5 as fallback - may work for cartridge systems
-                results.append(('md5', md5_file(filepath)))
-            else:
-                results.append(('error', 'rahasher_failed'))
-            return results
-
-        if is_disc_format:
-            results.append(('error', 'rahasher_required'))
-            return results
-
-        # Cartridge format - MD5 fallback is acceptable
-        if suffix in all_cart_extensions:
-            results.append(('md5', md5_file(filepath)))
-            return results
-
-        # Unknown extension - try MD5 anyway
-        results.append(('md5', md5_file(filepath)))
-
-    return results
+        # Cartridge systems: plain MD5
+        return [('md5', md5_file(filepath))]
 
 # ============================================================================
 # CACHE MANAGEMENT
