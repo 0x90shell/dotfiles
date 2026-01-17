@@ -430,6 +430,35 @@ RAHASHER_REQUIRED = {
 # - For archives: Extracts and hashes contents (ZIP supported for most systems)
 # - For PSP PBP: Extracts and hashes the ISO inside
 
+# ============================================================================
+# TITLE CATEGORIZATION
+# ============================================================================
+
+
+def categorize_title(title: str) -> tuple:
+    """Categorize an RA title by type.
+
+    Returns (category, base_title) where category is one of:
+    - 'base': Official/retail games
+    - 'hack': ROM hacks (~Hack~ prefix)
+    - 'homebrew': Homebrew games (~Homebrew~ prefix)
+    - 'subset': Achievement subsets ([Subset - X] suffix)
+    - 'special': Other special titles (demos, prototypes, etc.)
+    """
+    if '[Subset' in title:
+        # Extract base game name: "Game Name [Subset - X]" -> "Game Name"
+        base = title.split('[Subset')[0].strip()
+        return ('subset', base)
+    elif title.startswith('~Hack~'):
+        return ('hack', title)
+    elif title.startswith('~Homebrew~'):
+        return ('homebrew', title)
+    elif title.startswith('~'):  # Other special (demos, prototypes, etc.)
+        return ('special', title)
+    else:
+        return ('base', title)
+
+
 # System name aliases - maps common names to system ID
 # These are used for user-friendly lookups
 SYSTEM_ALIASES = {
@@ -1832,6 +1861,64 @@ def cmd_dedup(args):
                 f.write(u['path'] + '\n')
         print(f"UNSUPPORTED list saved to: {args.unsupported_list}", file=sys.stderr)
 
+    # Copy matched ROMs if --copy-to specified
+    copy_dest = getattr(args, 'copy_to', None)
+    if copy_dest:
+        copy_dest = Path(copy_dest)
+        copy_mode = getattr(args, 'copy_mode', 'copy')
+
+        # Create category subfolders
+        category_dirs = {
+            'base': copy_dest / 'base',
+            'hack': copy_dest / 'hack',
+            'homebrew': copy_dest / 'homebrew',
+            'special': copy_dest / 'special',
+            'subset': copy_dest / 'base',  # subsets go with base games
+        }
+        for d in set(category_dirs.values()):
+            d.mkdir(parents=True, exist_ok=True)
+
+        # Copy each matched ROM (only 'keep' action with achievements, skip duplicates)
+        copied = {'base': 0, 'hack': 0, 'homebrew': 0, 'special': 0}
+        for entry in results:
+            if entry['action'] != 'keep':
+                continue
+
+            # Skip games without achievements
+            if entry['achievements'] == 0:
+                continue
+
+            title = entry['title']
+            category, _ = categorize_title(title)
+
+            src_path = rom_dir / entry['path']
+            dest_dir = category_dirs.get(category, category_dirs['base'])
+            dest_path = dest_dir / src_path.name
+
+            if dest_path.exists():
+                print(f"  [SKIP] Already exists: {dest_path.name}", file=sys.stderr)
+                continue
+
+            try:
+                if copy_mode == 'copy':
+                    shutil.copy2(src_path, dest_path)
+                elif copy_mode == 'move':
+                    shutil.move(src_path, dest_path)
+                elif copy_mode == 'symlink':
+                    dest_path.symlink_to(src_path.resolve())
+
+                copied[category] = copied.get(category, 0) + 1
+            except (IOError, OSError) as e:
+                print(f"  [ERROR] Failed to {copy_mode} {src_path.name}: {e}", file=sys.stderr)
+
+        # Summary
+        total_copied = sum(copied.values())
+        print(f"\n✓ {'Copied' if copy_mode == 'copy' else 'Moved' if copy_mode == 'move' else 'Linked'} "
+              f"{total_copied} ROMs to {copy_dest}:", file=sys.stderr)
+        for cat, count in sorted(copied.items()):
+            if count > 0:
+                print(f"  {cat}/: {count}", file=sys.stderr)
+
     # Show missing RA titles (games with achievements you don't have)
     show_missing = getattr(args, 'missing', False)
     missing_base_only = getattr(args, 'missing_base_only', False)
@@ -1844,22 +1931,6 @@ def cmd_dedup(args):
             gid: info for gid, info in game_info.items()
             if info.get('achievements', 0) > 0
         }
-
-        # Helper to categorize titles
-        def categorize_title(title):
-            """Returns (category, base_title) - category is 'base', 'hack', 'homebrew', 'subset'"""
-            if '[Subset' in title:
-                # Extract base game name: "Game Name [Subset - X]" -> "Game Name"
-                base = title.split('[Subset')[0].strip()
-                return ('subset', base)
-            elif title.startswith('~Hack~'):
-                return ('hack', title)
-            elif title.startswith('~Homebrew~'):
-                return ('homebrew', title)
-            elif title.startswith('~'):  # Other special (demos, prototypes, etc.)
-                return ('special', title)
-            else:
-                return ('base', title)
 
         # Build set of base game titles user owns
         owned_base_titles = set()
@@ -1995,6 +2066,8 @@ Examples:
   %(prog)s dedup snes ~/roms/ --missing # Show RA titles you're missing
   %(prog)s dedup snes ~/roms/ --missing-base-only  # Missing official games only
   %(prog)s dedup snes ~/roms/ --missing-list wanted.txt  # Export with hashes
+  %(prog)s dedup snes ~/roms/ --copy-to ~/ra-roms/snes  # Copy to categorized folders
+  %(prog)s dedup snes ~/roms/ --copy-to ~/ra-roms --copy-mode symlink  # Symlink instead
   %(prog)s dedup snes ~/roms/ -o report.txt    # Save report to file
   %(prog)s dedup snes ~/roms/ --format json -o results.json  # JSON to file
   %(prog)s dedup snes ~/roms/ --format csv     # CSV output for spreadsheets
@@ -2073,6 +2146,9 @@ Cache:
     sub_dedup.add_argument('--unsupported-list', help='Output file for unsupported ROMs')
     sub_dedup.add_argument('--execute', action='store_true',
                            help='Actually delete duplicate files (DANGEROUS)')
+    sub_dedup.add_argument('--copy-to', help='Copy matched ROMs to destination folder (creates base/, hack/, homebrew/ subfolders)')
+    sub_dedup.add_argument('--copy-mode', choices=['copy', 'move', 'symlink'], default='copy',
+                           help='How to transfer files: copy (default), move, or symlink')
     sub_dedup.set_defaults(func=cmd_dedup)
 
     # hash command
