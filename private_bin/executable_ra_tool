@@ -38,6 +38,18 @@ from pathlib import Path
 from typing import Optional
 import zipfile
 
+try:
+    from tqdm import tqdm
+    TQDM_AVAILABLE = True
+except ImportError:
+    TQDM_AVAILABLE = False
+
+try:
+    import py7zr
+    PY7ZR_AVAILABLE = True
+except ImportError:
+    PY7ZR_AVAILABLE = False
+
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
@@ -857,6 +869,72 @@ def check_rahasher_version(rahasher_path: str, verbose: bool = True) -> dict:
 
     return result
 
+
+def check_dependencies(system_id: Optional[int] = None) -> dict:
+    """
+    Check availability of required dependencies for archive extraction and conversion.
+
+    Args:
+        system_id: Optional system ID to check system-specific deps (e.g., dolphin-tool for GC/Wii)
+
+    Returns:
+        dict with dependency availability info
+    """
+    deps = {
+        'zipfile': True,       # builtin
+        'py7zr': PY7ZR_AVAILABLE,
+        '7z': shutil.which('7z'),
+        'dolphin_tool': None,  # path or None
+    }
+
+    # Check dolphin-tool (only needed for GC/Wii RVZ files)
+    if system_id in (16, 19) or system_id is None:
+        deps['dolphin_tool'] = shutil.which('dolphin-tool') or shutil.which('DolphinTool')
+
+    return deps
+
+
+def convert_rvz_to_iso(rvz_path: Path, temp_dir: Path) -> Optional[Path]:
+    """
+    Convert RVZ to ISO using dolphin-tool.
+    Returns path to temporary ISO file, or None if conversion fails.
+
+    Args:
+        rvz_path: Path to the RVZ file
+        temp_dir: Temporary directory for the converted ISO
+
+    Returns:
+        Path to the converted ISO, or None if conversion failed
+    """
+    iso_path = temp_dir / (rvz_path.stem + '.iso')
+
+    # Find dolphin-tool
+    dolphin_tool = shutil.which('dolphin-tool') or shutil.which('DolphinTool')
+    if not dolphin_tool:
+        print(f"  dolphin-tool not found, cannot convert RVZ", file=sys.stderr)
+        return None
+
+    try:
+        result = subprocess.run(
+            [dolphin_tool, 'convert', '-i', str(rvz_path), '-o', str(iso_path), '-f', 'iso'],
+            capture_output=True,
+            text=True,
+            timeout=600  # 10 min timeout for large files
+        )
+        if result.returncode == 0 and iso_path.exists():
+            return iso_path
+        if result.stderr:
+            print(f"  dolphin-tool error: {result.stderr.strip()}", file=sys.stderr)
+    except subprocess.TimeoutExpired:
+        print(f"  dolphin-tool timeout for: {rvz_path.name}", file=sys.stderr)
+    except FileNotFoundError:
+        print(f"  dolphin-tool not found", file=sys.stderr)
+    except Exception as e:
+        print(f"  dolphin-tool error: {e}", file=sys.stderr)
+
+    return None
+
+
 # ============================================================================
 # HASHING FUNCTIONS
 # ============================================================================
@@ -979,9 +1057,117 @@ def hash_rom(filepath: Path, system_id: int, rahasher_path: Optional[str] = None
 
     # --- Handle 7z files ---
     elif suffix == ".7z":
-        # 7z requires external library (py7zr) for extraction
-        # For now, suggest converting to zip
-        return [('error', '7z_extract_required')]
+        # Try py7zr first (pure Python, faster for small archives)
+        if PY7ZR_AVAILABLE:
+            try:
+                with py7zr.SevenZipFile(filepath, mode='r') as szf:
+                    # Find the ROM file inside the 7z
+                    rom_file = None
+                    for name in szf.getnames():
+                        name_lower = name.lower()
+                        # Skip directories and common non-ROM files
+                        if name.endswith('/') or name_lower.endswith((
+                                '.txt', '.nfo', '.diz', '.doc', '.rtf',
+                                '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.pdf',
+                                '.htm', '.html', '.xml', '.url',
+                                '.ips', '.bps', '.ups', '.xdelta', '.ppf', '.aps',
+                                '.asm', '.src', '.bat', '.sh', '.exe')):
+                            continue
+                        # Check if file matches known ROM extensions
+                        for ext in all_rom_extensions:
+                            if name_lower.endswith(ext):
+                                rom_file = name
+                                break
+                        if rom_file:
+                            break
+
+                    if not rom_file:
+                        return [('error', 'no_rom_in_7z')]
+
+                    # For systems requiring RAHasher: extract to temp, run RAHasher
+                    if needs_rahasher:
+                        if not rahasher_path:
+                            return [('error', 'rahasher_required')]
+                        with tempfile.TemporaryDirectory() as tmpdir:
+                            szf.extract(path=tmpdir, targets=[rom_file])
+                            extracted = Path(tmpdir) / rom_file
+                            ra_hash = hash_with_rahasher(extracted, system_id, rahasher_path)
+                            if ra_hash:
+                                return [('rahasher', ra_hash)]
+                            return [('error', 'rahasher_failed')]
+
+                    # For cartridge systems: extract and MD5 the ROM data
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        szf.extract(path=tmpdir, targets=[rom_file])
+                        extracted = Path(tmpdir) / rom_file
+                        data = extracted.read_bytes()
+                        return [('md5', hashlib.md5(data).hexdigest())]
+
+            except py7zr.Bad7zFile:
+                return [('error', 'bad_7z')]
+            except Exception as e:
+                return [('error', f'7z_error:{str(e)}')]
+
+        # Fallback to 7z CLI
+        elif shutil.which('7z'):
+            try:
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    # Extract all files to temp dir
+                    result = subprocess.run(
+                        ['7z', 'x', str(filepath), f'-o{tmpdir}', '-y'],
+                        capture_output=True,
+                        text=True,
+                        timeout=300
+                    )
+                    if result.returncode != 0:
+                        return [('error', 'bad_7z')]
+
+                    # Find the ROM file in extracted contents
+                    rom_file = None
+                    for root, dirs, files in os.walk(tmpdir):
+                        for name in files:
+                            name_lower = name.lower()
+                            # Skip common non-ROM files
+                            if name_lower.endswith((
+                                    '.txt', '.nfo', '.diz', '.doc', '.rtf',
+                                    '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.pdf',
+                                    '.htm', '.html', '.xml', '.url',
+                                    '.ips', '.bps', '.ups', '.xdelta', '.ppf', '.aps',
+                                    '.asm', '.src', '.bat', '.sh', '.exe')):
+                                continue
+                            # Check if file matches known ROM extensions
+                            for ext in all_rom_extensions:
+                                if name_lower.endswith(ext):
+                                    rom_file = Path(root) / name
+                                    break
+                            if rom_file:
+                                break
+                        if rom_file:
+                            break
+
+                    if not rom_file:
+                        return [('error', 'no_rom_in_7z')]
+
+                    # For systems requiring RAHasher
+                    if needs_rahasher:
+                        if not rahasher_path:
+                            return [('error', 'rahasher_required')]
+                        ra_hash = hash_with_rahasher(rom_file, system_id, rahasher_path)
+                        if ra_hash:
+                            return [('rahasher', ra_hash)]
+                        return [('error', 'rahasher_failed')]
+
+                    # For cartridge systems: MD5 the ROM data
+                    data = rom_file.read_bytes()
+                    return [('md5', hashlib.md5(data).hexdigest())]
+
+            except subprocess.TimeoutExpired:
+                return [('error', '7z_timeout')]
+            except Exception as e:
+                return [('error', f'7z_error:{str(e)}')]
+
+        else:
+            return [('error', '7z_not_available')]
 
     # --- Handle RAR files (not supported) ---
     elif suffix == ".rar":
@@ -993,6 +1179,21 @@ def hash_rom(filepath: Path, system_id: int, rahasher_path: Optional[str] = None
 
     # --- Handle regular (non-archive) files ---
     else:
+        # Pre-process RVZ files for GameCube/Wii (RAHasher may not support RVZ directly)
+        if suffix == '.rvz' and system_id in (16, 19):
+            with tempfile.TemporaryDirectory() as tmpdir:
+                converted_iso = convert_rvz_to_iso(filepath, Path(tmpdir))
+                if converted_iso:
+                    # Hash the converted ISO
+                    if not rahasher_path:
+                        return [('error', 'rahasher_required')]
+                    ra_hash = hash_with_rahasher(converted_iso, system_id, rahasher_path)
+                    if ra_hash:
+                        return [('rahasher', ra_hash)]
+                    return [('error', 'rahasher_failed')]
+                else:
+                    return [('error', 'rvz_conversion_failed')]
+
         # Systems requiring RAHasher (disc/header systems)
         if needs_rahasher:
             if not rahasher_path:
@@ -1085,15 +1286,118 @@ def build_hash_lookup(games: list) -> dict:
     """Build hash -> game info lookup from game list."""
     lookup = {}
     for game in games:
+        game_hashes = game.get('Hashes', [])
         info = {
             'title': game.get('Title', 'Unknown'),
             'id': game.get('ID', 0),
             'achievements': game.get('NumAchievements', 0),
             'points': game.get('Points', 0),
+            'linked_hashes': len(game_hashes),
         }
-        for h in game.get('Hashes', []):
+        for h in game_hashes:
             lookup[h.lower()] = info
     return lookup
+
+
+def print_summary_line(total_roms: int, supported: int, unsupported: int,
+                       achievements: int, points: int, duplicates: int = 0,
+                       total_achievable: int = 0):
+    """Print a compact summary line to stderr."""
+    dup_str = f", {duplicates} dupes" if duplicates > 0 else ""
+    print(f"\n✓ Scanned {total_roms} ROMs → {supported} supported, "
+          f"{unsupported} unsupported{dup_str}", file=sys.stderr)
+    print(f"  Achievable: {achievements} achievements ({points} pts)", file=sys.stderr)
+    if total_achievable > 0:
+        pct = 100 * supported / total_achievable
+        print(f"  Collection: {supported}/{total_achievable} RA titles ({pct:.1f}%)", file=sys.stderr)
+
+
+def make_progress_bar(iterable, total=None, desc="Processing", disable=False):
+    """
+    Create a progress bar that handles terminal resizing gracefully.
+    Falls back to simple iteration if tqdm is not available.
+    """
+    if not TQDM_AVAILABLE or disable:
+        return iterable
+
+    return tqdm(
+        iterable,
+        total=total,
+        desc=desc,
+        unit="ROM",
+        ncols=None,  # Auto-detect terminal width
+        dynamic_ncols=True,  # Handle terminal resize
+        leave=False,  # Clean up after completion
+        file=sys.stderr,
+        bar_format="{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} {postfix}"
+    )
+
+
+def copy_roms_to_dest(rom_dir: Path, roms_to_copy: list, dest: Path,
+                      copy_mode: str = 'copy', skip_no_achievements: bool = True):
+    """
+    Copy/move/symlink ROMs to categorized destination folders.
+
+    Args:
+        rom_dir: Base directory where source ROMs are located
+        roms_to_copy: List of dicts with 'path', 'title', 'achievements' keys
+        dest: Destination base path (subfolders will be created)
+        copy_mode: 'copy', 'move', or 'symlink'
+        skip_no_achievements: If True, skip ROMs with 0 achievements
+
+    Returns:
+        dict of category -> count copied
+    """
+    # Create category subfolders
+    category_dirs = {
+        'base': dest / 'base',
+        'hack': dest / 'hack',
+        'homebrew': dest / 'homebrew',
+        'special': dest / 'special',
+        'subset': dest / 'base',  # subsets go with base games
+    }
+    for d in set(category_dirs.values()):
+        d.mkdir(parents=True, exist_ok=True)
+
+    copied = {'base': 0, 'hack': 0, 'homebrew': 0, 'special': 0}
+
+    for entry in roms_to_copy:
+        # Skip games without achievements if requested
+        if skip_no_achievements and entry.get('achievements', 0) == 0:
+            continue
+
+        title = entry['title']
+        category, _ = categorize_title(title)
+
+        src_path = rom_dir / entry['path']
+        dest_dir = category_dirs.get(category, category_dirs['base'])
+        dest_path = dest_dir / src_path.name
+
+        if dest_path.exists():
+            print(f"  [SKIP] Already exists: {dest_path.name}", file=sys.stderr)
+            continue
+
+        try:
+            if copy_mode == 'copy':
+                shutil.copy2(src_path, dest_path)
+            elif copy_mode == 'move':
+                shutil.move(src_path, dest_path)
+            elif copy_mode == 'symlink':
+                dest_path.symlink_to(src_path.resolve())
+
+            copied[category] = copied.get(category, 0) + 1
+        except (IOError, OSError) as e:
+            print(f"  [ERROR] Failed to {copy_mode} {src_path.name}: {e}", file=sys.stderr)
+
+    # Summary
+    total_copied = sum(copied.values())
+    action_word = 'Copied' if copy_mode == 'copy' else 'Moved' if copy_mode == 'move' else 'Linked'
+    print(f"\n✓ {action_word} {total_copied} ROMs to {dest}:", file=sys.stderr)
+    for cat, count in sorted(copied.items()):
+        if count > 0:
+            print(f"  {cat}/: {count}", file=sys.stderr)
+
+    return copied
 
 
 def ensure_cache(system_id: int, force: bool = False) -> dict:
@@ -1246,12 +1550,10 @@ def cmd_check(args):
     supported_no_ach = []
     unsupported = []
     errors = []
+    stats = {'ok': 0, 'no': 0, 'ach': 0}
 
-    print("Hashing ROMs...", file=sys.stderr)
-    for i, rom_path in enumerate(rom_files):
-        if args.verbose and (i % 25 == 0 or i == len(rom_files) - 1):
-            print(f"  [{i + 1}/{len(rom_files)}] {rom_path.name[:50]}...", file=sys.stderr)
-
+    pbar = make_progress_bar(rom_files, total=len(rom_files), desc="Hashing")
+    for rom_path in pbar:
         rel_path = rom_path.relative_to(rom_dir)
         hashes = hash_rom(rom_path, system_id, rahasher)
 
@@ -1275,10 +1577,18 @@ def cmd_check(args):
         if matched:
             if matched['achievements'] > 0:
                 supported.append((str(rel_path), matched, matched_hash))
+                stats['ok'] += 1
+                stats['ach'] += matched['achievements']
             else:
                 supported_no_ach.append((str(rel_path), matched, matched_hash))
+                stats['ok'] += 1
         else:
             unsupported.append((str(rel_path), [h[1] for h in hashes if h[0] != 'error']))
+            stats['no'] += 1
+
+        # Update progress bar with live stats
+        if TQDM_AVAILABLE and hasattr(pbar, 'set_postfix_str'):
+            pbar.set_postfix_str(f"✓{stats['ok']} ✗{stats['no']} 🏆{stats['ach']}")
 
     # Setup output (file or stdout)
     output_file = None
@@ -1319,7 +1629,9 @@ def cmd_check(args):
             for rom, info, h in sorted(supported, key=lambda x: -x[1]['achievements']):
                 out(f"\n{rom}")
                 out(f"  → {info['title']}")
-                out(f"    {info['achievements']} achievements, {info['points']} points")
+                linked = info.get('linked_hashes', 1)
+                linked_str = f" (1 of {linked} linked hashes)" if linked > 1 else ""
+                out(f"    {info['achievements']} achievements, {info['points']} points{linked_str}")
                 out(f"    https://retroachievements.org/game/{info['id']}")
 
         # Supported without achievements
@@ -1330,6 +1642,9 @@ def cmd_check(args):
             for rom, info, h in sorted(supported_no_ach, key=lambda x: x[1]['title']):
                 out(f"\n{rom}")
                 out(f"  → {info['title']}")
+                linked = info.get('linked_hashes', 1)
+                if linked > 1:
+                    out(f"    (1 of {linked} linked hashes)")
 
         # Unsupported
         if unsupported:
@@ -1350,27 +1665,46 @@ def cmd_check(args):
                 out(f"\n{rom}")
                 out(f"  Error: {err}")
 
-    # Summary
-    out("\n" + "=" * 70)
-    out("SUMMARY")
-    out("=" * 70)
-    total_roms = len(rom_files)
-    total_supported = len(supported) + len(supported_no_ach)
-    total_ach = sum(info['achievements'] for _, info, _ in supported)
-    total_pts = sum(info['points'] for _, info, _ in supported)
-    out(f"Total ROMs scanned: {total_roms}")
-    out(f"Supported: {total_supported} ({len(supported)} with achievements, {len(supported_no_ach)} without)")
-    out(f"Unsupported: {len(unsupported)}")
-    if errors:
-        out(f"Errors: {len(errors)}")
-    out(f"Achievable: {total_ach} achievements, {total_pts} points")
-    pct = len(supported) / len(rom_files) * 100 if rom_files else 0
-    out(f"Achievement coverage: {pct:.1f}% of your ROMs")
-
     # Close file if opened
     if output_file:
         output_file.close()
         print(f"Report saved to: {args.output}", file=sys.stderr)
+
+    # Print summary to stderr
+    total_ach = sum(info['achievements'] for _, info, _ in supported)
+    total_pts = sum(info['points'] for _, info, _ in supported)
+    print_summary_line(
+        total_roms=len(rom_files),
+        supported=len(supported) + len(supported_no_ach),
+        unsupported=len(unsupported),
+        achievements=total_ach,
+        points=total_pts,
+        total_achievable=cached.get('game_count', 0)
+    )
+
+    # Copy matched ROMs if --copy-to specified (copies ALL matches)
+    copy_dest = getattr(args, 'copy_to', None)
+    if copy_dest:
+        copy_dest = Path(copy_dest)
+        copy_mode = getattr(args, 'copy_mode', 'copy')
+
+        # Build list of all matched ROMs (both with and without achievements)
+        roms_to_copy = []
+        for rom, info, h in supported:
+            roms_to_copy.append({
+                'path': rom,
+                'title': info['title'],
+                'achievements': info['achievements'],
+            })
+        for rom, info, h in supported_no_ach:
+            roms_to_copy.append({
+                'path': rom,
+                'title': info['title'],
+                'achievements': info['achievements'],
+            })
+
+        copy_roms_to_dest(rom_dir, roms_to_copy, copy_dest, copy_mode,
+                          skip_no_achievements=True)
 
 
 def cmd_hash(args):
@@ -1581,6 +1915,28 @@ def cmd_setup(args):
         else:
             print("\n! RAHasher installed but verification failed", file=sys.stderr)
 
+    # Show optional dependencies status
+    print("\n" + "=" * 50)
+    print("Optional Dependencies:")
+    print("=" * 50)
+    deps = check_dependencies()
+
+    # 7z archive support
+    if deps['py7zr']:
+        print("  7z archives:    ✓ py7zr (Python module)")
+    elif deps['7z']:
+        print(f"  7z archives:    ✓ 7z CLI ({deps['7z']})")
+    else:
+        print("  7z archives:    ✗ Not available")
+        print("                  Install: pip install py7zr  OR  pacman -S p7zip")
+
+    # RVZ conversion (for GC/Wii)
+    if deps['dolphin_tool']:
+        print(f"  RVZ conversion: ✓ dolphin-tool ({deps['dolphin_tool']})")
+    else:
+        print("  RVZ conversion: ✗ Not available (needed for GC/Wii RVZ files)")
+        print("                  Install: pacman -S dolphin-emu  (includes dolphin-tool)")
+
 
 def cmd_dedup(args):
     """RA-aware deduplication - find best ROM per game for achievements."""
@@ -1645,12 +2001,11 @@ def cmd_dedup(args):
     # Hash each ROM and group by RA game ID
     games_found = defaultdict(list)
     unsupported = []
+    stats = {'ok': 0, 'no': 0, 'ach': 0}
+    seen_games = set()
 
-    print("Hashing ROMs...", file=sys.stderr)
-    for i, rom_path in enumerate(rom_files):
-        if args.verbose and i % 25 == 0:
-            print(f"  [{i + 1}/{len(rom_files)}]", file=sys.stderr)
-
+    pbar = make_progress_bar(rom_files, total=len(rom_files), desc="Hashing")
+    for rom_path in pbar:
         rel_path = rom_path.relative_to(rom_dir)
         hashes = hash_rom(rom_path, system_id, rahasher)
 
@@ -1660,14 +2015,21 @@ def cmd_dedup(args):
         # Check against lookup
         matched_game_id = None
         matched_hash = None
+        matched_info = None
         for hash_type, hash_val in hashes:
             if hash_val.lower() in lookup:
-                info = lookup[hash_val.lower()]
-                matched_game_id = info['id']
+                matched_info = lookup[hash_val.lower()]
+                matched_game_id = matched_info['id']
                 matched_hash = hash_val
                 break
 
         if matched_game_id:
+            # Track unique games for stats
+            if matched_game_id not in seen_games:
+                seen_games.add(matched_game_id)
+                stats['ok'] += 1
+                stats['ach'] += matched_info.get('achievements', 0)
+
             # Score region preference (higher = better)
             name = rom_path.stem.lower()
             region_score = 0
@@ -1697,6 +2059,11 @@ def cmd_dedup(args):
             })
         else:
             unsupported.append({'path': str(rel_path), 'hash': hashes[0][1] if hashes else ''})
+            stats['no'] += 1
+
+        # Update progress bar with live stats
+        if TQDM_AVAILABLE and hasattr(pbar, 'set_postfix_str'):
+            pbar.set_postfix_str(f"✓{stats['ok']} ✗{stats['no']} 🏆{stats['ach']}")
 
     # Build result data structure
     keep_list = []
@@ -1776,22 +2143,12 @@ def cmd_dedup(args):
                     })
 
             else:  # text format (default)
-                print("\n" + "=" * 70, file=out_handle)
-                print("RA-AWARE DEDUPLICATION REPORT", file=out_handle)
-                print("=" * 70, file=out_handle)
-                print(f"System: {system_id}", file=out_handle)
-                print(f"Directory: {rom_dir}", file=out_handle)
-                print(f"Total ROMs: {len(rom_files)}", file=out_handle)
-                print(f"Unique RA games found: {len(games_found)}", file=out_handle)
-                print(f"Unsupported ROMs: {len(unsupported)}", file=out_handle)
-
                 # Games with duplicates
                 duplicates = {gid: roms for gid, roms in games_found.items() if len(roms) > 1}
 
                 if duplicates:
-                    print("\n" + "=" * 70, file=out_handle)
-                    print(f"DUPLICATES FOUND ({len(duplicates)} games with multiple ROMs)", file=out_handle)
-                    print("=" * 70, file=out_handle)
+                    print(f"DUPLICATES ({len(duplicates)} games with multiple ROMs)", file=out_handle)
+                    print("=" * 50, file=out_handle)
 
                     for game_id, roms in sorted(duplicates.items(),
                                                 key=lambda x: game_info.get(x[0], {}).get('title', '')):
@@ -1810,17 +2167,8 @@ def cmd_dedup(args):
                                 print(f"  ✓ KEEP: {rom['path']}", file=out_handle)
                             else:
                                 print(f"  ✗ DUP:  {rom['path']}", file=out_handle)
-
-                # Summary
-                print("\n" + "=" * 70, file=out_handle)
-                print("SUMMARY", file=out_handle)
-                print("=" * 70, file=out_handle)
-                print(f"Total ROMs scanned: {len(rom_files)}", file=out_handle)
-                print(f"Unique RA games: {len(games_found)}", file=out_handle)
-                print(f"ROMs to KEEP: {len(keep_list)}", file=out_handle)
-                print(f"ROMs to DELETE (duplicates): {len(delete_list)}", file=out_handle)
-                print(f"Unsupported (no RA match): {len(unsupported)}", file=out_handle)
-                print(f"Achievable: {total_ach} achievements, {total_pts} points", file=out_handle)
+                else:
+                    print("No duplicates found.", file=out_handle)
 
         finally:
             if output_file:
@@ -1833,14 +2181,15 @@ def cmd_dedup(args):
     duplicates = {gid: roms for gid, roms in games_found.items() if len(roms) > 1}
     all_achievable = {gid: info for gid, info in game_info.items()
                       if info.get('achievements', 0) > 0}
-    collection_pct = 100 * len(games_found) / len(all_achievable) if all_achievable else 0
-
-    print(f"\n✓ Scanned {len(rom_files)} ROMs → {len(games_found)} RA titles, "
-          f"{len(duplicates)} with duplicates, {len(unsupported)} unsupported", file=sys.stderr)
-    print(f"  Keep: {len(keep_list)} | Delete: {len(delete_list)} | "
-          f"Achievements: {total_ach} ({total_pts} pts)", file=sys.stderr)
-    print(f"  Collection: {len(games_found)}/{len(all_achievable)} achievable titles "
-          f"({collection_pct:.1f}%)", file=sys.stderr)
+    print_summary_line(
+        total_roms=len(rom_files),
+        supported=len(games_found),
+        unsupported=len(unsupported),
+        achievements=total_ach,
+        points=total_pts,
+        duplicates=len(duplicates),
+        total_achievable=len(all_achievable)
+    )
 
     # Output files if requested (works with any format)
     if args.keep_list:
@@ -1861,63 +2210,19 @@ def cmd_dedup(args):
                 f.write(u['path'] + '\n')
         print(f"UNSUPPORTED list saved to: {args.unsupported_list}", file=sys.stderr)
 
-    # Copy matched ROMs if --copy-to specified
+    # Copy matched ROMs if --copy-to specified (only 'keep' entries, skips duplicates)
     copy_dest = getattr(args, 'copy_to', None)
     if copy_dest:
         copy_dest = Path(copy_dest)
         copy_mode = getattr(args, 'copy_mode', 'copy')
 
-        # Create category subfolders
-        category_dirs = {
-            'base': copy_dest / 'base',
-            'hack': copy_dest / 'hack',
-            'homebrew': copy_dest / 'homebrew',
-            'special': copy_dest / 'special',
-            'subset': copy_dest / 'base',  # subsets go with base games
-        }
-        for d in set(category_dirs.values()):
-            d.mkdir(parents=True, exist_ok=True)
-
-        # Copy each matched ROM (only 'keep' action with achievements, skip duplicates)
-        copied = {'base': 0, 'hack': 0, 'homebrew': 0, 'special': 0}
-        for entry in results:
-            if entry['action'] != 'keep':
-                continue
-
-            # Skip games without achievements
-            if entry['achievements'] == 0:
-                continue
-
-            title = entry['title']
-            category, _ = categorize_title(title)
-
-            src_path = rom_dir / entry['path']
-            dest_dir = category_dirs.get(category, category_dirs['base'])
-            dest_path = dest_dir / src_path.name
-
-            if dest_path.exists():
-                print(f"  [SKIP] Already exists: {dest_path.name}", file=sys.stderr)
-                continue
-
-            try:
-                if copy_mode == 'copy':
-                    shutil.copy2(src_path, dest_path)
-                elif copy_mode == 'move':
-                    shutil.move(src_path, dest_path)
-                elif copy_mode == 'symlink':
-                    dest_path.symlink_to(src_path.resolve())
-
-                copied[category] = copied.get(category, 0) + 1
-            except (IOError, OSError) as e:
-                print(f"  [ERROR] Failed to {copy_mode} {src_path.name}: {e}", file=sys.stderr)
-
-        # Summary
-        total_copied = sum(copied.values())
-        print(f"\n✓ {'Copied' if copy_mode == 'copy' else 'Moved' if copy_mode == 'move' else 'Linked'} "
-              f"{total_copied} ROMs to {copy_dest}:", file=sys.stderr)
-        for cat, count in sorted(copied.items()):
-            if count > 0:
-                print(f"  {cat}/: {count}", file=sys.stderr)
+        # Only copy 'keep' entries (one per game, best region preference)
+        roms_to_copy = [
+            {'path': e['path'], 'title': e['title'], 'achievements': e['achievements']}
+            for e in results if e['action'] == 'keep'
+        ]
+        copy_roms_to_dest(rom_dir, roms_to_copy, copy_dest, copy_mode,
+                          skip_no_achievements=True)
 
     # Show missing RA titles (games with achievements you don't have)
     show_missing = getattr(args, 'missing', False)
@@ -2121,6 +2426,10 @@ Cache:
     sub_check.add_argument('-o', '--output', help='Output report to file')
     sub_check.add_argument('-f', '--force', action='store_true',
                            help='Force refresh hash database')
+    sub_check.add_argument('--copy-to',
+                           help='Copy ALL matched ROMs to destination folder (creates base/, hack/, homebrew/ subfolders)')
+    sub_check.add_argument('--copy-mode', choices=['copy', 'move', 'symlink'], default='copy',
+                           help='Copy mode: copy (default), move, or symlink')
     sub_check.set_defaults(func=cmd_check)
 
     # dedup command
