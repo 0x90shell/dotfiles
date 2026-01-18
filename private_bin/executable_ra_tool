@@ -940,7 +940,7 @@ def convert_rvz_to_iso(rvz_path: Path, temp_dir: Path) -> Optional[Path]:
 # ============================================================================
 
 
-def hash_with_rahasher(filepath: Path, system_id: int, rahasher_path: str) -> Optional[str]:
+def hash_with_rahasher(filepath: Path, system_id: int, rahasher_path: str, verbose: bool = False) -> Optional[str]:
     """Hash a file using RAHasher. Handles all formats including CHD."""
     try:
         result = subprocess.run(
@@ -949,20 +949,29 @@ def hash_with_rahasher(filepath: Path, system_id: int, rahasher_path: str) -> Op
             text=True,
             timeout=300  # 5 min timeout for large CHD files
         )
-        if result.returncode == 0:
-            # RAHasher outputs: "hash filename" or just "hash"
-            output = result.stdout.strip()
-            if output:
-                # Get the hash (first word if multiple, or the whole thing)
-                hash_val = output.split()[0] if ' ' in output else output
-                # Validate it looks like a hash (32 hex chars for MD5)
-                if len(hash_val) == 32 and all(c in '0123456789abcdef' for c in hash_val.lower()):
-                    return hash_val.lower()
-                # Could be longer hash, just return it
+        # RAHasher outputs: "hash" or "hash\nFAIL" (FAIL means not in its internal DB)
+        # We want the hash regardless of exit code or FAIL status
+        # Check both stdout and stderr - RAHasher may output to either depending on version/conditions
+        output = result.stdout.strip()
+        if not output:
+            output = result.stderr.strip()
+        if output:
+            # Get the first line (the hash), ignore FAIL/OK lines
+            first_line = output.split('\n')[0].strip()
+            # Get the hash (first word if multiple, or the whole thing)
+            hash_val = first_line.split()[0] if ' ' in first_line else first_line
+            # Validate it looks like a hash (32 hex chars for MD5)
+            if len(hash_val) == 32 and all(c in '0123456789abcdef' for c in hash_val.lower()):
                 return hash_val.lower()
-        # Log error for debugging
-        if result.stderr:
-            print(f"  RAHasher stderr: {result.stderr.strip()}", file=sys.stderr)
+            # Could be longer hash, just return it if it looks hex
+            if hash_val and all(c in '0123456789abcdef' for c in hash_val.lower()):
+                return hash_val.lower()
+        # Log error for debugging (only in verbose mode)
+        if verbose:
+            if result.stderr:
+                print(f"  RAHasher stderr: {result.stderr.strip()}", file=sys.stderr)
+            if result.returncode != 0 and not output:
+                print(f"  RAHasher exit code: {result.returncode}", file=sys.stderr)
         return None
     except FileNotFoundError:
         return None
@@ -983,7 +992,7 @@ def md5_file(filepath: Path) -> str:
     return hash_md5.hexdigest()
 
 
-def hash_rom(filepath: Path, system_id: int, rahasher_path: Optional[str] = None) -> list:
+def hash_rom(filepath: Path, system_id: int, rahasher_path: Optional[str] = None, verbose: bool = False) -> list:
     """
     Hash a ROM file for RetroAchievements comparison.
     Returns list of (hash_type, hash_value) tuples.
@@ -1043,7 +1052,7 @@ def hash_rom(filepath: Path, system_id: int, rahasher_path: Optional[str] = None
                     with tempfile.TemporaryDirectory() as tmpdir:
                         extracted = Path(tmpdir) / Path(rom_file).name
                         extracted.write_bytes(zf.read(rom_file))
-                        ra_hash = hash_with_rahasher(extracted, system_id, rahasher_path)
+                        ra_hash = hash_with_rahasher(extracted, system_id, rahasher_path, verbose)
                         if ra_hash:
                             return [('rahasher', ra_hash)]
                         return [('error', 'rahasher_failed')]
@@ -1091,7 +1100,7 @@ def hash_rom(filepath: Path, system_id: int, rahasher_path: Optional[str] = None
                         with tempfile.TemporaryDirectory() as tmpdir:
                             szf.extract(path=tmpdir, targets=[rom_file])
                             extracted = Path(tmpdir) / rom_file
-                            ra_hash = hash_with_rahasher(extracted, system_id, rahasher_path)
+                            ra_hash = hash_with_rahasher(extracted, system_id, rahasher_path, verbose)
                             if ra_hash:
                                 return [('rahasher', ra_hash)]
                             return [('error', 'rahasher_failed')]
@@ -1152,7 +1161,7 @@ def hash_rom(filepath: Path, system_id: int, rahasher_path: Optional[str] = None
                     if needs_rahasher:
                         if not rahasher_path:
                             return [('error', 'rahasher_required')]
-                        ra_hash = hash_with_rahasher(rom_file, system_id, rahasher_path)
+                        ra_hash = hash_with_rahasher(rom_file, system_id, rahasher_path, verbose)
                         if ra_hash:
                             return [('rahasher', ra_hash)]
                         return [('error', 'rahasher_failed')]
@@ -1187,7 +1196,7 @@ def hash_rom(filepath: Path, system_id: int, rahasher_path: Optional[str] = None
                     # Hash the converted ISO
                     if not rahasher_path:
                         return [('error', 'rahasher_required')]
-                    ra_hash = hash_with_rahasher(converted_iso, system_id, rahasher_path)
+                    ra_hash = hash_with_rahasher(converted_iso, system_id, rahasher_path, verbose)
                     if ra_hash:
                         return [('rahasher', ra_hash)]
                     return [('error', 'rahasher_failed')]
@@ -1198,7 +1207,7 @@ def hash_rom(filepath: Path, system_id: int, rahasher_path: Optional[str] = None
         if needs_rahasher:
             if not rahasher_path:
                 return [('error', 'rahasher_required')]
-            ra_hash = hash_with_rahasher(filepath, system_id, rahasher_path)
+            ra_hash = hash_with_rahasher(filepath, system_id, rahasher_path, verbose)
             if ra_hash:
                 return [('rahasher', ra_hash)]
             return [('error', 'rahasher_failed')]
@@ -1555,7 +1564,7 @@ def cmd_check(args):
     pbar = make_progress_bar(rom_files, total=len(rom_files), desc="Hashing")
     for rom_path in pbar:
         rel_path = rom_path.relative_to(rom_dir)
-        hashes = hash_rom(rom_path, system_id, rahasher)
+        hashes = hash_rom(rom_path, system_id, rahasher, args.verbose)
 
         if not hashes:
             errors.append((str(rel_path), 'no_hash'))
@@ -1825,7 +1834,7 @@ def cmd_hash(args):
     else:
         print("Warning: RAHasher not found, using fallback MD5", file=sys.stderr)
 
-    hashes = hash_rom(filepath, system_id, rahasher)
+    hashes = hash_rom(filepath, system_id, rahasher, verbose=True)
 
     print(f"\nFile: {filepath}")
     print(f"Size: {filepath.stat().st_size:,} bytes")
@@ -2103,7 +2112,7 @@ def cmd_dedup(args):
     pbar = make_progress_bar(rom_files, total=len(rom_files), desc="Hashing")
     for rom_path in pbar:
         rel_path = rom_path.relative_to(rom_dir)
-        hashes = hash_rom(rom_path, system_id, rahasher)
+        hashes = hash_rom(rom_path, system_id, rahasher, args.verbose)
 
         if not hashes or hashes[0][0] == 'error':
             continue
@@ -2516,7 +2525,7 @@ Cache:
         'check', help='Check ROMs against database (auto-pulls if needed)')
     sub_check.add_argument('system', help='System ID or name (e.g., 3, snes, "super nintendo")')
     sub_check.add_argument('rom_dir', help='ROM directory to scan')
-    sub_check.add_argument('-v', '--verbose', action='store_true', help='Show progress')
+    sub_check.add_argument('-v', '--verbose', action='store_true', help='Show detailed output (RAHasher errors, no-achievement games)')
     sub_check.add_argument('-s', '--summary', action='store_true',
                            help='Show only summary (no full report)')
     sub_check.add_argument('-o', '--output', help='Output report to file')
@@ -2539,7 +2548,7 @@ Cache:
         'dedup', help='RA-aware deduplication - recommend best ROM per game')
     sub_dedup.add_argument('system', help='System ID or name (e.g., 3, snes, "super nintendo")')
     sub_dedup.add_argument('rom_dir', help='ROM directory to scan')
-    sub_dedup.add_argument('-v', '--verbose', action='store_true', help='Show progress')
+    sub_dedup.add_argument('-v', '--verbose', action='store_true', help='Show detailed output (RAHasher errors)')
     sub_dedup.add_argument('-s', '--summary', action='store_true',
                            help='Show only summary (no full report)')
     sub_dedup.add_argument('-o', '--output', help='Output file (default: stdout)')
