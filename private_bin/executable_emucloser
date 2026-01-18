@@ -9,3 +9,4 @@ xdotool search --class 'simple64-gui' search --name 'simple64    build: ......' 
 xdotool search --class 'Kodi' windowquit
 kill -9 $(pgrep kodi.bin)
 xdotool search --class 'jellyfin' windowquit
+xdotool search --class 'vacuumtube' windowquit
