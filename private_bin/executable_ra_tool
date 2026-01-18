@@ -1559,7 +1559,7 @@ def cmd_check(args):
     supported_no_ach = []
     unsupported = []
     errors = []
-    stats = {'ok': 0, 'no': 0, 'ach': 0}
+    stats = {'ok': 0, 'no_ach': 0, 'unsup': 0, 'ach': 0}
 
     pbar = make_progress_bar(rom_files, total=len(rom_files), desc="Hashing")
     for rom_path in pbar:
@@ -1590,14 +1590,14 @@ def cmd_check(args):
                 stats['ach'] += matched['achievements']
             else:
                 supported_no_ach.append((str(rel_path), matched, matched_hash))
-                stats['ok'] += 1
+                stats['no_ach'] += 1
         else:
             unsupported.append((str(rel_path), [h[1] for h in hashes if h[0] != 'error']))
-            stats['no'] += 1
+            stats['unsup'] += 1
 
         # Update progress bar with live stats
         if TQDM_AVAILABLE and hasattr(pbar, 'set_postfix_str'):
-            pbar.set_postfix_str(f"✓{stats['ok']} ✗{stats['no']} 🏆{stats['ach']}")
+            pbar.set_postfix_str(f"✓{stats['ok']} ○{stats['no_ach']} ✗{stats['unsup']} 🏆{stats['ach']}")
 
     # Setup output (file or stdout)
     output_file = None
@@ -1751,23 +1751,18 @@ def cmd_check(args):
             if gid in found_game_ids:
                 continue
 
-            # Determine category from title
             title = info['title']
             title_lower = title.lower()
-            if '~hack~' in title_lower or '~hackrom~' in title_lower:
-                cat = 'hack'
-            elif '~homebrew~' in title_lower:
-                cat = 'homebrew'
-            elif '~prototype~' in title_lower or '~demo~' in title_lower:
-                cat = 'proto'
-            elif '~unlicensed~' in title_lower:
-                cat = 'unlicensed'
-            else:
-                cat = 'base'
 
-            # Apply base-only filter
-            if missing_base_only and cat != 'base':
-                continue
+            # Apply base-only filter: exclude hacks, demos, subsets
+            # Include: base, homebrew, prototype, unlicensed (standalone titles)
+            if missing_base_only:
+                if '[subset' in title_lower:
+                    continue
+                if '~hack~' in title_lower:
+                    continue
+                if '~demo~' in title_lower:
+                    continue
 
             missing_games[gid] = info
 
@@ -2106,7 +2101,7 @@ def cmd_dedup(args):
     # Hash each ROM and group by RA game ID
     games_found = defaultdict(list)
     unsupported = []
-    stats = {'ok': 0, 'no': 0, 'ach': 0}
+    stats = {'ok': 0, 'no_ach': 0, 'unsup': 0, 'ach': 0}
     seen_games = set()
 
     pbar = make_progress_bar(rom_files, total=len(rom_files), desc="Hashing")
@@ -2132,8 +2127,12 @@ def cmd_dedup(args):
             # Track unique games for stats
             if matched_game_id not in seen_games:
                 seen_games.add(matched_game_id)
-                stats['ok'] += 1
-                stats['ach'] += matched_info.get('achievements', 0)
+                ach_count = matched_info.get('achievements', 0)
+                if ach_count > 0:
+                    stats['ok'] += 1
+                    stats['ach'] += ach_count
+                else:
+                    stats['no_ach'] += 1
 
             # Score region preference (higher = better)
             name = rom_path.stem.lower()
@@ -2164,11 +2163,11 @@ def cmd_dedup(args):
             })
         else:
             unsupported.append({'path': str(rel_path), 'hash': hashes[0][1] if hashes else ''})
-            stats['no'] += 1
+            stats['unsup'] += 1
 
         # Update progress bar with live stats
         if TQDM_AVAILABLE and hasattr(pbar, 'set_postfix_str'):
-            pbar.set_postfix_str(f"✓{stats['ok']} ✗{stats['no']} 🏆{stats['ach']}")
+            pbar.set_postfix_str(f"✓{stats['ok']} ○{stats['no_ach']} ✗{stats['unsup']} 🏆{stats['ach']}")
 
     # Build result data structure
     keep_list = []
@@ -2368,9 +2367,16 @@ def cmd_dedup(args):
                 subsets_owned_base.append((gid, info))
                 continue
 
-            # Apply base-only filter
-            if missing_base_only and cat != 'base':
-                continue
+            # Apply base-only filter: exclude hacks, demos, subsets
+            # Include: base, homebrew, prototype, unlicensed (standalone titles)
+            if missing_base_only:
+                title_lower = title.lower()
+                if cat == 'subset':
+                    continue
+                if cat == 'hack':
+                    continue
+                if '~demo~' in title_lower:
+                    continue
 
             missing_games[gid] = info
 
