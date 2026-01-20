@@ -567,6 +567,28 @@ SYSTEM_ALIASES = {
     # Note: PICO-8 and TIC-80 may not have RA support
 }
 
+# Reverse mapping: system ID -> canonical short name (for filenames)
+SYSTEM_ID_TO_NAME = {
+    # Nintendo
+    7: 'nes', 3: 'snes', 2: 'n64', 16: 'gc', 19: 'wii',
+    4: 'gb', 6: 'gbc', 5: 'gba', 28: 'vb', 18: 'nds', 78: '3ds', 24: 'pokemini',
+    # Sega
+    33: 'sg1000', 11: 'sms', 1: 'genesis', 10: '32x', 56: 'segacd',
+    39: 'saturn', 40: 'dreamcast',
+    # Sony
+    12: 'psx', 21: 'ps2', 41: 'psp',
+    # Atari
+    25: 'atari2600', 51: 'atari7800', 77: 'atarilynx', 17: 'atarijaguar',
+    # NEC
+    8: 'pce', 76: 'pcfx',
+    # SNK
+    14: 'neogeo', 80: 'ngp',  # Note: 56 is Sega CD, Neo Geo CD TBD
+    # Other
+    46: 'vectrex', 23: 'odyssey2', 57: 'channelf',
+    53: 'wonderswan', 29: 'msx', 38: 'apple2', 37: 'c64', 47: 'amstrad',
+    27: 'arcade',
+}
+
 
 # ============================================================================
 # SYSTEMS CACHE
@@ -674,6 +696,14 @@ def resolve_system_id(system_arg: str) -> int:
     print("Use 'ra_tool.py systems' to see available systems", file=sys.stderr)
     print("Common examples: snes, genesis, nes, psx, gba, n64", file=sys.stderr)
     sys.exit(1)
+
+
+def get_system_name(system_id: int) -> str:
+    """Get canonical short name for a system ID (for filenames)."""
+    if system_id in SYSTEM_ID_TO_NAME:
+        return SYSTEM_ID_TO_NAME[system_id]
+    # Fallback to numeric ID if unknown
+    return str(system_id)
 
 # ============================================================================
 # API FUNCTIONS
@@ -2132,6 +2162,12 @@ def cmd_check(args):
     rom_info_flag = getattr(args, 'rom_info', False)
     download_patches_flag = getattr(args, 'download_patches', False)
 
+    # Resolve default filename for --missing-list if flag used without value
+    if missing_list_file is True:
+        system_name = get_system_name(system_id)
+        suffix = '-base-missing.txt' if missing_base_only else '-missing.txt'
+        missing_list_file = f"{system_name}{suffix}"
+
     needs_missing_info = (show_missing or missing_list_file or missing_base_only or
                           rom_info_flag or download_patches_flag)
     if needs_missing_info:
@@ -2797,6 +2833,12 @@ def cmd_dedup(args):
     rom_info_flag = getattr(args, 'rom_info', False)
     download_patches_flag = getattr(args, 'download_patches', False)
 
+    # Resolve default filename for --missing-list if flag used without value
+    if missing_list_file is True:
+        system_name = get_system_name(system_id)
+        suffix = '-base-missing.txt' if missing_base_only else '-missing.txt'
+        missing_list_file = f"{system_name}{suffix}"
+
     needs_missing_info = (show_missing or missing_list_file or missing_base_only or
                           rom_info_flag or download_patches_flag)
     if needs_missing_info:
@@ -3058,8 +3100,8 @@ Cache:
                            help='Show RA titles with achievements that you are missing')
     sub_check.add_argument('--missing-base-only', action='store_true',
                            help='Only show missing base games (no hacks/homebrews)')
-    sub_check.add_argument('--missing-list',
-                           help='Output file for missing RA titles (TSV with hashes)')
+    sub_check.add_argument('--missing-list', nargs='?', const=True, default=None,
+                           help='Output missing list (default: {system}-missing.txt)')
     sub_check.add_argument('--rom-info', action='store_true',
                            help='Query hash pages for missing games to get ROM names & patch URLs')
     sub_check.add_argument('--download-patches', action='store_true',
@@ -3085,7 +3127,8 @@ Cache:
                            help='Show RA titles you don\'t have (with achievements)')
     sub_dedup.add_argument('--missing-base-only', action='store_true',
                            help='Only show base games (exclude hacks, homebrew, subsets)')
-    sub_dedup.add_argument('--missing-list', help='Output file for missing RA titles')
+    sub_dedup.add_argument('--missing-list', nargs='?', const=True, default=None,
+                           help='Output missing list (default: {system}-missing.txt)')
     sub_dedup.add_argument('--rom-info', action='store_true',
                            help='Query hash pages for missing games to get ROM names & patch URLs')
     sub_dedup.add_argument('--download-patches', action='store_true',
