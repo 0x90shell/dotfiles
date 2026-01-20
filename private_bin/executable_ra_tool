@@ -1080,39 +1080,54 @@ def format_rom_info_report(rom_info: dict, local_hashes: set = None) -> str:
     return '\n'.join(lines)
 
 
-def write_rom_info_list(rom_info: dict, output_path: Path):
-    """Write ROM info to TSV file."""
+def write_missing_list_basic(output_path: str, sorted_missing: list):
+    """Write basic missing list TSV (no ROM info)."""
     with open(output_path, 'w', encoding='utf-8') as f:
-        f.write("# Title\tCategory\tROM Name\tHash\tLabels\tPatch URL\tGame URL\n")
+        f.write("# Title\tAchievements\tPoints\tURL\tHashes\n")
+        for gid, info in sorted_missing:
+            hashes = ','.join(info.get('hashes', [])[:5])
+            f.write(f"{info['title']}\t{info['achievements']}\t{info['points']}\t"
+                    f"https://retroachievements.org/game/{gid}\t{hashes}\n")
 
-        # Base games
-        for g in rom_info['base_games']:
-            rom_name = g['rom_names'][0] if g['rom_names'] else ''
-            hash_val = g['hashes'][0] if g.get('hashes') else ''
-            patch_url = g['patches'][0]['patch_url'] if g['patches'] else ''
-            labels = ','.join(g.get('labels', []))
-            f.write(f"{g['title']}\tbase\t{rom_name}\t{hash_val}\t{labels}\t{patch_url}\t{g['url']}\n")
 
-        # Hacks with patches
-        for g in rom_info['hacks_with_patches']:
-            rom_name = g['rom_names'][0] if g['rom_names'] else ''
-            hash_val = g['patches'][0]['md5'] if g['patches'] else ''
-            patch_url = g['patches'][0]['patch_url'] if g['patches'] else ''
-            labels = ','.join(g.get('labels', []))
-            f.write(f"{g['title']}\thack_patched\t{rom_name}\t{hash_val}\t{labels}\t{patch_url}\t{g['url']}\n")
+def write_missing_list_expanded(output_path: str, sorted_missing: list, rom_info: dict):
+    """Write expanded missing list TSV with ROM info columns."""
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write("# Title\tAchievements\tPoints\tURL\tHashes\t"
+                "ROM_Name\tCategory\tLabels\tPatch_URL\n")
 
-        # Hacks without patches
-        for g in rom_info['hacks_without_patches']:
-            rom_name = g['rom_names'][0] if g['rom_names'] else ''
-            hash_val = g['all_hash_info'][0]['md5'] if g.get('all_hash_info') else ''
-            labels = ','.join(g.get('labels', []))
-            f.write(f"{g['title']}\thack_no_patch\t{rom_name}\t{hash_val}\t{labels}\t\t{g['url']}\n")
+        # Build lookup from rom_info by title for easy access
+        rom_lookup = {}
+        for g in rom_info.get('base_games', []):
+            rom_lookup[g['title']] = ('base', g)
+        for g in rom_info.get('hacks_with_patches', []):
+            rom_lookup[g['title']] = ('hack_patched', g)
+        for g in rom_info.get('hacks_without_patches', []):
+            rom_lookup[g['title']] = ('hack_no_patch', g)
+        for g in rom_info.get('translations_skipped', []):
+            rom_lookup[g['title']] = ('translation_skipped', g)
 
-        # Skipped translations
-        for g in rom_info['translations_skipped']:
-            rom_name = g.get('rom_name', '')
-            patch_url = g.get('patch_url', '')
-            f.write(f"{g['title']}\ttranslation_skipped\t{rom_name}\t\t{patch_url}\t{g['url']}\n")
+        for gid, info in sorted_missing:
+            title = info['title']
+            hashes = ','.join(info.get('hashes', [])[:5])
+            url = f"https://retroachievements.org/game/{gid}"
+
+            # Get ROM info if available
+            if title in rom_lookup:
+                category, g = rom_lookup[title]
+                rom_name = g.get('rom_names', [''])[0] if g.get('rom_names') else ''
+                labels = ','.join(g.get('labels', []))
+                patch_url = ''
+                if g.get('patches'):
+                    patch_url = g['patches'][0].get('patch_url', '')
+            else:
+                rom_name = ''
+                category = ''
+                labels = ''
+                patch_url = ''
+
+            f.write(f"{title}\t{info['achievements']}\t{info['points']}\t{url}\t"
+                    f"{hashes}\t{rom_name}\t{category}\t{labels}\t{patch_url}\n")
 
 
 # ============================================================================
@@ -2115,11 +2130,10 @@ def cmd_check(args):
     missing_base_only = getattr(args, 'missing_base_only', False)
     missing_list_file = getattr(args, 'missing_list', None)
     rom_info_flag = getattr(args, 'rom_info', False)
-    rom_info_list_file = getattr(args, 'rom_info_list', None)
     download_patches_flag = getattr(args, 'download_patches', False)
 
     needs_missing_info = (show_missing or missing_list_file or missing_base_only or
-                          rom_info_flag or rom_info_list_file or download_patches_flag)
+                          rom_info_flag or download_patches_flag)
     if needs_missing_info:
         games = cached.get('games', [])
 
@@ -2176,18 +2190,6 @@ def cmd_check(args):
             key=lambda x: (-x[1]['achievements'], x[1]['title'])
         )
 
-        # Write to file if requested (include hashes for ROM hunting)
-        if missing_list_file:
-            with open(missing_list_file, 'w') as f:
-                # Header
-                f.write("# Title\tAchievements\tPoints\tURL\tHashes\n")
-                for gid, info in sorted_missing:
-                    hashes = ','.join(info.get('hashes', [])[:5])  # First 5 hashes
-                    f.write(f"{info['title']}\t{info['achievements']}\t{info['points']}\t"
-                            f"https://retroachievements.org/game/{gid}\t{hashes}\n")
-            print(f"MISSING list saved to: {missing_list_file} ({len(missing_games)} titles)",
-                  file=sys.stderr)
-
         # Show to stderr if --missing flag
         if show_missing or missing_base_only:
             filter_label = " (base games only)" if missing_base_only else ""
@@ -2209,7 +2211,7 @@ def cmd_check(args):
         # ROM info and patch download for missing games
         patch_dir = getattr(args, 'patch_dir', Path('./patches'))
 
-        if rom_info_flag or rom_info_list_file or download_patches_flag:
+        if rom_info_flag or download_patches_flag:
             # Convert missing_games to list format for get_rom_info_for_missing()
             missing_list = []
             for gid, info in sorted_missing:
@@ -2229,11 +2231,6 @@ def cmd_check(args):
                 local_hashes = {h for _, hs in unsupported for h in hs}
                 report = format_rom_info_report(rom_info, local_hashes)
                 print(report)
-
-            # Write to file
-            if rom_info_list_file:
-                write_rom_info_list(rom_info, Path(rom_info_list_file))
-                print(f"ROM info saved to: {rom_info_list_file}", file=sys.stderr)
 
             # Download patches
             if download_patches_flag:
@@ -2258,6 +2255,17 @@ def cmd_check(args):
                     print(f"Patches: {success_count} downloaded, {fail_count} failed", file=sys.stderr)
                 else:
                     print("No patches available to download.", file=sys.stderr)
+
+            # Write missing list with expanded columns (ROM info was fetched)
+            if missing_list_file:
+                write_missing_list_expanded(
+                    missing_list_file, sorted_missing, rom_info)
+                print(f"MISSING list saved to: {missing_list_file}", file=sys.stderr)
+
+        elif missing_list_file:
+            # Write basic missing list (no ROM info)
+            write_missing_list_basic(missing_list_file, sorted_missing)
+            print(f"MISSING list saved to: {missing_list_file}", file=sys.stderr)
 
 
 def cmd_hash(args):
@@ -2787,11 +2795,10 @@ def cmd_dedup(args):
     missing_list_file = getattr(args, 'missing_list', None)
     summary_only = getattr(args, 'summary', False)
     rom_info_flag = getattr(args, 'rom_info', False)
-    rom_info_list_file = getattr(args, 'rom_info_list', None)
     download_patches_flag = getattr(args, 'download_patches', False)
 
     needs_missing_info = (show_missing or missing_list_file or missing_base_only or
-                          rom_info_flag or rom_info_list_file or download_patches_flag)
+                          rom_info_flag or download_patches_flag)
     if needs_missing_info:
         # Find all games with achievements that user doesn't have
         all_achievable = {
@@ -2850,18 +2857,6 @@ def cmd_dedup(args):
             key=lambda x: (-x[1]['points'], -x[1]['achievements'])
         )
 
-        # Write to file if requested (include hashes for ROM hunting)
-        if missing_list_file:
-            with open(missing_list_file, 'w') as f:
-                # Header
-                f.write("# Title\tAchievements\tPoints\tURL\tHashes\n")
-                for gid, info in sorted_missing:
-                    hashes = ','.join(info.get('hashes', [])[:5])  # First 5 hashes
-                    f.write(f"{info['title']}\t{info['achievements']}\t{info['points']}\t"
-                            f"https://retroachievements.org/game/{gid}\t{hashes}\n")
-            print(f"MISSING list saved to: {missing_list_file} ({len(missing_games)} titles)",
-                  file=sys.stderr)
-
         # Show to stderr if --missing flag
         if show_missing or missing_base_only:
             filter_label = " (base games only)" if missing_base_only else ""
@@ -2909,7 +2904,7 @@ def cmd_dedup(args):
         # ROM info and patch download for missing games
         patch_dir = getattr(args, 'patch_dir', Path('./patches'))
 
-        if rom_info_flag or rom_info_list_file or download_patches_flag:
+        if rom_info_flag or download_patches_flag:
             # Convert missing_games to list format for get_rom_info_for_missing()
             missing_list = []
             for gid, info in sorted_missing:
@@ -2929,11 +2924,6 @@ def cmd_dedup(args):
                 local_hashes = {u['hash'] for u in unsupported if u.get('hash')}
                 report = format_rom_info_report(rom_info, local_hashes)
                 print(report)
-
-            # Write to file
-            if rom_info_list_file:
-                write_rom_info_list(rom_info, Path(rom_info_list_file))
-                print(f"ROM info saved to: {rom_info_list_file}", file=sys.stderr)
 
             # Download patches
             if download_patches_flag:
@@ -2958,6 +2948,17 @@ def cmd_dedup(args):
                     print(f"Patches: {success_count} downloaded, {fail_count} failed", file=sys.stderr)
                 else:
                     print("No patches available to download.", file=sys.stderr)
+
+            # Write missing list with expanded columns (ROM info was fetched)
+            if missing_list_file:
+                write_missing_list_expanded(
+                    missing_list_file, sorted_missing, rom_info)
+                print(f"MISSING list saved to: {missing_list_file}", file=sys.stderr)
+
+        elif missing_list_file:
+            # Write basic missing list (no ROM info)
+            write_missing_list_basic(missing_list_file, sorted_missing)
+            print(f"MISSING list saved to: {missing_list_file}", file=sys.stderr)
 
     # Offer to delete
     if delete_list and args.execute:
@@ -3061,8 +3062,6 @@ Cache:
                            help='Output file for missing RA titles (TSV with hashes)')
     sub_check.add_argument('--rom-info', action='store_true',
                            help='Query hash pages for missing games to get ROM names & patch URLs')
-    sub_check.add_argument('--rom-info-list',
-                           help='Output file for ROM info (TSV with names, hashes, patch URLs)')
     sub_check.add_argument('--download-patches', action='store_true',
                            help='Download patches for missing games (excludes non-English translations)')
     sub_check.add_argument('--patch-dir', type=Path, default=Path('./patches'),
@@ -3089,8 +3088,6 @@ Cache:
     sub_dedup.add_argument('--missing-list', help='Output file for missing RA titles')
     sub_dedup.add_argument('--rom-info', action='store_true',
                            help='Query hash pages for missing games to get ROM names & patch URLs')
-    sub_dedup.add_argument('--rom-info-list',
-                           help='Output file for ROM info (TSV with names, hashes, patch URLs)')
     sub_dedup.add_argument('--download-patches', action='store_true',
                            help='Download patches for missing games (excludes non-English translations)')
     sub_dedup.add_argument('--patch-dir', type=Path, default=Path('./patches'),
