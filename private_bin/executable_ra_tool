@@ -395,6 +395,20 @@ ALL_ROM_EXTENSIONS = (
     UNSUPPORTED_DISC_FORMATS
 )
 
+# Match threshold for fuzzy comparison (0-100)
+COMPARE_MATCH_THRESHOLD = 75
+
+# Default ROM base directory for comparison
+DEFAULT_ROM_BASE = Path.home() / 'mnt' / 'NAS' / 'Gamer' / 'Roms'
+
+# Platform mapping: missing file prefix -> ROM folder name
+PLATFORM_TO_FOLDER = {
+    'n64': 'n64', 'psx': 'psx', 'gc': 'gc', 'snes': 'SNES', 'nes': 'NES',
+    'gba': 'GBA', 'nds': 'nds', '3ds': '3DS', 'dreamcast': 'dreamcast',
+    'saturn': 'SS', 'ps2': 'ps2', 'wii': 'wii', 'gamecube': 'gc',
+    'genesis': 'Genesis', 'gb': 'GB', 'gbc': 'GBC', 'psp': 'PSP',
+}
+
 # ============================================================================
 # SYSTEMS REQUIRING RAHASHER
 # ============================================================================
@@ -704,6 +718,278 @@ def get_system_name(system_id: int) -> str:
         return SYSTEM_ID_TO_NAME[system_id]
     # Fallback to numeric ID if unknown
     return str(system_id)
+
+
+# ============================================================================
+# COMPARE FUNCTIONS (fuzzy matching missing list against local ROMs)
+# ============================================================================
+
+
+def normalize_title_for_compare(title: str) -> str:
+    """Normalize a title for fuzzy matching comparison."""
+    s = title
+
+    # Remove RA-specific prefixes
+    s = re.sub(r'^~(Hack|Homebrew|Prototype|Demo|Unlicensed)~\s*', '', s, flags=re.IGNORECASE)
+
+    # Remove [Subset - ...] suffix
+    s = re.sub(r'\s*\[Subset\s*-[^\]]+\]', '', s, flags=re.IGNORECASE)
+
+    # Remove region codes like (USA), (Japan), (Europe), (En,Fr,De), etc.
+    s = re.sub(r'\s*\([^)]*\)', '', s)
+
+    # Remove revision markers like (Rev 1), (Rev A)
+    s = re.sub(r'\s*\(Rev\s*\w+\)', '', s, flags=re.IGNORECASE)
+
+    # Remove disc markers like [D1], [D2], (Disc 1)
+    s = re.sub(r'\s*\[D\d+\]', '', s, flags=re.IGNORECASE)
+    s = re.sub(r'\s*\(Disc\s*\d+\)', '', s, flags=re.IGNORECASE)
+
+    # Remove file extensions
+    s = re.sub(r'\.(chd|7z|zip|rvz|z64|n64|v64|m3u|iso|bin|nds|3ds|sfc|smc|nes|gba)$',
+               '', s, flags=re.IGNORECASE)
+
+    # Normalize separators and whitespace
+    s = s.replace('_', ' ').replace('-', ' ').replace(':', ' ').replace("'", '')
+    s = ' '.join(s.split())  # Collapse whitespace
+
+    return s.lower().strip()
+
+
+def scan_rom_directory_for_compare(rom_dir: Path) -> list:
+    """Scan a ROM directory for all ROM files (for comparison)."""
+    roms = []
+
+    # Locations to scan
+    scan_dirs = [rom_dir]
+
+    # Add hacks subfolder if exists
+    hacks_dir = rom_dir / 'hacks'
+    if hacks_dir.exists():
+        scan_dirs.append(hacks_dir)
+
+    # Add .multidisc subfolder if exists (for PSX)
+    multidisc_dir = rom_dir / '.multidisc'
+    if multidisc_dir.exists():
+        scan_dirs.append(multidisc_dir)
+
+    for scan_dir in scan_dirs:
+        try:
+            for entry in os.scandir(scan_dir):
+                if not entry.is_file():
+                    continue
+
+                ext = Path(entry.name).suffix.lower()
+                if ext not in ALL_ROM_EXTENSIONS and ext not in ('.m3u',):
+                    continue
+
+                # Get base name without extension
+                name = Path(entry.name).stem
+
+                # Determine location tag
+                if scan_dir == hacks_dir:
+                    location = 'hacks/'
+                elif scan_dir == multidisc_dir:
+                    location = '.multidisc/'
+                else:
+                    location = ''
+
+                roms.append({
+                    'filename': entry.name,
+                    'path': entry.path,
+                    'name': name,
+                    'normalized': normalize_title_for_compare(name),
+                    'location': location,
+                })
+        except PermissionError:
+            print(f"  Warning: Cannot access {scan_dir}", file=sys.stderr)
+
+    return roms
+
+
+def fuzzy_match_rom(needle: str, haystack: list, threshold: int = COMPARE_MATCH_THRESHOLD,
+                    alt_needle: str = '') -> Optional[tuple]:
+    """Find best fuzzy match for a normalized title in local ROM list."""
+    from difflib import SequenceMatcher
+
+    needle_norm = normalize_title_for_compare(needle)
+    alt_norm = normalize_title_for_compare(alt_needle) if alt_needle else ''
+
+    best_match = None
+    best_score = 0
+
+    for rom in haystack:
+        # Calculate similarity against primary needle
+        ratio = SequenceMatcher(None, needle_norm, rom['normalized']).ratio()
+        score = int(ratio * 100)
+
+        # Also try alt_needle (ROM_Name) if provided - use best score
+        if alt_norm:
+            alt_ratio = SequenceMatcher(None, alt_norm, rom['normalized']).ratio()
+            alt_score = int(alt_ratio * 100)
+            score = max(score, alt_score)
+
+        if score > best_score and score >= threshold:
+            best_score = score
+            best_match = rom
+
+    if best_match:
+        return (best_match, best_score)
+    return None
+
+
+def parse_missing_file_for_compare(filepath: Path) -> list:
+    """Parse a *-missing.txt TSV file (basic or expanded format)."""
+    entries = []
+    with open(filepath, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+
+            parts = line.split('\t')
+            if len(parts) < 4:
+                continue
+
+            title = parts[0]
+            achievements = int(parts[1]) if parts[1].isdigit() else 0
+            points = int(parts[2]) if parts[2].isdigit() else 0
+            url = parts[3]
+            hashes = parts[4].split(',') if len(parts) > 4 and parts[4] else []
+
+            # Extended columns (from --rom-info output)
+            rom_name = parts[5] if len(parts) > 5 else ''
+            file_category = parts[6] if len(parts) > 6 else ''
+            labels = parts[7].split(',') if len(parts) > 7 and parts[7] else []
+            patch_url = parts[8] if len(parts) > 8 else ''
+
+            # Determine category (priority: file > patch_url > title)
+            category = ''
+            if file_category:
+                category = file_category
+            elif patch_url:
+                category = get_patch_category(patch_url)
+
+            if not category:
+                # Fallback: derive from title prefix
+                title_lower = title.lower()
+                if '~hack~' in title_lower:
+                    category = 'hack'
+                elif '~homebrew~' in title_lower:
+                    category = 'homebrew'
+                elif '~prototype~' in title_lower:
+                    category = 'prototype'
+                elif '~demo~' in title_lower:
+                    category = 'demo'
+                elif '~unlicensed~' in title_lower:
+                    category = 'unlicensed'
+                elif '[subset' in title_lower:
+                    category = 'subset'
+                else:
+                    category = 'base'
+
+            entries.append({
+                'title': title,
+                'achievements': achievements,
+                'points': points,
+                'url': url,
+                'hashes': hashes,
+                'category': category,
+                'rom_name': rom_name,
+                'labels': labels,
+                'patch_url': patch_url,
+            })
+
+    return entries
+
+
+def detect_platform_from_filename(filepath: Path) -> Optional[str]:
+    """Detect platform from missing file name (e.g., 'snes' from 'snes-missing.txt')."""
+    name = filepath.stem.lower()
+    for platform in PLATFORM_TO_FOLDER:
+        if name.startswith(platform):
+            return platform
+    return None
+
+
+def get_rom_dir_for_platform(platform: str, rom_base: Path = DEFAULT_ROM_BASE) -> Optional[Path]:
+    """Get ROM directory for a platform."""
+    folder = PLATFORM_TO_FOLDER.get(platform)
+    if folder:
+        rom_dir = rom_base / folder
+        if rom_dir.exists():
+            return rom_dir
+    return None
+
+
+def run_compare(missing_file: Path, rom_dir: Path, output_dir: Path,
+                threshold: int = COMPARE_MATCH_THRESHOLD) -> dict:
+    """Run comparison of missing list against local ROM directory.
+
+    Returns stats dict with results.
+    """
+    # Use input filename base for output
+    output_base = missing_file.stem
+
+    print(f"\nComparing {missing_file.name} against {rom_dir}...", file=sys.stderr)
+
+    # Parse missing entries
+    entries = parse_missing_file_for_compare(missing_file)
+    print(f"  Entries in missing file: {len(entries)}", file=sys.stderr)
+
+    # Scan ROM directory
+    roms = scan_rom_directory_for_compare(rom_dir)
+    print(f"  ROMs found in directory: {len(roms)}", file=sys.stderr)
+
+    # Categorize
+    truly_missing = []
+    possible_matches = []
+
+    for entry in entries:
+        match_result = fuzzy_match_rom(entry['title'], roms, threshold,
+                                       alt_needle=entry.get('rom_name', ''))
+
+        if match_result:
+            rom, score = match_result
+            possible_matches.append({
+                **entry,
+                'match_file': rom['location'] + rom['filename'],
+                'match_score': score,
+            })
+        else:
+            truly_missing.append(entry)
+
+    # Write truly missing
+    missing_out = output_dir / f"{output_base}-truly-missing.txt"
+    with open(missing_out, 'w', encoding='utf-8') as f:
+        f.write("# Title\tAchievements\tPoints\tURL\tCategory\n")
+        for e in sorted(truly_missing, key=lambda x: (-x['points'], x['title'])):
+            f.write(f"{e['title']}\t{e['achievements']}\t{e['points']}\t{e['url']}\t{e['category']}\n")
+
+    # Write possible matches
+    matches_out = output_dir / f"{output_base}-possible-matches.txt"
+    with open(matches_out, 'w', encoding='utf-8') as f:
+        f.write("# RA Title\tMatch Score\tLocal File\tURL\tCategory\n")
+        for e in sorted(possible_matches, key=lambda x: (-x['match_score'], x['title'])):
+            f.write(f"{e['title']}\t{e['match_score']}%\t{e['match_file']}\t{e['url']}\t{e['category']}\n")
+
+    # Stats
+    stats = {
+        'total_missing': len(entries),
+        'truly_missing': len(truly_missing),
+        'possible_matches': len(possible_matches),
+        'roms_scanned': len(roms),
+        'missing_file': str(missing_out),
+        'matches_file': str(matches_out),
+    }
+
+    print("\n  Results:", file=sys.stderr)
+    print(f"    Truly missing: {len(truly_missing)} (need to acquire)", file=sys.stderr)
+    print(f"    Possible matches: {len(possible_matches)} (may need replacement)", file=sys.stderr)
+    print(f"    Output: {missing_out.name}, {matches_out.name}", file=sys.stderr)
+
+    return stats
+
 
 # ============================================================================
 # API FUNCTIONS
@@ -2192,6 +2478,11 @@ def cmd_check(args):
     missing_list_file = getattr(args, 'missing_list', None)
     rom_info_flag = getattr(args, 'rom_info', False)
     download_patches_flag = getattr(args, 'download_patches', False)
+    compare_flag = getattr(args, 'compare', None)
+
+    # --compare implies --missing-list (need the file to compare against)
+    if compare_flag and not missing_list_file:
+        missing_list_file = True  # Will be resolved to default filename below
 
     # Resolve default filename for --missing-list if flag used without value
     if missing_list_file is True:
@@ -2336,6 +2627,19 @@ def cmd_check(args):
             write_missing_list_basic(missing_list_file, sorted_missing)
             print(f"MISSING list saved to: {missing_list_file}", file=sys.stderr)
 
+        # Run comparison if --compare flag was used
+        if compare_flag and missing_list_file:
+            # Determine compare directory
+            if compare_flag is True:
+                compare_dir = rom_dir  # Default to same ROM dir
+            else:
+                compare_dir = Path(compare_flag)
+
+            if compare_dir.exists():
+                run_compare(Path(missing_list_file), compare_dir, Path('.'))
+            else:
+                print(f"Warning: Compare directory not found: {compare_dir}", file=sys.stderr)
+
 
 def cmd_hash(args):
     """Hash a single file using RAHasher."""
@@ -2385,6 +2689,83 @@ def cmd_hash(args):
         print(f"\n✗ No match in cached database ({cached.get('hash_count', 0)} hashes)")
     else:
         print(f"\n  (No cached DB for system {system_id} - run 'check' to auto-pull)")
+
+
+def cmd_compare(args):
+    """Compare missing list against local ROM collection."""
+    all_mode = getattr(args, 'all', False)
+    threshold = getattr(args, 'threshold', COMPARE_MATCH_THRESHOLD)
+    output_dir = getattr(args, 'output_dir', Path('.'))
+    rom_base = getattr(args, 'rom_base', DEFAULT_ROM_BASE)
+
+    # Collect files to process
+    missing_files = []
+
+    if all_mode:
+        # Find all *-missing.txt files in current directory (exclude output files)
+        for f in Path('.').glob('*-missing*.txt'):
+            name = f.stem.lower()
+            if 'truly-missing' in name or 'possible-matches' in name:
+                continue
+            missing_files.append(f)
+        if not missing_files:
+            print("No *-missing.txt files found in current directory.", file=sys.stderr)
+            sys.exit(1)
+    else:
+        missing_file = getattr(args, 'missing_file', None)
+        if not missing_file:
+            print("Error: Provide a missing file or use --all", file=sys.stderr)
+            sys.exit(1)
+        missing_files.append(Path(missing_file))
+
+    # Process each file
+    all_stats = []
+
+    for missing_file in sorted(missing_files):
+        if not missing_file.exists():
+            print(f"Warning: {missing_file} not found, skipping", file=sys.stderr)
+            continue
+
+        # Determine ROM directory
+        rom_dir_arg = getattr(args, 'rom_dir', None)
+        if rom_dir_arg:
+            rom_dir = Path(rom_dir_arg)
+        else:
+            # Auto-detect from filename
+            platform = detect_platform_from_filename(missing_file)
+            if platform:
+                rom_dir = get_rom_dir_for_platform(platform, rom_base)
+                if not rom_dir:
+                    print(f"Warning: ROM dir not found for {platform}, skipping", file=sys.stderr)
+                    continue
+            else:
+                print(f"Warning: Cannot detect platform from {missing_file}, skipping", file=sys.stderr)
+                continue
+
+        if not rom_dir.exists():
+            print(f"Warning: ROM directory not found: {rom_dir}, skipping", file=sys.stderr)
+            continue
+
+        stats = run_compare(missing_file, rom_dir, output_dir, threshold)
+        stats['platform'] = detect_platform_from_filename(missing_file) or 'unknown'
+        all_stats.append(stats)
+
+    # Summary
+    if len(all_stats) > 1:
+        print("\n" + "=" * 60, file=sys.stderr)
+        print("SUMMARY", file=sys.stderr)
+        print("=" * 60, file=sys.stderr)
+
+        total_missing = sum(s['truly_missing'] for s in all_stats)
+        total_matches = sum(s['possible_matches'] for s in all_stats)
+
+        for s in all_stats:
+            print(f"  {s['platform'].upper()}: {s['truly_missing']} missing, "
+                  f"{s['possible_matches']} possible matches", file=sys.stderr)
+
+        print(f"\n  TOTAL: {total_missing} truly missing, "
+              f"{total_matches} possible matches", file=sys.stderr)
+
 
 # ============================================================================
 # MAIN
@@ -2865,6 +3246,11 @@ def cmd_dedup(args):
     summary_only = getattr(args, 'summary', False)
     rom_info_flag = getattr(args, 'rom_info', False)
     download_patches_flag = getattr(args, 'download_patches', False)
+    compare_flag = getattr(args, 'compare', None)
+
+    # --compare implies --missing-list (need the file to compare against)
+    if compare_flag and not missing_list_file:
+        missing_list_file = True  # Will be resolved to default filename below
 
     # Resolve default filename for --missing-list if flag used without value
     if missing_list_file is True:
@@ -3037,6 +3423,19 @@ def cmd_dedup(args):
             write_missing_list_basic(missing_list_file, sorted_missing)
             print(f"MISSING list saved to: {missing_list_file}", file=sys.stderr)
 
+        # Run comparison if --compare flag was used
+        if compare_flag and missing_list_file:
+            # Determine compare directory
+            if compare_flag is True:
+                compare_dir = rom_dir  # Default to same ROM dir
+            else:
+                compare_dir = Path(compare_flag)
+
+            if compare_dir.exists():
+                run_compare(Path(missing_list_file), compare_dir, Path('.'))
+            else:
+                print(f"Warning: Compare directory not found: {compare_dir}", file=sys.stderr)
+
     # Offer to delete
     if delete_list and args.execute:
         print(f"\n⚠️  Deleting {len(delete_list)} duplicate ROMs...", file=sys.stderr)
@@ -3143,6 +3542,8 @@ Cache:
                            help='Download patches for missing games (excludes non-English translations)')
     sub_check.add_argument('--patch-dir', type=Path, default=Path('./patches'),
                            help='Output directory for downloaded patches (default: ./patches)')
+    sub_check.add_argument('--compare', nargs='?', const=True, default=None, metavar='ROM_DIR',
+                           help='Compare missing against local ROMs (default: same dir)')
     sub_check.set_defaults(func=cmd_check)
 
     # dedup command
@@ -3170,6 +3571,8 @@ Cache:
                            help='Download patches for missing games (excludes non-English translations)')
     sub_dedup.add_argument('--patch-dir', type=Path, default=Path('./patches'),
                            help='Output directory for downloaded patches (default: ./patches)')
+    sub_dedup.add_argument('--compare', nargs='?', const=True, default=None, metavar='ROM_DIR',
+                           help='Compare missing against local ROMs (default: same dir)')
     sub_dedup.add_argument('--keep-list', help='Output file for ROMs to keep (one per line)')
     sub_dedup.add_argument('--delete-list', help='Output file for duplicate ROMs to delete')
     sub_dedup.add_argument('--unsupported-list', help='Output file for unsupported ROMs')
@@ -3186,6 +3589,23 @@ Cache:
     sub_hash.add_argument('system', help='System ID or name')
     sub_hash.add_argument('file', help='File to hash')
     sub_hash.set_defaults(func=cmd_hash)
+
+    # compare command
+    sub_compare = subparsers.add_parser('compare',
+                                        help='Compare missing list against local ROM collection')
+    sub_compare.add_argument('missing_file', nargs='?',
+                             help='Path to *-missing.txt file (or use --all)')
+    sub_compare.add_argument('rom_dir', nargs='?',
+                             help='ROM directory (auto-detected from filename if not specified)')
+    sub_compare.add_argument('--all', action='store_true',
+                             help='Process all *-missing.txt files in current directory')
+    sub_compare.add_argument('--rom-base', type=Path, default=DEFAULT_ROM_BASE,
+                             help=f'Base ROM directory for auto-detection (default: {DEFAULT_ROM_BASE})')
+    sub_compare.add_argument('--threshold', type=int, default=COMPARE_MATCH_THRESHOLD,
+                             help=f'Fuzzy match threshold 0-100 (default: {COMPARE_MATCH_THRESHOLD})')
+    sub_compare.add_argument('--output-dir', '-o', type=Path, default=Path('.'),
+                             help='Output directory for result files (default: current dir)')
+    sub_compare.set_defaults(func=cmd_compare)
 
     args = parser.parse_args()
     args.func(args)
