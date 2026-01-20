@@ -847,22 +847,53 @@ def is_english_patch(patch_url: str, title: str = '', rom_name: str = '') -> boo
     return True
 
 
-def download_patch(patch_url: str, output_dir: Path, game_id: int = 0) -> tuple[bool, str]:
+def get_patch_category(patch_url: str) -> str:
+    """Extract category folder from RAPatches URL structure.
+
+    Example URL: .../RAPatches/raw/main/SNES/Hacks/Super Mario World/...
+    Returns: 'hacks' (lowercase)
+    """
+    if not patch_url or 'RAPatches' not in patch_url:
+        return 'other'
+
+    # Pattern: /RAPatches/raw/main/{SYSTEM}/{CATEGORY}/...
+    # Categories: Hacks, Translation, Fix, Improvement, Subset, MSU-1, etc.
+    match = re.search(r'/RAPatches/raw/main/[^/]+/([^/]+)/', patch_url)
+    if match:
+        category = match.group(1).lower()
+        return category
+    return 'other'
+
+
+def download_patch(patch_url: str, output_dir: Path, system_name: str = '',
+                   game_id: int = 0) -> tuple[bool, str]:
     """Download patch from URL to output directory.
+
+    Args:
+        patch_url: URL to download from
+        output_dir: Base output directory
+        system_name: System name for subfolder organization (e.g., 'snes')
+        game_id: Game ID for fallback filename
 
     Returns (success: bool, message: str)
     """
     if not patch_url:
         return False, "No patch URL provided"
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-
     # Extract filename from URL
     filename = patch_url.split('/')[-1]
     if not filename:
         filename = f"patch_{game_id}.zip"
 
-    output_path = output_dir / filename
+    # Determine output path based on system and category
+    if system_name:
+        category = get_patch_category(patch_url)
+        final_dir = output_dir / system_name / category
+    else:
+        final_dir = output_dir
+
+    final_dir.mkdir(parents=True, exist_ok=True)
+    output_path = final_dir / filename
 
     # Skip if already downloaded
     if output_path.exists():
@@ -873,7 +904,7 @@ def download_patch(patch_url: str, output_dir: Path, game_id: int = 0) -> tuple[
         with urllib.request.urlopen(req, timeout=120) as response:
             with open(output_path, 'wb') as f:
                 f.write(response.read())
-        return True, f"Downloaded: {filename}"
+        return True, f"Downloaded: {final_dir.name}/{filename}"
     except urllib.error.HTTPError as e:
         return False, f"HTTP Error {e.code}: {filename}"
     except urllib.error.URLError as e:
@@ -2277,11 +2308,13 @@ def cmd_check(args):
                     all_patches.extend(g.get('patches', []))
 
                 if all_patches:
-                    print(f"\nDownloading {len(all_patches)} patches to {patch_dir}...", file=sys.stderr)
+                    sys_name = get_system_name(system_id)
+                    print(f"\nDownloading {len(all_patches)} patches to "
+                          f"{patch_dir}/{sys_name}/...", file=sys.stderr)
                     success_count = 0
                     fail_count = 0
                     for patch in all_patches:
-                        ok, msg = download_patch(patch['patch_url'], patch_dir)
+                        ok, msg = download_patch(patch['patch_url'], patch_dir, sys_name)
                         if ok:
                             success_count += 1
                         else:
@@ -2976,11 +3009,13 @@ def cmd_dedup(args):
                     all_patches.extend(g.get('patches', []))
 
                 if all_patches:
-                    print(f"\nDownloading {len(all_patches)} patches to {patch_dir}...", file=sys.stderr)
+                    sys_name = get_system_name(system_id)
+                    print(f"\nDownloading {len(all_patches)} patches to "
+                          f"{patch_dir}/{sys_name}/...", file=sys.stderr)
                     success_count = 0
                     fail_count = 0
                     for patch in all_patches:
-                        ok, msg = download_patch(patch['patch_url'], patch_dir)
+                        ok, msg = download_patch(patch['patch_url'], patch_dir, sys_name)
                         if ok:
                             success_count += 1
                         else:
