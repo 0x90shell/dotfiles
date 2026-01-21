@@ -4,7 +4,7 @@ README.md
 bin/cherrymap
 bin/test-setup*
 {{ end }}
-{{ if eq .chezmoi.hostname "Glamdring" }} 
+{{ if eq .chezmoi.hostname "Glamdring" }}
 .config/autostart/Caffeine-ng.desktop
 .config/autostart/caffeine.desktop
 .config/autostart/redshift-gtk.desktop

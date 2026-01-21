@@ -1,0 +1,10 @@
+#!/bin/bash
+{{ if ne .chezmoi.hostname "Glamdring" }}
+exit 0
+{{ end }}
+
+systemctl --user daemon-reload
+systemctl --user enable --now btpowerfix.service
+systemctl --user enable --now jslisten.service
+systemctl --user enable --now jstimeout.service
+systemctl --user enable --now weekly@esde-backup.timer

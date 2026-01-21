@@ -2,9 +2,6 @@
 Description="A script to backup ES-DE configs and data."
 
 [Service]
-Type=simple
+Type=oneshot
 ExecStart=/home/gandalf/bin/ESDE-backup
-Restart=on-failure
 
-[Install]
-WantedBy=default.target
