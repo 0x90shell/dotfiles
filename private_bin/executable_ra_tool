@@ -56,6 +56,16 @@ except ImportError:
 # CONFIGURATION
 # ============================================================================
 
+# Verbose output flag (set by -v)
+VERBOSE = False
+
+
+def log_info(msg):
+    """Print informational message to stderr (only in verbose mode)."""
+    if VERBOSE:
+        print(msg, file=sys.stderr)
+
+
 # Default cache directory
 CACHE_DIR = Path.home() / ".cache" / "ra_tool"
 
@@ -931,15 +941,15 @@ def run_compare(missing_file: Path, rom_dir: Path, output_dir: Path,
     # Use input filename base for output
     output_base = missing_file.stem
 
-    print(f"\nComparing {missing_file.name} against {rom_dir}...", file=sys.stderr)
+    log_info(f"\nComparing {missing_file.name} against {rom_dir}...")
 
     # Parse missing entries
     entries = parse_missing_file_for_compare(missing_file)
-    print(f"  Entries in missing file: {len(entries)}", file=sys.stderr)
+    log_info(f"  Entries in missing file: {len(entries)}")
 
     # Scan ROM directory
     roms = scan_rom_directory_for_compare(rom_dir)
-    print(f"  ROMs found in directory: {len(roms)}", file=sys.stderr)
+    log_info(f"  ROMs found in directory: {len(roms)}")
 
     # Categorize
     truly_missing = []
@@ -1199,14 +1209,12 @@ def download_patch(patch_url: str, output_dir: Path, system_name: str = '',
         return False, f"Error: {str(e)}"
 
 
-def get_rom_info_for_missing(missing_games: list, rate_limit: float = 0.5,
-                             verbose: bool = False) -> dict:
+def get_rom_info_for_missing(missing_games: list, rate_limit: float = 0.5) -> dict:
     """Query RA hash pages for missing games to get ROM names and patch URLs.
 
     Args:
         missing_games: List of dicts with 'title', 'url', 'hashes', etc.
         rate_limit: Delay between requests in seconds
-        verbose: Show progress
 
     Returns dict with:
         'base_games': list of base game info
@@ -1224,8 +1232,9 @@ def get_rom_info_for_missing(missing_games: list, rate_limit: float = 0.5,
     }
 
     total = len(missing_games)
+    pbar = make_progress_bar(missing_games, total=total, desc="Fetching ROM info")
 
-    for idx, game in enumerate(missing_games, 1):
+    for idx, game in enumerate(pbar, 1):
         title = game.get('title', '')
         url = game.get('url', '')
 
@@ -1237,9 +1246,6 @@ def get_rom_info_for_missing(missing_games: list, rate_limit: float = 0.5,
             continue
 
         game_id = int(match.group(1))
-
-        if verbose:
-            print(f"  [{idx}/{total}] Fetching ROM info for: {title[:50]}...", file=sys.stderr)
 
         # Fetch hash page
         hash_data = fetch_game_hashes_page(game_id)
@@ -2067,15 +2073,17 @@ def build_hash_lookup(games: list) -> dict:
 
 def print_summary_line(total_roms: int, supported: int, unsupported: int,
                        achievements: int, points: int, duplicates: int = 0,
-                       total_achievable: int = 0):
+                       total_achievable: int = 0, unique_games: int = 0):
     """Print a compact summary line to stderr."""
     dup_str = f", {duplicates} dupes" if duplicates > 0 else ""
     print(f"\n✓ Scanned {total_roms} ROMs → {supported} supported, "
           f"{unsupported} unsupported{dup_str}", file=sys.stderr)
     print(f"  Achievable: {achievements} achievements ({points} pts)", file=sys.stderr)
     if total_achievable > 0:
-        pct = 100 * supported / total_achievable
-        print(f"  Collection: {supported}/{total_achievable} RA titles ({pct:.1f}%)", file=sys.stderr)
+        # Use unique_games for collection percentage if provided, else fall back to supported
+        games = unique_games if unique_games else supported
+        pct = 100 * games / total_achievable
+        print(f"  Collection: {games}/{total_achievable} RA titles ({pct:.1f}%)", file=sys.stderr)
 
 
 def make_progress_bar(iterable, total=None, desc="Processing", disable=False):
@@ -2263,6 +2271,9 @@ def cmd_pull(args):
 
 def cmd_check(args):
     """Check ROMs against cached database (auto-pulls if needed)."""
+    global VERBOSE
+    VERBOSE = getattr(args, 'verbose', False)
+
     system_id = resolve_system_id(args.system)
     rom_dir = Path(args.rom_dir)
 
@@ -2279,7 +2290,7 @@ def cmd_check(args):
         else:
             version = get_rahasher_version(rahasher)
             version_str = f" ({version})" if version else ""
-            print(f"Using RAHasher: {rahasher}{version_str}", file=sys.stderr)
+            log_info(f"Using RAHasher: {rahasher}{version_str}")
             # Quick version check (non-blocking)
             check_rahasher_version(rahasher, verbose=False)
     else:
@@ -2287,7 +2298,7 @@ def cmd_check(args):
         print("Run 'ra_tool.py setup' to install RAHasher.", file=sys.stderr)
 
     # Auto-pull if cache missing or expired (or forced)
-    print(f"Loading hash database for system {system_id}...", file=sys.stderr)
+    log_info(f"Loading hash database for system {system_id}...")
     cached = ensure_cache(system_id, force=getattr(args, 'force', False))
     lookup = cached.get('lookup', {})
 
@@ -2305,7 +2316,7 @@ def cmd_check(args):
     # Deduplicate (rglob can return same file for different case patterns)
     rom_files = list(set(rom_files))
 
-    print(f"Found {len(rom_files)} ROM files to check", file=sys.stderr)
+    log_info(f"Found {len(rom_files)} ROM files to check")
 
     if not rom_files:
         print("No ROM files found in directory.", file=sys.stderr)
@@ -2316,6 +2327,7 @@ def cmd_check(args):
     supported_no_ach = []
     unsupported = []
     errors = []
+    seen_game_ids = set()  # Track unique games for accurate collection %
     stats = {'ok': 0, 'no_ach': 0, 'unsup': 0, 'ach': 0}
 
     pbar = make_progress_bar(rom_files, total=len(rom_files), desc="Hashing")
@@ -2341,6 +2353,7 @@ def cmd_check(args):
                 break
 
         if matched:
+            seen_game_ids.add(matched['id'])  # Track unique game
             if matched['achievements'] > 0:
                 supported.append((str(rel_path), matched, matched_hash))
                 stats['ok'] += 1
@@ -2359,12 +2372,13 @@ def cmd_check(args):
     # Setup output (file or stdout)
     output_file = None
     output = sys.stdout
-    summary_only = getattr(args, 'summary', False)
+    # Summary by default unless --full or -o specified
+    summary_only = not (getattr(args, 'full', False) or args.output)
 
     if args.output:
         output_file = open(args.output, 'w')
         output = output_file
-        print(f"Writing report to: {args.output}", file=sys.stderr)
+        log_info(f"Writing report to: {args.output}")
 
     def out(msg=""):
         print(msg, file=output)
@@ -2434,7 +2448,7 @@ def cmd_check(args):
     # Close file if opened
     if output_file:
         output_file.close()
-        print(f"Report saved to: {args.output}", file=sys.stderr)
+        log_info(f"Report saved to: {args.output}")
 
     # Print summary to stderr
     total_ach = sum(info['achievements'] for _, info, _ in supported)
@@ -2445,7 +2459,8 @@ def cmd_check(args):
         unsupported=len(unsupported),
         achievements=total_ach,
         points=total_pts,
-        total_achievable=cached.get('game_count', 0)
+        total_achievable=cached.get('game_count', 0),
+        unique_games=len(seen_game_ids)
     )
 
     # Copy matched ROMs if --copy-to specified (copies ALL matches)
@@ -2582,7 +2597,7 @@ def cmd_check(args):
                 })
 
             print(f"\nQuerying ROM info for {len(missing_list)} missing games...", file=sys.stderr)
-            rom_info = get_rom_info_for_missing(missing_list, rate_limit=0.5, verbose=True)
+            rom_info = get_rom_info_for_missing(missing_list, rate_limit=0.5)
 
             # Print report
             if rom_info_flag:
@@ -2693,6 +2708,9 @@ def cmd_hash(args):
 
 def cmd_compare(args):
     """Compare missing list against local ROM collection."""
+    global VERBOSE
+    VERBOSE = getattr(args, 'verbose', False)
+
     all_mode = getattr(args, 'all', False)
     threshold = getattr(args, 'threshold', COMPARE_MATCH_THRESHOLD)
     output_dir = getattr(args, 'output_dir', Path('.'))
@@ -2951,6 +2969,9 @@ def cmd_setup(args):
 
 def cmd_dedup(args):
     """RA-aware deduplication - find best ROM per game for achievements."""
+    global VERBOSE
+    VERBOSE = getattr(args, 'verbose', False)
+
     from collections import defaultdict
     import csv
 
@@ -2972,7 +2993,7 @@ def cmd_dedup(args):
         else:
             version = get_rahasher_version(rahasher)
             version_str = f" ({version})" if version else ""
-            print(f"Using RAHasher: {rahasher}{version_str}", file=sys.stderr)
+            log_info(f"Using RAHasher: {rahasher}{version_str}")
             # Quick version check (non-blocking)
             check_rahasher_version(rahasher, verbose=False)
     else:
@@ -2980,7 +3001,7 @@ def cmd_dedup(args):
               file=sys.stderr)
 
     # Auto-pull if cache missing or expired
-    print(f"Loading hash database for system {system_id}...", file=sys.stderr)
+    log_info(f"Loading hash database for system {system_id}...")
     cached = ensure_cache(system_id, force=getattr(args, 'force', False))
     lookup = cached.get('lookup', {})
     games = cached.get('games', [])
@@ -3007,7 +3028,7 @@ def cmd_dedup(args):
         rom_files.extend(rom_dir.rglob(f"*{ext.upper()}"))
     rom_files = list(set(rom_files))
 
-    print(f"Found {len(rom_files)} ROM files to analyze", file=sys.stderr)
+    log_info(f"Found {len(rom_files)} ROM files to analyze")
 
     # Hash each ROM and group by RA game ID
     games_found = defaultdict(list)
@@ -3125,10 +3146,11 @@ def cmd_dedup(args):
     }
 
     # Determine output destination
-    summary_only = getattr(args, 'summary', False)
     output_file = getattr(args, 'output', None)
+    # Summary by default unless --full or -o specified
+    summary_only = not (getattr(args, 'full', False) or output_file)
 
-    # Skip full output if --summary flag is set
+    # Skip full output if summary mode
     if not summary_only:
         out_handle = open(output_file, 'w') if output_file else sys.stdout
 
@@ -3190,7 +3212,7 @@ def cmd_dedup(args):
                 out_handle.close()
 
         if output_file:
-            print(f"  Output saved to: {output_file}", file=sys.stderr)
+            log_info(f"  Output saved to: {output_file}")
 
     # Always print summary to stderr (visible even when output goes to file)
     duplicates = {gid: roms for gid, roms in games_found.items() if len(roms) > 1}
@@ -3243,7 +3265,6 @@ def cmd_dedup(args):
     show_missing = getattr(args, 'missing', False)
     missing_base_only = getattr(args, 'missing_base_only', False)
     missing_list_file = getattr(args, 'missing_list', None)
-    summary_only = getattr(args, 'summary', False)
     rom_info_flag = getattr(args, 'rom_info', False)
     download_patches_flag = getattr(args, 'download_patches', False)
     compare_flag = getattr(args, 'compare', None)
@@ -3378,7 +3399,7 @@ def cmd_dedup(args):
                 })
 
             print(f"\nQuerying ROM info for {len(missing_list)} missing games...", file=sys.stderr)
-            rom_info = get_rom_info_for_missing(missing_list, rate_limit=0.5, verbose=True)
+            rom_info = get_rom_info_for_missing(missing_list, rate_limit=0.5)
 
             # Print report
             if rom_info_flag:
@@ -3521,8 +3542,8 @@ Cache:
     sub_check.add_argument('rom_dir', help='ROM directory to scan')
     sub_check.add_argument('-v', '--verbose', action='store_true',
                            help='Show detailed output (RAHasher errors, no-achievement games)')
-    sub_check.add_argument('-s', '--summary', action='store_true',
-                           help='Show only summary (no full report)')
+    sub_check.add_argument('--full', action='store_true',
+                           help='Show full per-ROM report (default: summary only)')
     sub_check.add_argument('-o', '--output', help='Output report to file')
     sub_check.add_argument('-f', '--force', action='store_true',
                            help='Force refresh hash database')
@@ -3540,8 +3561,8 @@ Cache:
                            help='Query hash pages for missing games to get ROM names & patch URLs')
     sub_check.add_argument('--download-patches', action='store_true',
                            help='Download patches for missing games (excludes non-English translations)')
-    sub_check.add_argument('--patch-dir', type=Path, default=Path('./patches'),
-                           help='Output directory for downloaded patches (default: ./patches)')
+    sub_check.add_argument('--patch-dir', type=Path, default=Path('./ra_patches'),
+                           help='Output directory for downloaded patches (default: ./ra_patches)')
     sub_check.add_argument('--compare', nargs='?', const=True, default=None, metavar='ROM_DIR',
                            help='Compare missing against local ROMs (default: same dir)')
     sub_check.set_defaults(func=cmd_check)
@@ -3552,8 +3573,8 @@ Cache:
     sub_dedup.add_argument('system', help='System ID or name (e.g., 3, snes, "super nintendo")')
     sub_dedup.add_argument('rom_dir', help='ROM directory to scan')
     sub_dedup.add_argument('-v', '--verbose', action='store_true', help='Show detailed output (RAHasher errors)')
-    sub_dedup.add_argument('-s', '--summary', action='store_true',
-                           help='Show only summary (no full report)')
+    sub_dedup.add_argument('--full', action='store_true',
+                           help='Show full per-ROM report (default: summary only)')
     sub_dedup.add_argument('-o', '--output', help='Output file (default: stdout)')
     sub_dedup.add_argument('-f', '--force', action='store_true',
                            help='Force refresh hash database')
@@ -3569,8 +3590,8 @@ Cache:
                            help='Query hash pages for missing games to get ROM names & patch URLs')
     sub_dedup.add_argument('--download-patches', action='store_true',
                            help='Download patches for missing games (excludes non-English translations)')
-    sub_dedup.add_argument('--patch-dir', type=Path, default=Path('./patches'),
-                           help='Output directory for downloaded patches (default: ./patches)')
+    sub_dedup.add_argument('--patch-dir', type=Path, default=Path('./ra_patches'),
+                           help='Output directory for downloaded patches (default: ./ra_patches)')
     sub_dedup.add_argument('--compare', nargs='?', const=True, default=None, metavar='ROM_DIR',
                            help='Compare missing against local ROMs (default: same dir)')
     sub_dedup.add_argument('--keep-list', help='Output file for ROMs to keep (one per line)')
@@ -3605,6 +3626,8 @@ Cache:
                              help=f'Fuzzy match threshold 0-100 (default: {COMPARE_MATCH_THRESHOLD})')
     sub_compare.add_argument('--output-dir', '-o', type=Path, default=Path('.'),
                              help='Output directory for result files (default: current dir)')
+    sub_compare.add_argument('-v', '--verbose', action='store_true',
+                             help='Show detailed progress output')
     sub_compare.set_defaults(func=cmd_compare)
 
     args = parser.parse_args()
