@@ -9,12 +9,14 @@ IFS=$'\n\t'
 # by syncing from NAS, scraping metadata, and organizing media files.
 #
 # Author: Your Name
-# Version: 2.0
+# Version: 2.1
 # =============================================================================
 
 # --- Global Variables ---
 SCRIPT_NAME="$(basename "$0")"
 VERBOSE=false
+QUIET=false
+DRY_RUN=false
 EXTENSION=""
 NAS_MOUNT="$HOME/mnt/Games"
 NAS_USER_RO="lolguest"
@@ -25,7 +27,7 @@ NAS_SHARE="gamer"
 # --- Help Function ---
 show_help() {
     cat << EOF
-ES-DE ROM Management Script v2.0
+ES-DE ROM Management Script v2.1
 
 DESCRIPTION:
     Manages ROM files for ES-DE by syncing from NAS storage, scraping metadata
@@ -59,6 +61,8 @@ ARGUMENTS:
 
 OTHER OPTIONS:
     -v, --verbose      Enable verbose output (detailed progress information)
+    -q, --quiet        Suppress informational messages (errors still shown)
+    -n, --dry-run      Show what would be done without making changes
     -e, --extension    Add file extension filter to Skyscraper commands
                        Example: -e "*.wua" for Wii U archives
     -h, --help         Show this help message and exit
@@ -94,6 +98,12 @@ EXAMPLES:
     # Process additions for SNES with verbose logging
     $SCRIPT_NAME --verbose --additions snes
 
+    # Preview what would happen without making changes (dry-run)
+    $SCRIPT_NAME --dry-run --initialize psx
+
+    # Run quietly (only errors shown)
+    $SCRIPT_NAME --quiet --additions n64
+
 NOTES:
     • '--additions' mode requires a '0merge' directory on the NAS
     • The script will create necessary local directories if they don't exist
@@ -106,12 +116,13 @@ EOF
 
 # --- Logging Functions ---
 
-# Log message with timestamp (always shown)
+# Log message with timestamp (shown unless quiet mode)
 log_info() {
+    [[ "$QUIET" == true ]] && return
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
 }
 
-# Log error message and exit
+# Log error message and exit (always shown)
 log_error() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" >&2
     exit 1
@@ -119,8 +130,69 @@ log_error() {
 
 # Log verbose message (only shown in verbose mode)
 log_verbose() {
-    if [[ "$VERBOSE" == true ]]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] VERBOSE: $*"
+    [[ "$VERBOSE" != true ]] && return
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] VERBOSE: $*"
+}
+
+# Log dry-run action (shown when dry-run mode is active)
+log_dryrun() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] DRY-RUN: Would $*"
+}
+
+# --- Dry-Run Wrapper Functions ---
+
+# Run rsync with dry-run support
+run_rsync() {
+    if [[ "$DRY_RUN" == true ]]; then
+        log_dryrun "rsync $*"
+        rsync --dry-run "$@" 2>/dev/null || true
+    else
+        rsync "$@"
+    fi
+}
+
+# Run rm with dry-run support
+run_rm() {
+    if [[ "$DRY_RUN" == true ]]; then
+        log_dryrun "rm $*"
+    else
+        rm "$@"
+    fi
+}
+
+# Run mv with dry-run support
+run_mv() {
+    if [[ "$DRY_RUN" == true ]]; then
+        log_dryrun "mv $*"
+    else
+        mv "$@"
+    fi
+}
+
+# Run cp with dry-run support
+run_cp() {
+    if [[ "$DRY_RUN" == true ]]; then
+        log_dryrun "cp $*"
+    else
+        cp "$@"
+    fi
+}
+
+# Run sudo rm with dry-run support
+run_sudo_rm() {
+    if [[ "$DRY_RUN" == true ]]; then
+        log_dryrun "sudo rm $*"
+    else
+        sudo rm "$@"
+    fi
+}
+
+# Run sudo mv with dry-run support
+run_sudo_mv() {
+    if [[ "$DRY_RUN" == true ]]; then
+        log_dryrun "sudo mv $*"
+    else
+        sudo mv "$@"
     fi
 }
 
@@ -168,16 +240,16 @@ mount_nas() {
     local mount_options="$2"
     
     if ! grep -qs "$NAS_MOUNT" /proc/mounts; then
-        log_info "Mounting NAS as user '$nas_user'..."
+        log_info "🔌 Mounting NAS as user '$nas_user'..."
         log_verbose "Mount command: mount -t cifs '//$NAS_IP/$NAS_SHARE' '$NAS_MOUNT' -o $mount_options"
         
         if ! sudo mount -t cifs "//$NAS_IP/$NAS_SHARE" "$NAS_MOUNT" -o "$mount_options"; then
             log_error "Failed to mount NAS at $NAS_MOUNT"
         fi
         
-        log_info "NAS mounted successfully"
+        log_info "✅ NAS mounted successfully"
     else
-        log_info "NAS already mounted"
+        log_info "✅ NAS already mounted"
         log_verbose "Mount point: $NAS_MOUNT"
     fi
 }
@@ -185,9 +257,9 @@ mount_nas() {
 # Unmount NAS safely
 unmount_nas() {
     if grep -qs "$NAS_MOUNT" /proc/mounts; then
-        log_info "Unmounting NAS..."
+        log_info "🔌 Unmounting NAS..."
         if sudo umount "$NAS_MOUNT"; then
-            log_info "NAS unmounted successfully"
+            log_info "✅ NAS unmounted"
         else
             log_error "Failed to unmount NAS"
         fi
@@ -235,7 +307,7 @@ validate_paths() {
         log_verbose "✓ 0merge directory exists: $merge_dir"
     fi
     
-    log_info "✓ All required directories validated"
+    log_info "📁 All required directories validated"
 }
 
 # --- Skyscraper Functions ---
@@ -247,31 +319,31 @@ scrape_metadata() {
     shift 2
     local extension_args=("$@")  # Use array for extension arguments
     
-    log_info "Running Skyscraper metadata scrapes for $console..."
+    log_info "🎮 Running Skyscraper metadata scrapes for $console..."
     log_verbose "Input directory: $input_dir"
     log_verbose "Extension args: ${extension_args[*]:-none}"
     
     # ES gamelist scrape (existing metadata)
     log_verbose "Scraping ES gamelist metadata..."
     Skyscraper -p "$console" -s esgamelist -i "$input_dir" \
-        --flags videos,relative,nosubdirs,unattend --refresh "${extension_args[@]}"
+        --flags videos,relative,nosubdirs,unattend --refresh ${extension_args[@]+"${extension_args[@]}"}
     
     # ScreenScraper database scrape
     log_verbose "Scraping ScreenScraper database..."
     Skyscraper -p "$console" -s screenscraper -i "$input_dir" \
-        --flags noscreenshots,nocovers,nowheels,nomarquees,nosubdirs,unattend "${extension_args[@]}"
+        --flags noscreenshots,nocovers,nowheels,nomarquees,nosubdirs,unattend ${extension_args[@]+"${extension_args[@]}"}
     
     # TheGamesDB scrape
     log_verbose "Scraping TheGamesDB database..."
     Skyscraper -p "$console" -s thegamesdb -i "$input_dir" \
-        --flags nosubdirs,unattend "${extension_args[@]}"
+        --flags nosubdirs,unattend ${extension_args[@]+"${extension_args[@]}"}
     
     # Generate final gamelist
     log_verbose "Generating final gamelist..."
     Skyscraper -p "$console" -i "$input_dir" \
-        --flags unattend,relative "${extension_args[@]}"
+        --flags unattend,relative ${extension_args[@]+"${extension_args[@]}"}
     
-    log_info "✓ Metadata scraping completed"
+    log_info "✅ Metadata scraping completed"
 }
 
 # --- Gamelist Management Functions ---
@@ -285,7 +357,7 @@ sync_gamelist_replace() {
     local source_gamelist="$source_dir/gamelist.xml"
     local target_gamelist="$es_gamelist/gamelist.xml"
     
-    log_info "Syncing gamelist (replace mode)..."
+    log_info "📁 Syncing gamelist (replace mode)..."
     
     mkdir -p "$es_gamelist"
     
@@ -297,8 +369,8 @@ sync_gamelist_replace() {
     
     # Copy new gamelist
     if [[ -f "$source_gamelist" ]]; then
-        rsync "$source_gamelist" "$target_gamelist"
-        log_info "✓ Gamelist synced successfully"
+        run_rsync "$source_gamelist" "$target_gamelist"
+        log_info "✅ Gamelist synced"
     else
         log_error "Source gamelist not found: $source_gamelist"
     fi
@@ -314,7 +386,7 @@ sync_gamelist_merge() {
     local target_gamelist="$es_gamelist/gamelist.xml"
     local merge_gamelist="$es_gamelist/gamelist-merge.xml"
     
-    log_info "Merging gamelist (additions mode)..."
+    log_info "📁 Merging gamelist (additions mode)..."
     
     mkdir -p "$es_gamelist"
     
@@ -349,7 +421,7 @@ EOF
     # Replace original with merged version
     mv "$merge_gamelist" "$target_gamelist"
     
-    log_info "✓ Gamelist merged successfully"
+    log_info "✅ Gamelist merged"
 }
 
 # --- Media Management Functions ---
@@ -360,7 +432,7 @@ sync_media_files() {
     local source_dir="$2"
     local mode="$3"  # "copy" for additions, "rsync" for initialize
     
-    log_info "Syncing media files ($mode mode)..."
+    log_info "📁 Syncing media files ($mode mode)..."
     
     local es_media="$HOME/ES-DE/downloaded_media/$console"
     mkdir -p "$es_media"
@@ -390,7 +462,7 @@ sync_media_files() {
             
             if [[ "$mode" == "copy" ]]; then
                 # For additions mode, copy files
-                if cp -r "$src_path"/* "$dest_path" 2>/dev/null; then
+                if run_cp -r "$src_path"/* "$dest_path" 2>/dev/null; then
                     log_verbose "✓ Copied $src_type -> $dest_type"
                 else
                     log_verbose "• No files to copy for $src_type"
@@ -398,9 +470,9 @@ sync_media_files() {
             elif [[ "$mode" == "rsync" ]]; then
                 # For initialize mode, sync with rsync
                 if [[ "$VERBOSE" == true ]]; then
-                    rsync -avz --info=progress2 "$src_path/" "$dest_path"
+                    run_rsync -avz --info=progress2 "$src_path/" "$dest_path"
                 else
-                    rsync -az "$src_path/" "$dest_path"
+                    run_rsync -az "$src_path/" "$dest_path"
                 fi
                 log_verbose "✓ Synced $src_type -> $dest_type"
             fi
@@ -409,7 +481,7 @@ sync_media_files() {
         fi
     done
     
-    log_info "✓ Media files synced successfully"
+    log_info "✅ Media files synced"
 }
 
 # --- Cleanup Functions ---
@@ -419,28 +491,28 @@ cleanup_temp_files() {
     local cleanup_dir="$1"
     local description="$2"
     
-    log_info "Cleaning up $description..."
+    log_info "🧹 Cleaning up $description..."
     
     # Remove media directory
     if [[ -d "${cleanup_dir:?}/media" ]]; then
-        rm -rf "${cleanup_dir:?}/media"
+        run_rm -rf "${cleanup_dir:?}/media"
         log_verbose "✓ Removed media directory"
     else
         log_verbose "• No media directory to remove"
     fi
-    
+
     # Remove gamelist files
     shopt -s nullglob
     local gamelist_files=("${cleanup_dir:?}"/gamelist.*)
     if (( ${#gamelist_files[@]} )); then
-        rm -f "${gamelist_files[@]}"
+        run_rm -f "${gamelist_files[@]}"
         log_verbose "✓ Removed ${#gamelist_files[@]} gamelist file(s)"
     else
         log_verbose "• No gamelist files to remove"
     fi
     shopt -u nullglob
     
-    log_info "✓ Cleanup completed"
+    log_info "✅ Cleanup completed"
 }
 
 # Move all files including dotfiles
@@ -459,7 +531,7 @@ move_all_contents() {
     shopt -s dotglob nullglob
     local files=("$src"/*)
     if (( ${#files[@]} )); then
-        mv "$src"/* "$dst"/
+        run_mv "$src"/* "$dst"/
         log_verbose "✓ Moved ${#files[@]} items"
     else
         log_verbose "• No files to move"
@@ -475,7 +547,7 @@ mode_initialize() {
     shift
     local extension_args=("$@")
     
-    log_info "=== INITIALIZE MODE: $console ==="
+    log_info "🔄 === INITIALIZE MODE: $console ==="
     
     local nas_rom_dir="$NAS_MOUNT/Roms/$console"
     local local_rom_dir="$HOME/ROMs/$console"
@@ -487,16 +559,16 @@ mode_initialize() {
     validate_paths "$console" "initialize"
     
     # Sync all ROMs from NAS (with delete to match exactly)
-    log_info "Syncing ROMs from NAS (with --delete)..."
+    log_info "🔄 Syncing ROMs from NAS (with --delete)..."
     if [[ "$VERBOSE" == true ]]; then
-        rsync -avz --info=progress2 "$nas_rom_dir/" "$local_rom_dir" --delete
+        run_rsync -avz --info=progress2 "$nas_rom_dir/" "$local_rom_dir" --delete
     else
-        rsync -az "$nas_rom_dir/" "$local_rom_dir" --delete
+        run_rsync -az "$nas_rom_dir/" "$local_rom_dir" --delete
     fi
-    log_info "✓ ROM sync completed"
+    log_info "✅ ROM sync completed"
     
     # Scrape metadata
-    scrape_metadata "$console" "$local_rom_dir" "${extension_args[@]}"
+    scrape_metadata "$console" "$local_rom_dir" ${extension_args[@]+"${extension_args[@]}"}
     
     # Sync gamelist (replace)
     sync_gamelist_replace "$console" "$local_rom_dir"
@@ -516,7 +588,7 @@ mode_additions() {
     shift
     local extension_args=("$@")
     
-    log_info "=== ADDITIONS MODE: $console ==="
+    log_info "🔄 === ADDITIONS MODE: $console ==="
     
     local nas_rom_dir="$NAS_MOUNT/Roms/$console"
     local nas_merge_dir="$nas_rom_dir/0merge"
@@ -530,16 +602,16 @@ mode_additions() {
     validate_paths "$console" "additions"
     
     # Process 0merge directory
-    log_info "Processing 0merge directory..."
+    log_info "📁 Processing 0merge directory..."
     if [[ "$VERBOSE" == true ]]; then
-        rsync -avz --info=progress2 "$nas_merge_dir/" "$local_merge_dir"
+        run_rsync -avz --info=progress2 "$nas_merge_dir/" "$local_merge_dir"
     else
-        rsync -az "$nas_merge_dir/" "$local_merge_dir"
+        run_rsync -az "$nas_merge_dir/" "$local_merge_dir"
     fi
-    log_info "✓ 0merge directory synced"
+    log_info "✅ 0merge synced"
     
     # Scrape metadata for new ROMs
-    scrape_metadata "$console" "$local_merge_dir" "${extension_args[@]}"
+    scrape_metadata "$console" "$local_merge_dir" ${extension_args[@]+"${extension_args[@]}"}
     
     # Merge gamelist
     sync_gamelist_merge "$console" "$local_merge_dir"
@@ -551,57 +623,57 @@ mode_additions() {
     cleanup_temp_files "$local_merge_dir" "0merge directory"
     
     # Move ROMs to main directory
-    log_info "Moving ROMs to main directory..."
+    log_info "🔄 Moving ROMs to main directory..."
     move_all_contents "$local_merge_dir" "$local_rom_dir"
     
     # Remove 0merge if empty
     if [[ -z "$(ls -A "$local_merge_dir" 2>/dev/null || true)" ]]; then
-        rm -rf "${local_merge_dir:?}"
-        log_info "✓ Removed empty 0merge directory"
+        run_rm -rf "${local_merge_dir:?}"
+        log_info "🧹 Removed empty 0merge directory"
     else
-        log_info "⚠️  0merge directory not empty - inspect manually: $local_merge_dir"
+        log_info "⚠️ 0merge not empty - inspect manually: $local_merge_dir"
     fi
     
     # Handle hacks folder if present
     if [[ -d "$nas_rom_dir/hacks" ]]; then
-        log_info "Syncing hacks directory..."
+        log_info "🎯 Syncing hacks directory..."
         local hacks_dir="$local_rom_dir/hacks"
         if [[ "$VERBOSE" == true ]]; then
-            rsync -avz --info=progress2 "$nas_rom_dir/hacks/" "$hacks_dir/" --delete
+            run_rsync -avz --info=progress2 "$nas_rom_dir/hacks/" "$hacks_dir/" --delete
         else
-            rsync -az "$nas_rom_dir/hacks/" "$hacks_dir/" --delete
+            run_rsync -az "$nas_rom_dir/hacks/" "$hacks_dir/" --delete
         fi
         # Remove any gamelist from hacks directory
-        rm -f "$hacks_dir/gamelist.xml"
-        log_info "✓ Hacks directory synced"
+        run_rm -f "$hacks_dir/gamelist.xml"
+        log_info "✅ Hacks synced"
     else
         log_verbose "• No hacks directory found"
     fi
     
     # Remount NAS as read-write for cleanup
-    log_info "Remounting NAS as read-write for cleanup..."
+    log_info "🔌 Remounting NAS as read-write for cleanup..."
     unmount_nas
     mount_nas "$NAS_USER_RW" "user=$NAS_USER_RW,vers=2.0"
     
     # Clean up NAS 0merge directory
-    log_info "Cleaning up NAS 0merge directory..."
-    sudo rm -f "$nas_merge_dir"/gamelist.*
-    
+    log_info "🧹 Cleaning up NAS 0merge directory..."
+    run_sudo_rm -f "$nas_merge_dir"/gamelist.*
+
     # Move any remaining files from 0merge to main directory on NAS
     shopt -s dotglob nullglob
     local remaining_files=("$nas_merge_dir"/*)
     if (( ${#remaining_files[@]} )); then
-        sudo mv "$nas_merge_dir"/* "$nas_rom_dir"/ 2>/dev/null || true
+        run_sudo_mv "$nas_merge_dir"/* "$nas_rom_dir"/ 2>/dev/null || true
         log_verbose "• Moved ${#remaining_files[@]} remaining files"
     fi
     shopt -u dotglob nullglob
-    
+
     # Remove 0merge from NAS if empty
     if [[ -z "$(ls -A "$nas_merge_dir" 2>/dev/null || true)" ]]; then
-        sudo rm -rf "$nas_merge_dir"
-        log_info "✓ Removed empty 0merge directory from NAS"
+        run_sudo_rm -rf "$nas_merge_dir"
+        log_info "🧹 Removed 0merge from NAS"
     else
-        log_info "⚠️  NAS 0merge directory not empty - inspect manually: $nas_merge_dir"
+        log_info "⚠️ NAS 0merge not empty - inspect manually: $nas_merge_dir"
     fi
     
     # Unmount NAS
@@ -641,7 +713,14 @@ main() {
                 ;;
             -v|--verbose)
                 VERBOSE=true
-                log_verbose "Verbose mode enabled"
+                shift
+                ;;
+            -q|--quiet)
+                QUIET=true
+                shift
+                ;;
+            -n|--dry-run)
+                DRY_RUN=true
                 shift
                 ;;
             -e|--extension)
@@ -675,7 +754,15 @@ main() {
     
     # Validate arguments
     validate_arguments "$mode" "$console"
-    
+
+    # Validate required commands exist
+    if ! command -v Skyscraper &>/dev/null; then
+        log_error "Skyscraper not found. Please install it first."
+    fi
+    if ! command -v rsync &>/dev/null; then
+        log_error "rsync not found. Please install it first."
+    fi
+
     # Prepare extension arguments for Skyscraper
     local extension_args=()
     if [[ -n "$EXTENSION" ]]; then

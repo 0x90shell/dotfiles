@@ -1,15 +1,186 @@
 #!/bin/bash
-#Script to backup ES-DE configs and data
-dir="$HOME/ES-DE"
-backup="$HOME/Backups/ESDE-backup.tar.xz"
-for file in "$dir"/* 
-do 
-    if [[ $file -nt $backup ]]
-    then
-        echo "change detected"
-        nohup systemd-inhibit --what="idle:sleep" tar -cJvf "$backup" "$dir" &>/dev/null
-        rsync -avz --info=progress2 "$backup" "$HOME/mnt/Backups/Configs"
-        break
-    fi 
-done
-echo "no change detected"
+# =============================================================================
+# ES-DE Backup Script
+# =============================================================================
+# Backs up ES-DE configuration and data to local and NAS storage.
+# Only creates a backup if files have changed since the last backup.
+#
+# Author: Your Name
+# Version: 2.0
+# =============================================================================
+
+set -euo pipefail
+IFS=$'\n\t'
+
+# --- Configuration ---
+SCRIPT_NAME="$(basename "$0")"
+ES_DE_DIR="$HOME/ES-DE"
+LOCAL_BACKUP="$HOME/Backups/ESDE-backup.tar.xz"
+NAS_BACKUP_DIR="$HOME/mnt/Backups/Configs"
+VERBOSE=false
+
+# --- Help Function ---
+show_help() {
+    cat << EOF
+ES-DE Backup Script v2.0
+
+DESCRIPTION:
+    Backs up ES-DE configuration and data to local storage and optionally
+    syncs to NAS. Only creates a backup if files have changed since the
+    last backup.
+
+USAGE:
+    $SCRIPT_NAME [OPTIONS]
+
+OPTIONS:
+    -v, --verbose      Enable verbose output
+    -h, --help         Show this help message and exit
+
+DIRECTORIES:
+    Source:     $ES_DE_DIR
+    Local:      $LOCAL_BACKUP
+    NAS:        $NAS_BACKUP_DIR
+
+NOTES:
+    - Recursively checks all files for changes, not just top-level
+    - Uses systemd-inhibit to prevent sleep during backup
+    - Creates xz-compressed tar archive for efficient storage
+    - NAS sync is only attempted if NAS_BACKUP_DIR is accessible
+
+EOF
+}
+
+# --- Logging Functions ---
+
+log_info() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+}
+
+log_verbose() {
+    [[ "$VERBOSE" != true ]] && return
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] VERBOSE: $*"
+}
+
+log_error() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" >&2
+    exit 1
+}
+
+# --- Core Functions ---
+
+# Check if any files have changed since last backup (recursive)
+detect_changes() {
+    local source_dir="$1"
+    local backup_file="$2"
+
+    # If backup doesn't exist, changes detected
+    if [[ ! -f "$backup_file" ]]; then
+        log_verbose "No existing backup found - backup needed"
+        return 0
+    fi
+
+    # Check for any file newer than the backup (recursive)
+    if find "$source_dir" -newer "$backup_file" -type f 2>/dev/null | grep -q .; then
+        log_verbose "Found files newer than backup"
+        return 0
+    fi
+
+    # No changes detected
+    return 1
+}
+
+# Create the backup archive
+create_backup() {
+    local source_dir="$1"
+    local backup_file="$2"
+
+    log_info "Creating backup archive..."
+    log_verbose "Source: $source_dir"
+    log_verbose "Target: $backup_file"
+
+    # Ensure backup directory exists
+    mkdir -p "$(dirname "$backup_file")"
+
+    # Create compressed tar archive with sleep inhibition
+    if [[ "$VERBOSE" == true ]]; then
+        systemd-inhibit --what="idle:sleep" --why="ES-DE backup in progress" \
+            tar -cvJf "$backup_file" -C "$(dirname "$source_dir")" "$(basename "$source_dir")"
+    else
+        systemd-inhibit --what="idle:sleep" --why="ES-DE backup in progress" \
+            tar -cJf "$backup_file" -C "$(dirname "$source_dir")" "$(basename "$source_dir")"
+    fi
+
+    log_info "Backup created: $backup_file"
+}
+
+# Sync backup to NAS if available
+sync_to_nas() {
+    local backup_file="$1"
+    local nas_dir="$2"
+
+    # Check if NAS directory is accessible
+    if [[ ! -d "$nas_dir" ]]; then
+        log_info "NAS backup directory not accessible: $nas_dir"
+        log_info "Skipping NAS sync (local backup complete)"
+        return 0
+    fi
+
+    log_info "Syncing backup to NAS..."
+    log_verbose "Target: $nas_dir"
+
+    if [[ "$VERBOSE" == true ]]; then
+        rsync -avz --info=progress2 "$backup_file" "$nas_dir/"
+    else
+        rsync -az "$backup_file" "$nas_dir/"
+    fi
+
+    log_info "NAS sync complete"
+}
+
+# --- Main Function ---
+main() {
+    # Parse command line arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_help
+                exit 0
+                ;;
+            -v|--verbose)
+                VERBOSE=true
+                shift
+                ;;
+            -*)
+                log_error "Unknown option: $1"
+                ;;
+            *)
+                log_error "Unexpected argument: $1"
+                ;;
+        esac
+    done
+
+    log_verbose "Starting ES-DE backup check..."
+
+    # Validate source directory exists
+    if [[ ! -d "$ES_DE_DIR" ]]; then
+        log_error "ES-DE directory not found: $ES_DE_DIR"
+    fi
+
+    # Check for changes
+    if detect_changes "$ES_DE_DIR" "$LOCAL_BACKUP"; then
+        log_info "Changes detected in ES-DE directory"
+
+        # Create backup
+        create_backup "$ES_DE_DIR" "$LOCAL_BACKUP"
+
+        # Sync to NAS
+        sync_to_nas "$LOCAL_BACKUP" "$NAS_BACKUP_DIR"
+
+        log_info "Backup complete"
+    else
+        log_info "No changes detected - backup not needed"
+    fi
+}
+
+# --- Entry Point ---
+main "$@"
