@@ -993,9 +993,21 @@ def run_compare(missing_file: Path, rom_dir: Path, output_dir: Path,
         'matches_file': str(matches_out),
     }
 
+    # Category breakdown
+    from collections import Counter
+    truly_cats = Counter(e.get('category', 'base') for e in truly_missing)
+    match_cats = Counter(e.get('category', 'base') for e in possible_matches)
+
+    def fmt_cats(counter):
+        return ", ".join(f"{cat}: {n}" for cat, n in counter.most_common())
+
     print("\n  Results:", file=sys.stderr)
     print(f"    Truly missing: {len(truly_missing)} (need to acquire)", file=sys.stderr)
+    if truly_cats:
+        print(f"      {fmt_cats(truly_cats)}", file=sys.stderr)
     print(f"    Possible matches: {len(possible_matches)} (may need replacement)", file=sys.stderr)
+    if match_cats:
+        print(f"      {fmt_cats(match_cats)}", file=sys.stderr)
     print(f"    Output: {missing_out.name}, {matches_out.name}", file=sys.stderr)
 
     return stats
@@ -2615,17 +2627,17 @@ def cmd_check(args):
 
                 if all_patches:
                     sys_name = get_system_name(system_id)
-                    print(f"\nDownloading {len(all_patches)} patches to "
-                          f"{patch_dir}/{sys_name}/...", file=sys.stderr)
                     success_count = 0
                     fail_count = 0
-                    for patch in all_patches:
+                    pbar = make_progress_bar(
+                        all_patches, total=len(all_patches),
+                        desc=f"Downloading to {patch_dir}/{sys_name}")
+                    for patch in pbar:
                         ok, msg = download_patch(patch['patch_url'], patch_dir, sys_name)
                         if ok:
                             success_count += 1
                         else:
                             fail_count += 1
-                            print(f"  Failed: {msg}", file=sys.stderr)
                         time.sleep(0.3)  # Rate limit downloads
                     print(f"Patches: {success_count} downloaded, {fail_count} failed", file=sys.stderr)
                 else:
@@ -3417,17 +3429,17 @@ def cmd_dedup(args):
 
                 if all_patches:
                     sys_name = get_system_name(system_id)
-                    print(f"\nDownloading {len(all_patches)} patches to "
-                          f"{patch_dir}/{sys_name}/...", file=sys.stderr)
                     success_count = 0
                     fail_count = 0
-                    for patch in all_patches:
+                    pbar = make_progress_bar(
+                        all_patches, total=len(all_patches),
+                        desc=f"Downloading to {patch_dir}/{sys_name}")
+                    for patch in pbar:
                         ok, msg = download_patch(patch['patch_url'], patch_dir, sys_name)
                         if ok:
                             success_count += 1
                         else:
                             fail_count += 1
-                            print(f"  Failed: {msg}", file=sys.stderr)
                         time.sleep(0.3)  # Rate limit downloads
                     print(f"Patches: {success_count} downloaded, {fail_count} failed", file=sys.stderr)
                 else:
