@@ -3,8 +3,9 @@ set -g default-terminal "tmux-256color"
 # Update environment variables when attaching from a different session
 set -g update-environment "DISPLAY WAYLAND_DISPLAY SSH_AUTH_SOCK"
 
-# Fix DISPLAY for clipboard in existing panes after attaching (prefix + E)
-bind e run-shell "tmux setenv DISPLAY $DISPLAY" \; send-keys 'eval "$(tmux show-env -s DISPLAY)"' Enter
+set -g display-time 2000  # 2 seconds
+# Fix environment for clipboard/SSH in existing panes after attaching (prefix + e)
+bind e send-keys 'eval "$(tmux show-env -s DISPLAY 2>/dev/null)"; eval "$(tmux show-env -s WAYLAND_DISPLAY 2>/dev/null)"; eval "$(tmux show-env -s SSH_AUTH_SOCK 2>/dev/null)"; tmux display-message "Environment updated (DISPLAY=${DISPLAY:-unset})"' C-m
 
 # remap prefix from 'C-b' to 'C-a'
 #unbind C-b

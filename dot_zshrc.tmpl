@@ -55,6 +55,16 @@ source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 {{- end }}
 
+# Auto-sync tmux environment on each prompt
+if [[ -n "$TMUX" ]]; then
+    function _tmux_update_env() {
+        eval "$(tmux show-env -s DISPLAY 2>/dev/null)"
+        eval "$(tmux show-env -s WAYLAND_DISPLAY 2>/dev/null)"
+        eval "$(tmux show-env -s SSH_AUTH_SOCK 2>/dev/null)"
+    }
+    add-zsh-hook precmd _tmux_update_env
+fi
+
 # Compilation flags
 export ARCHFLAGS="-arch x86_64"
 
