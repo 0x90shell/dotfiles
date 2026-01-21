@@ -34,6 +34,31 @@ bind -n M-z resize-pane -Z
 bind-key S-Left swap-window -t -1
 bind-key S-Right swap-window -t +1
 
+# Toggle outer tmux off/on with F12 or prefix + a
+bind -T root F12 \
+    set prefix None \;\
+    set key-table off \;\
+    set status-style "fg=colour245,bg=colour238" \;\
+    refresh-client -S
+
+bind -T off F12 \
+    set -u prefix \;\
+    set -u key-table \;\
+    set -u status-style \;\
+    refresh-client -S
+
+bind a \
+    set prefix None \;\
+    set key-table off \;\
+    set status-style "fg=colour245,bg=colour238" \;\
+    refresh-client -S
+
+bind -T off a \
+    set -u prefix \;\
+    set -u key-table \;\
+    set -u status-style \;\
+    refresh-client -S
+
 # Enable mouse mode (tmux 2.1 and above)
 set -g mouse on
 
