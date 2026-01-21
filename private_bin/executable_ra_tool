@@ -2395,24 +2395,20 @@ def cmd_check(args):
     def out(msg=""):
         print(msg, file=output)
 
-    # Summary header (always shown)
-    out("\n" + "=" * 70)
-    out("RETROACHIEVEMENTS COMPATIBILITY REPORT")
-    out("=" * 70)
-    out(f"System ID: {system_id}")
-    out(f"ROM Directory: {rom_dir}")
-    out(f"Database: {cached.get('game_count', '?')} games, {cached.get('hash_count', '?')} hashes")
-    cache_age = get_cache_age_str(system_id)
-    out(f"Cache: {cache_age}")
-    out("\nResults:")
-    out(f"  ✓ Supported (achievements): {len(supported)}")
-    out(f"  ○ Supported (no achievements): {len(supported_no_ach)}")
-    out(f"  ✗ Not found: {len(unsupported)}")
-    if errors:
-        out(f"  ! Errors: {len(errors)}")
-
-    # Detailed sections (skip if summary_only)
+    # Full report (skip if summary_only)
     if not summary_only:
+        out("\n" + "=" * 70)
+        out("RETROACHIEVEMENTS COMPATIBILITY REPORT")
+        out("=" * 70)
+        out(f"System ID: {system_id}")
+        out(f"ROM Directory: {rom_dir}")
+        out(f"Database: {cached.get('game_count', '?')} games, {cached.get('hash_count', '?')} hashes")
+        out("\nResults:")
+        out(f"  ✓ Supported (achievements): {len(supported)}")
+        out(f"  ○ Supported (no achievements): {len(supported_no_ach)}")
+        out(f"  ✗ Not found: {len(unsupported)}")
+        if errors:
+            out(f"  ! Errors: {len(errors)}")
         # Supported with achievements
         if supported:
             out("\n" + "=" * 70)
