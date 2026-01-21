@@ -4,7 +4,7 @@ set -g default-terminal "tmux-256color"
 set -g update-environment "DISPLAY WAYLAND_DISPLAY SSH_AUTH_SOCK"
 
 # Fix DISPLAY for clipboard in existing panes after attaching (prefix + E)
-bind E run-shell "tmux setenv DISPLAY $DISPLAY" \; send-keys 'eval "$(tmux show-env -s DISPLAY)"' Enter
+bind e run-shell "tmux setenv DISPLAY $DISPLAY" \; send-keys 'eval "$(tmux show-env -s DISPLAY)"' Enter
 
 # remap prefix from 'C-b' to 'C-a'
 #unbind C-b
