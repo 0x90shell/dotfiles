@@ -145,12 +145,41 @@ METACRITIC_CSV = DATASETS_DIR / "metacritic.csv"
 RAWG_CSV = DATASETS_DIR / "rawg.csv"
 
 
+def _decompress_with_system_7z(archive_path: Path, csv_path: Path) -> bool:
+    """Try to decompress using system 7z command. Returns True on success."""
+    import subprocess
+    result = subprocess.run(
+        ['7z', 'x', '-y', '-o' + str(csv_path.parent), str(archive_path)],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        log_info(f"Warning: 7z failed: {result.stderr.strip()}")
+        return False
+    return True
+
+
+def _decompress_with_py7zr(archive_path: Path, csv_path: Path) -> bool:
+    """Try to decompress using py7zr library. Returns True on success."""
+    try:
+        import py7zr
+        with py7zr.SevenZipFile(archive_path, mode='r') as z:
+            z.extractall(path=csv_path.parent)
+        return True
+    except ImportError:
+        return False
+    except Exception as e:
+        log_info(f"Warning: py7zr failed: {e}")
+        return False
+
+
 def ensure_dataset_decompressed(csv_path: Path) -> bool:
     """Decompress .7z dataset if needed.
 
     Checks for {csv_path}.7z and decompresses if:
     - CSV doesn't exist, or
     - 7z is newer than CSV
+
+    Uses system 7z command first, falls back to py7zr library if available.
 
     Returns True if CSV is available after this call.
     """
@@ -170,26 +199,28 @@ def ensure_dataset_decompressed(csv_path: Path) -> bool:
         log_info(f"Archive {archive_path.name} is newer, re-decompressing...")
 
     if need_decompress:
+        # Try system 7z first
         try:
-            import subprocess
-            result = subprocess.run(
-                ['7z', 'x', '-y', '-o' + str(csv_path.parent), str(archive_path)],
-                capture_output=True, text=True
-            )
-            if result.returncode != 0:
-                log_info(f"Warning: Failed to decompress {archive_path.name}: {result.stderr}")
-                if not csv_path.exists():
-                    log_info(f"  Manual fix: 7z x {archive_path}")
+            if _decompress_with_system_7z(archive_path, csv_path):
+                log_info(f"Decompressed {archive_path.name} -> {csv_path.name}")
                 return csv_path.exists()
-            log_info(f"Decompressed {archive_path.name} -> {csv_path.name}")
         except FileNotFoundError:
-            if not csv_path.exists():
-                log_info(f"Warning: 7z not found and {csv_path.name} missing.")
-                log_info("  Install p7zip: sudo apt install p7zip-full")
-                log_info(f"  Or manually decompress: cd {csv_path.parent} && 7z x {archive_path.name}")
-            else:
-                log_info("Note: 7z not found, using existing CSV (may be outdated)")
+            pass  # 7z not installed, try py7zr
+
+        # Fallback to py7zr library
+        if _decompress_with_py7zr(archive_path, csv_path):
+            log_info(f"Decompressed {archive_path.name} -> {csv_path.name} (via py7zr)")
             return csv_path.exists()
+
+        # Both methods failed
+        if not csv_path.exists():
+            log_info(f"Warning: Cannot decompress {archive_path.name}")
+            log_info("  Install 7z:  sudo pacman -S 7zip        # Arch")
+            log_info("               sudo apt install p7zip-full  # Debian/Ubuntu")
+            log_info("  Or install:  pip install py7zr")
+            log_info(f"  Or manually: cd {csv_path.parent} && 7z x {archive_path.name}")
+        else:
+            log_info("Note: Using existing CSV (may be outdated, install 7z to update)")
 
     return csv_path.exists()
 
