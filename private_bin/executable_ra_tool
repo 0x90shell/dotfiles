@@ -1041,7 +1041,12 @@ def api_request(endpoint: str, params: dict) -> dict:
         with urllib.request.urlopen(url, timeout=60) as response:
             return json.loads(response.read().decode())
     except urllib.error.HTTPError as e:
-        print(f"API Error: {e.code} {e.reason}", file=sys.stderr)
+        if e.code == 401:
+            print("Error: API authentication failed (401 Unauthorized)", file=sys.stderr)
+            print("Your RA_API_KEY may be invalid or expired.", file=sys.stderr)
+            print("Get a new key from: https://retroachievements.org/settings", file=sys.stderr)
+        else:
+            print(f"API Error: {e.code} {e.reason}", file=sys.stderr)
         sys.exit(1)
     except urllib.error.URLError as e:
         print(f"Network Error: {e.reason}", file=sys.stderr)
@@ -1083,6 +1088,11 @@ def fetch_game_hashes_page(game_id: int) -> dict:
         with urllib.request.urlopen(url, timeout=60) as response:
             data = json.loads(response.read().decode())
     except urllib.error.HTTPError as e:
+        if e.code == 401:
+            print("Error: API authentication failed (401 Unauthorized)", file=sys.stderr)
+            print("Your RA_API_KEY may be invalid or expired.", file=sys.stderr)
+            print("Get a new key from: https://retroachievements.org/settings", file=sys.stderr)
+            sys.exit(1)
         print(f"  Warning: Failed to fetch hashes for game {game_id}: {e.code}", file=sys.stderr)
         return {'game_id': game_id, 'hashes': []}
     except urllib.error.URLError as e:
@@ -2504,6 +2514,10 @@ def cmd_check(args):
     download_patches_flag = getattr(args, 'download_patches', False)
     compare_flag = getattr(args, 'compare', None)
 
+    # Validate API key early if --rom-info or --download-patches will be used
+    if rom_info_flag or download_patches_flag:
+        get_api_key()  # Exits with helpful message if not set
+
     # --compare implies --missing-list (need the file to compare against)
     if compare_flag and not missing_list_file:
         missing_list_file = True  # Will be resolved to default filename below
@@ -3277,6 +3291,10 @@ def cmd_dedup(args):
     rom_info_flag = getattr(args, 'rom_info', False)
     download_patches_flag = getattr(args, 'download_patches', False)
     compare_flag = getattr(args, 'compare', None)
+
+    # Validate API key early if --rom-info or --download-patches will be used
+    if rom_info_flag or download_patches_flag:
+        get_api_key()  # Exits with helpful message if not set
 
     # --compare implies --missing-list (need the file to compare against)
     if compare_flag and not missing_list_file:
