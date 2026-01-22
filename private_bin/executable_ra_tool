@@ -435,6 +435,7 @@ RAHASHER_REQUIRED = {
     # --- Systems with special header handling ---
     7,   # NES - needs iNES/NES 2.0 header removal
     13,  # Atari Lynx - has header that needs detection
+    18,  # Nintendo DS - uses content-based hashing, not plain MD5
 
     # --- CD-based systems (use track/sector hashing) ---
     12,  # PlayStation (PSX)
