@@ -144,6 +144,56 @@ GAMEFAQS_CSV = DATASETS_DIR / "gamefaqs.csv"
 METACRITIC_CSV = DATASETS_DIR / "metacritic.csv"
 RAWG_CSV = DATASETS_DIR / "rawg.csv"
 
+
+def ensure_dataset_decompressed(csv_path: Path) -> bool:
+    """Decompress .7z dataset if needed.
+
+    Checks for {csv_path}.7z and decompresses if:
+    - CSV doesn't exist, or
+    - 7z is newer than CSV
+
+    Returns True if CSV is available after this call.
+    """
+    archive_path = Path(str(csv_path) + '.7z')
+
+    # If no archive exists, just check if CSV exists
+    if not archive_path.exists():
+        return csv_path.exists()
+
+    # Check if decompression needed
+    need_decompress = False
+    if not csv_path.exists():
+        need_decompress = True
+        log_info(f"Dataset {csv_path.name} not found, decompressing from {archive_path.name}...")
+    elif archive_path.stat().st_mtime > csv_path.stat().st_mtime:
+        need_decompress = True
+        log_info(f"Archive {archive_path.name} is newer, re-decompressing...")
+
+    if need_decompress:
+        try:
+            import subprocess
+            result = subprocess.run(
+                ['7z', 'x', '-y', '-o' + str(csv_path.parent), str(archive_path)],
+                capture_output=True, text=True
+            )
+            if result.returncode != 0:
+                log_info(f"Warning: Failed to decompress {archive_path.name}: {result.stderr}")
+                if not csv_path.exists():
+                    log_info(f"  Manual fix: 7z x {archive_path}")
+                return csv_path.exists()
+            log_info(f"Decompressed {archive_path.name} -> {csv_path.name}")
+        except FileNotFoundError:
+            if not csv_path.exists():
+                log_info(f"Warning: 7z not found and {csv_path.name} missing.")
+                log_info("  Install p7zip: sudo apt install p7zip-full")
+                log_info(f"  Or manually decompress: cd {csv_path.parent} && 7z x {archive_path.name}")
+            else:
+                log_info("Note: 7z not found, using existing CSV (may be outdated)")
+            return csv_path.exists()
+
+    return csv_path.exists()
+
+
 # IGDB API configuration
 IGDB_TOKEN_URL = "https://id.twitch.tv/oauth2/token"
 IGDB_API_URL = "https://api.igdb.com/v4/games"
@@ -522,7 +572,8 @@ def load_gamefaqs_data() -> dict:
     if _gamefaqs_cache:
         return _gamefaqs_cache
 
-    if not GAMEFAQS_CSV.exists():
+    # Auto-decompress from .7z if needed
+    if not ensure_dataset_decompressed(GAMEFAQS_CSV):
         log_info(f"Warning: GameFAQs data not found: {GAMEFAQS_CSV}")
         return {}
 
@@ -595,7 +646,8 @@ def load_metacritic_data() -> dict:
     if _metacritic_cache:
         return _metacritic_cache
 
-    if not METACRITIC_CSV.exists():
+    # Auto-decompress from .7z if needed
+    if not ensure_dataset_decompressed(METACRITIC_CSV):
         log_info(f"Warning: Metacritic data not found: {METACRITIC_CSV}")
         return {}
 
@@ -686,7 +738,8 @@ def load_rawg_data() -> dict:
     if _rawg_cache:
         return _rawg_cache
 
-    if not RAWG_CSV.exists():
+    # Auto-decompress from .7z if needed
+    if not ensure_dataset_decompressed(RAWG_CSV):
         log_info(f"Warning: RAWG data not found: {RAWG_CSV}")
         return {}
 
