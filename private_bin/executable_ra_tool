@@ -503,115 +503,161 @@ def categorize_title(title: str) -> tuple:
 SYSTEM_ALIASES = {
     # === Nintendo Home Consoles ===
     'nes': 7, 'famicom': 7, 'fc': 7, 'nintendo': 7,
-    'fds': 7,  # FDS uses NES system ID in RA
     'snes': 3, 'super nintendo': 3, 'super famicom': 3, 'sfc': 3, 'super nes': 3,
-    'satellaview': 3, 'bs-x': 3,  # Satellaview uses SNES ID
+    'satellaview': 3, 'bs-x': 3,
     'n64': 2, 'nintendo 64': 2, 'nintendo64': 2,
-    '64dd': 2,  # 64DD uses N64 system ID
+    '64dd': 2,
     'gc': 16, 'gamecube': 16, 'ngc': 16, 'nintendo gamecube': 16,
     'wii': 19, 'nintendo wii': 19,
-    # Note: Wii U (101) and Switch don't have full RA support yet
+    'wiiu': 20, 'wii u': 20, 'nintendo wii u': 20,
 
     # === Nintendo Handhelds ===
-    'gb': 4, 'game boy': 4, 'gameboy': 4,
+    'gb': 4, 'game boy': 4, 'gameboy': 4, 'dmg': 4,
     'gbc': 6, 'game boy color': 6, 'gameboy color': 6,
     'gba': 5, 'game boy advance': 5, 'gameboy advance': 5,
     'vb': 28, 'virtual boy': 28, 'virtualboy': 28,
     'nds': 18, 'ds': 18, 'nintendo ds': 18,
-    'dsi': 18,  # DSi uses DS system ID
-    '3ds': 78, 'n3ds': 78, 'nintendo 3ds': 78,
+    'ndsi': 78, 'dsi': 78, 'nintendo dsi': 78,
+    'n3ds': 62, '3ds': 62, 'nintendo 3ds': 62,
     'pokemon mini': 24, 'pokemini': 24, 'pm': 24,
+    'gameandwatch': 60, 'game & watch': 60, 'gnw': 60, 'g&w': 60,
+
+    # === Nintendo Add-ons ===
+    'fds': 81, 'famicom disk system': 81, 'disk system': 81,
 
     # === Sega Home Consoles ===
     'sg1000': 33, 'sg-1000': 33, 'sg 1000': 33,
     'sms': 11, 'master system': 11, 'mastersystem': 11, 'sega master system': 11,
     'genesis': 1, 'mega drive': 1, 'megadrive': 1, 'md': 1, 'sega genesis': 1,
     '32x': 10, 'sega 32x': 10, 'super 32x': 10, 'mega 32x': 10,
-    'sega cd': 56, 'mega cd': 56, 'segacd': 56, 'megacd': 56, 'mcd': 56,
+    'segacd': 9, 'sega cd': 9, 'mega cd': 9, 'megacd': 9, 'mcd': 9,
     'saturn': 39, 'sega saturn': 39,
     'dreamcast': 40, 'dc': 40, 'sega dreamcast': 40,
 
     # === Sega Handhelds ===
     'gg': 15, 'game gear': 15, 'gamegear': 15, 'sega game gear': 15,
+    'segapico': 68, 'sega pico': 68, 'pico': 68,
+    'megaduck': 69, 'mega duck': 69,
 
     # === Sony ===
     'ps1': 12, 'psx': 12, 'playstation': 12, 'playstation 1': 12, 'psone': 12,
     'ps2': 21, 'playstation 2': 21, 'playstation2': 21,
     'psp': 41, 'playstation portable': 41,
-    # Note: PS Vita (63), PS3 (not supported with achievements)
+
+    # === Microsoft ===
+    'xbox': 22, 'microsoft xbox': 22, 'og xbox': 22,
 
     # === NEC / PC Engine / TurboGrafx ===
     'pce': 8, 'pc engine': 8, 'pcengine': 8, 'turbografx': 8, 'tg16': 8,
     'turbografx-16': 8, 'turbografx 16': 8,
-    'supergrafx': 8, 'sgx': 8,  # SuperGrafx uses PCE ID
-    'pce cd': 76, 'pc engine cd': 76, 'turbografx cd': 76, 'pcecd': 76,
+    'supergrafx': 8, 'sgx': 8,
+    'pcenginecd': 76, 'pce cd': 76, 'pc engine cd': 76, 'turbografx cd': 76, 'pcecd': 76,
     'pcfx': 49, 'pc-fx': 49, 'pc fx': 49,
 
     # === SNK / Neo Geo ===
     'neogeo': 14, 'neo geo': 14, 'ng': 14, 'aes': 14, 'mvs': 14,
-    'neo geo cd': 56, 'neogeocd': 56, 'ngcd': 56,  # Check actual ID
-    'ngp': 14, 'neo geo pocket': 14, 'neogeopocket': 14,  # Check actual ID
-    'ngpc': 14, 'neo geo pocket color': 14,  # Check actual ID
+    'neogeocd': 56, 'neo geo cd': 56, 'ngcd': 56,
+    'ngp': 14, 'neo geo pocket': 14, 'neogeopocket': 14,
+    'ngpc': 14, 'neo geo pocket color': 14,
 
     # === Atari ===
-    'atari 2600': 25, '2600': 25, 'a2600': 25, 'vcs': 25, 'atari2600': 25,
-    'atari 5200': 79, '5200': 79, 'a5200': 79, 'atari5200': 79,
-    'atari 7800': 51, '7800': 51, 'a7800': 51, 'atari7800': 51,
-    'lynx': 13, 'atari lynx': 13, 'atarilynx': 13,
-    'jaguar': 17, 'atari jaguar': 17, 'atarijaguar': 17, 'jag': 17,
-    'jaguar cd': 77, 'jaguarcd': 77,
-    'atari st': 42, 'atarist': 42, 'st': 42,
-    'atari 800': 25,  # Check actual ID - might share with 2600 or separate
+    'atari2600': 25, 'atari 2600': 25, '2600': 25, 'a2600': 25, 'vcs': 25,
+    'atari5200': 50, 'atari 5200': 50, '5200': 50, 'a5200': 50,
+    'atari7800': 51, 'atari 7800': 51, '7800': 51, 'a7800': 51,
+    'atarilynx': 13, 'atari lynx': 13, 'lynx': 13,
+    'atarijaguar': 17, 'atari jaguar': 17, 'jaguar': 17, 'jag': 17,
+    'atarijaguarcd': 77, 'jaguar cd': 77, 'jaguarcd': 77,
+    'atarist': 36, 'atari st': 36, 'st': 36,
 
     # === Other Consoles ===
-    '3do': 43, '3do interactive': 43,
-    'coleco': 44, 'colecovision': 44, 'coleco vision': 44,
-    'intellivision': 45, 'intv': 45,
+    '3do': 43, '3do interactive': 43, 'panasonic 3do': 43,
+    'cdimono1': 42, 'cdi': 42, 'cd-i': 42, 'philips cdi': 42, 'philips cd-i': 42,
+    'colecovision': 44, 'coleco': 44, 'coleco vision': 44,
+    'intellivision': 45, 'intv': 45, 'mattel intellivision': 45,
     'vectrex': 46, 'gce vectrex': 46,
-    'odyssey2': 23, 'odyssey 2': 23, 'o2': 23, 'videopac': 23,
-    'channel f': 57, 'fairchild': 57, 'fairchild channel f': 57,
+    'odyssey2': 23, 'odyssey 2': 23, 'o2': 23, 'videopac': 23, 'magnavox odyssey 2': 23,
+    'channelf': 57, 'channel f': 57, 'fairchild': 57, 'fairchild channel f': 57,
+    'arcadia': 73, 'arcadia 2001': 73,
+    'vc4000': 74, 'interton vc 4000': 74,
+    'supervision': 63, 'watara supervision': 63,
+    'ngage': 61, 'n-gage': 61, 'nokia n-gage': 61,
+    'cassettevision': 54, 'cassette vision': 54,
+    'supercassettevision': 55, 'super cassette vision': 55,
 
     # === WonderSwan ===
     'wonderswan': 53, 'ws': 53,
-    'wonderswancolor': 53, 'wsc': 53, 'wonderswan color': 53,  # Uses same ID
+    'wonderswancolor': 53, 'wsc': 53, 'wonderswan color': 53,
 
     # === Computers ===
-    'msx': 29, 'msx1': 29,
-    'msx2': 29,  # Shares ID with MSX
+    'msx': 29, 'msx1': 29, 'msx2': 29,
     'apple2': 38, 'apple ii': 38, 'appleii': 38, 'apple 2': 38,
-    'c64': 37, 'commodore 64': 37, 'commodore64': 37,
-    'zx spectrum': 80, 'zxspectrum': 80, 'spectrum': 80, 'speccy': 80,
-    'amstrad cpc': 47, 'amstradcpc': 47, 'cpc': 47,
-    'pc8800': 47,  # Check actual ID
-    'pc9800': 47,  # Check actual ID
+    'c64': 30, 'commodore 64': 30, 'commodore64': 30,
+    'vic20': 34, 'vic-20': 34, 'commodore vic-20': 34,
+    'amiga': 35, 'commodore amiga': 35,
+    'zxspectrum': 59, 'zx spectrum': 59, 'spectrum': 59, 'speccy': 59,
+    'zx81': 31, 'sinclair zx81': 31,
+    'oric': 32, 'oric-1': 32, 'oric atmos': 32,
+    'amstradcpc': 37, 'amstrad cpc': 37, 'cpc': 37,
+    'pc88': 47, 'pc8800': 47, 'pc-8800': 47, 'pc-8000': 47,
+    'pc98': 48, 'pc9800': 48, 'pc-9800': 48,
+    'x68000': 52, 'sharp x68000': 52,
+    'x1': 64, 'sharp x1': 64,
+    'fmtowns': 58, 'fm towns': 58,
+    'to8': 66, 'thomson to8': 66,
+    'pc6000': 67, 'pc-6000': 67,
+    'ti83': 79, 'ti-83': 79,
+    'dos': 26, 'ms-dos': 26, 'msdos': 26,
 
     # === Arcade ===
     'arcade': 27,
 
     # === Fantasy Consoles ===
-    # Note: PICO-8 and TIC-80 may not have RA support
+    'tic80': 65, 'tic-80': 65,
+    'arduboy': 71,
+    'wasm4': 72, 'wasm-4': 72,
+    'uzebox': 80,
 }
 
 # Reverse mapping: system ID -> canonical short name (for filenames)
+# Uses ES-DE naming conventions for compatibility
 SYSTEM_ID_TO_NAME = {
-    # Nintendo
-    7: 'nes', 3: 'snes', 2: 'n64', 16: 'gc', 19: 'wii',
-    4: 'gb', 6: 'gbc', 5: 'gba', 28: 'vb', 18: 'nds', 78: '3ds', 24: 'pokemini',
-    # Sega
-    33: 'sg1000', 11: 'sms', 1: 'genesis', 10: '32x', 56: 'segacd',
+    # Nintendo Home Consoles
+    7: 'nes', 3: 'snes', 2: 'n64', 16: 'gc', 19: 'wii', 20: 'wiiu',
+    # Nintendo Handhelds
+    4: 'gb', 6: 'gbc', 5: 'gba', 28: 'vb', 18: 'nds', 78: 'ndsi',
+    62: 'n3ds', 24: 'pokemini', 60: 'gameandwatch',
+    # Nintendo Add-ons
+    81: 'fds',
+    # Sega Home Consoles
+    33: 'sg1000', 11: 'sms', 1: 'genesis', 10: '32x', 9: 'segacd',
     39: 'saturn', 40: 'dreamcast',
+    # Sega Handhelds
+    15: 'gamegear', 68: 'segapico', 69: 'megaduck',
     # Sony
     12: 'psx', 21: 'ps2', 41: 'psp',
+    # Microsoft
+    22: 'xbox',
     # Atari
-    25: 'atari2600', 51: 'atari7800', 77: 'atarilynx', 17: 'atarijaguar',
+    25: 'atari2600', 50: 'atari5200', 51: 'atari7800',
+    13: 'atarilynx', 17: 'atarijaguar', 77: 'atarijaguarcd', 36: 'atarist',
     # NEC
-    8: 'pce', 76: 'pcfx',
+    8: 'pce', 76: 'pcenginecd', 49: 'pcfx',
     # SNK
-    14: 'neogeo', 80: 'ngp',  # Note: 56 is Sega CD, Neo Geo CD TBD
-    # Other
-    46: 'vectrex', 23: 'odyssey2', 57: 'channelf',
-    53: 'wonderswan', 29: 'msx', 38: 'apple2', 37: 'c64', 47: 'amstrad',
+    14: 'ngp', 56: 'neogeocd',
+    # Other Consoles
+    43: '3do', 42: 'cdimono1', 44: 'colecovision', 45: 'intellivision',
+    46: 'vectrex', 23: 'odyssey2', 57: 'channelf', 53: 'wonderswan',
+    73: 'arcadia', 74: 'vc4000', 63: 'supervision', 61: 'ngage',
+    54: 'cassettevision', 55: 'supercassettevision',
+    # Computers
+    29: 'msx', 38: 'apple2', 30: 'c64', 34: 'vic20', 35: 'amiga',
+    37: 'amstradcpc', 47: 'pc88', 48: 'pc98', 52: 'x68000', 64: 'x1',
+    58: 'fmtowns', 59: 'zxspectrum', 31: 'zx81', 32: 'oric', 66: 'to8',
+    67: 'pc6000', 79: 'ti83', 26: 'dos',
+    # Arcade
     27: 'arcade',
+    # Fantasy Consoles
+    65: 'tic80', 71: 'arduboy', 72: 'wasm4', 80: 'uzebox',
 }
 
 
