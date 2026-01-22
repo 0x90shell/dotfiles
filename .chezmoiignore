@@ -32,6 +32,7 @@ bin/steampull
 bin/ds3-search
 bin/rom-bulkconvert
 bin/ra_tool
+bin/.ratool_datasets
 bin/rgt_downloader
 bin/ps2-bootcheck
 bin/post-skraper
@@ -39,6 +40,7 @@ bin/jstimeout
 bin/.jstimeout.devices
 bin/.jstimeout-source/
 bin/yaycache
+.config/ra_tool
 .config/xfce4/panel/datetime-12.rc
 .config/xfce4/panel/launcher-23
 .config/xfce4/panel/launcher-24

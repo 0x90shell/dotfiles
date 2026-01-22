@@ -8,21 +8,24 @@ Features:
 - Auto-pull if cache missing or older than 6 months
 - Compare local collection against RA database
 - Generate compatibility reports
+- Enrich missing game lists with critic/user scores from IGDB, Metacritic, GameFAQs, RAWG
 
 Usage:
   ra_tool.py systems                     # List all RA systems with IDs
   ra_tool.py pull <system_id|all>        # Download hash DB for system(s)
   ra_tool.py check <system_id> <rom_dir> # Check ROMs against cached DB
   ra_tool.py hash <system_id> <file>     # Hash a single file
+  ra_tool.py scores <missing_file>       # Add scores to existing missing file
 
-Environment:
-  RA_API_KEY  - Your RetroAchievements Web API Key (required for pull)
-  RA_HASHER   - Path to RAHasher executable (default: searches PATH)
+Config:
+  ~/.config/ra_tool/config.json - API keys (ra_api_key, igdb_client_id, igdb_client_secret)
+  Environment variables RA_API_KEY, IGDB_CLIENT_ID, IGDB_CLIENT_SECRET override config file
 
 Author: Generated for Zach's ROM management workflow
 """
 
 import argparse
+import csv
 import hashlib
 import json
 import os
@@ -33,8 +36,10 @@ import sys
 import tempfile
 import time
 
-import urllib.request
 import urllib.error
+import urllib.parse
+import urllib.request
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -69,8 +74,755 @@ def log_info(msg):
 # Default cache directory
 CACHE_DIR = Path.home() / ".cache" / "ra_tool"
 
+# Config directory
+CONFIG_DIR = Path.home() / ".config" / "ra_tool"
+CONFIG_FILE = CONFIG_DIR / "config.json"
+
+# Dataset directory (relative to script location)
+SCRIPT_DIR = Path(__file__).parent
+DATASETS_DIR = SCRIPT_DIR / ".ratool_datasets"
+
 # Cache expiry in days (6 months)
 CACHE_EXPIRY_DAYS = 180
+
+# Global config cache
+_config_cache: Optional[dict] = None
+
+
+def load_config() -> dict:
+    """Load configuration from config file with env var overrides.
+
+    Config file: ~/.config/ra_tool/config.json
+    {
+      "ra_api_key": "...",
+      "igdb_client_id": "...",
+      "igdb_client_secret": "..."
+    }
+
+    Environment variables override config file:
+    - RA_API_KEY overrides ra_api_key
+    - IGDB_CLIENT_ID overrides igdb_client_id
+    - IGDB_CLIENT_SECRET overrides igdb_client_secret
+    """
+    global _config_cache
+    if _config_cache is not None:
+        return _config_cache
+
+    config = {}
+
+    # Load from config file if it exists
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Warning: Could not read config file: {e}", file=sys.stderr)
+
+    # Environment variables override config file
+    if os.environ.get("RA_API_KEY"):
+        config["ra_api_key"] = os.environ["RA_API_KEY"]
+    if os.environ.get("IGDB_CLIENT_ID"):
+        config["igdb_client_id"] = os.environ["IGDB_CLIENT_ID"]
+    if os.environ.get("IGDB_CLIENT_SECRET"):
+        config["igdb_client_secret"] = os.environ["IGDB_CLIENT_SECRET"]
+
+    _config_cache = config
+    return config
+
+
+# ============================================================================
+# GAME SCORE INTEGRATION
+# ============================================================================
+# Dataset sources:
+# - GameFAQs: https://www.kaggle.com/datasets/patkle/gamefaqs-82100-rankings-length-and-difficulty
+# - Metacritic: https://www.kaggle.com/datasets/zaireali/metacritic-games-scrape
+# - RAWG: https://github.com/trung-hn/video-game-encyclopedia
+# ============================================================================
+
+# Dataset file paths
+GAMEFAQS_CSV = DATASETS_DIR / "gamefaqs.csv"
+METACRITIC_CSV = DATASETS_DIR / "metacritic.csv"
+RAWG_CSV = DATASETS_DIR / "rawg.csv"
+
+# IGDB API configuration
+IGDB_TOKEN_URL = "https://id.twitch.tv/oauth2/token"
+IGDB_API_URL = "https://api.igdb.com/v4/games"
+
+# Platform mappings: RA/ES-DE name -> GameFAQs abbreviation
+SCORE_PLATFORM_TO_GAMEFAQS = {
+    'nes': 'NES', 'famicom': 'NES',
+    'snes': 'SNES', 'sfc': 'SNES',
+    'n64': 'N64',
+    'gc': 'GCN', 'gamecube': 'GCN',
+    'wii': 'WII',
+    'wiiu': 'WIIU',
+    'gb': 'GB', 'gameboy': 'GB',
+    'gbc': 'GBC',
+    'gba': 'GBA',
+    'nds': 'DS', 'ds': 'DS',
+    'n3ds': '3DS', '3ds': '3DS',
+    'genesis': 'GEN', 'megadrive': 'GEN', 'md': 'GEN',
+    'sms': 'SMS', 'mastersystem': 'SMS',
+    'segacd': 'SCD',
+    'saturn': 'SAT',
+    'dreamcast': 'DC',
+    'gamegear': 'GG',
+    'psx': 'PS', 'ps1': 'PS', 'playstation': 'PS',
+    'ps2': 'PS2',
+    'psp': 'PSP',
+    'pce': 'TG16', 'pcengine': 'TG16', 'turbografx': 'TG16',
+    'pcenginecd': 'TGCD',
+    'neogeo': 'NEO',
+    'arcade': 'ARC',
+    'atari2600': '2600',
+    'atari7800': '7800',
+    'atarilynx': 'LYNX',
+    'atarijaguar': 'JAG',
+    'colecovision': 'CVIS',
+    'intellivision': 'INTV',
+    'msx': 'MSX',
+    'c64': 'C64',
+    'amiga': 'AMI',
+    'dos': 'PC',
+}
+
+# Platform mappings: RA/ES-DE name -> RAWG platform names
+SCORE_PLATFORM_TO_RAWG = {
+    'nes': 'NES',
+    'snes': 'SNES',
+    'n64': 'Nintendo 64',
+    'gc': 'GameCube',
+    'wii': 'Wii',
+    'wiiu': 'Wii U',
+    'gb': 'Game Boy',
+    'gbc': 'Game Boy Color',
+    'gba': 'Game Boy Advance',
+    'nds': 'Nintendo DS',
+    'n3ds': 'Nintendo 3DS',
+    'genesis': 'Genesis',
+    'sms': 'SEGA Master System',
+    'segacd': 'SEGA CD',
+    'saturn': 'SEGA Saturn',
+    'dreamcast': 'Dreamcast',
+    'gamegear': 'Game Gear',
+    'psx': 'PlayStation',
+    'ps2': 'PlayStation 2',
+    'psp': 'PSP',
+    'neogeo': 'Neo Geo',
+}
+
+# Metacritic platform columns (for per-platform user reviews)
+SCORE_PLATFORM_TO_METACRITIC_COL = {
+    'psx': 'playStationUserReviews/score',
+    'ps2': 'playStation2UserReviews/score',
+    'ps3': 'playStation3UserReviews/score',
+    'n64': 'nintendo64UserReviews/score',
+    'gc': 'gameCubeUserReviews/score',
+    'wii': 'wiiUserReviews/score',
+    'wiiu': 'wiiUUserReviews/score',
+    'gba': 'gameBoyAdvanceUserReviews/score',
+    'nds': 'dsUserReviews/score',
+    'n3ds': '3DsUserReviews/score',
+    'dreamcast': 'dreamcastUserReviews/score',
+    'psp': 'pspUserReviews/score',
+    'xbox': 'xboxUserReviews/score',
+}
+
+# IGDB platform IDs (https://api-docs.igdb.com/#platform)
+SCORE_PLATFORM_TO_IGDB = {
+    'nes': 18,        # Nintendo Entertainment System
+    'snes': 19,       # Super Nintendo Entertainment System
+    'n64': 4,         # Nintendo 64
+    'gc': 21,         # Nintendo GameCube
+    'wii': 5,         # Wii
+    'wiiu': 41,       # Wii U
+    'gb': 33,         # Game Boy
+    'gbc': 22,        # Game Boy Color
+    'gba': 24,        # Game Boy Advance
+    'nds': 20,        # Nintendo DS
+    'n3ds': 37,       # Nintendo 3DS
+    'genesis': 29,    # Sega Mega Drive/Genesis
+    'sms': 64,        # Sega Master System
+    'segacd': 78,     # Sega CD
+    'saturn': 32,     # Sega Saturn
+    'dreamcast': 23,  # Dreamcast
+    'gamegear': 35,   # Sega Game Gear
+    'psx': 7,         # PlayStation
+    'ps2': 8,         # PlayStation 2
+    'psp': 38,        # PlayStation Portable
+    'pce': 86,        # TurboGrafx-16/PC Engine
+    'pcenginecd': 150,  # TurboGrafx CD
+    'neogeo': 80,     # Neo Geo AES
+    'arcade': 52,     # Arcade
+    'atari2600': 59,  # Atari 2600
+    'atari7800': 60,  # Atari 7800
+    'atarilynx': 61,  # Atari Lynx
+    'atarijaguar': 62,  # Atari Jaguar
+    'colecovision': 68,  # ColecoVision
+    'intellivision': 67,  # Intellivision
+    'msx': 27,        # MSX
+    'c64': 15,        # Commodore C64/128
+    'amiga': 16,      # Amiga
+    'dos': 13,        # DOS
+}
+
+
+@dataclass
+class ScoreResult:
+    """Score from a single source."""
+    source: str
+    critic_score: Optional[float] = None  # 0-100
+    user_score: Optional[float] = None    # 0-100
+    length_hours: Optional[float] = None
+    difficulty: Optional[float] = None    # 0-5
+    completion_ratio: Optional[float] = None  # 0-100
+
+
+@dataclass
+class AggregatedScores:
+    """Aggregated scores from all sources."""
+    title: str
+    platform: str
+    critic_score: Optional[float] = None
+    user_score: Optional[float] = None
+    combined_score: Optional[float] = None
+    length_hours: Optional[float] = None
+    difficulty: Optional[float] = None
+    completion_ratio: Optional[float] = None
+    sources: list = field(default_factory=list)
+
+    def __str__(self) -> str:
+        critic = f"{self.critic_score:.0f}c" if self.critic_score else "--"
+        user = f"{self.user_score:.0f}u" if self.user_score else "--"
+        combined = f"{self.combined_score:.0f}" if self.combined_score else "--"
+        length = f"{self.length_hours:.0f}h" if self.length_hours else "--"
+        diff = f"{self.difficulty:.1f}" if self.difficulty else "--"
+        sources = ",".join(s.source for s in self.sources)
+        return f"{combined} ({critic}/{user}) len={length} diff={diff} [{sources}]"
+
+
+# IGDB token cache
+_igdb_token: Optional[dict] = None
+
+
+def get_igdb_credentials() -> Optional[dict]:
+    """Get IGDB credentials from config."""
+    config = load_config()
+    client_id = config.get("igdb_client_id")
+    client_secret = config.get("igdb_client_secret")
+    if client_id and client_secret:
+        return {"client_id": client_id, "client_secret": client_secret}
+    return None
+
+
+def get_igdb_token() -> Optional[str]:
+    """Get OAuth token from Twitch for IGDB API."""
+    global _igdb_token
+
+    # Check cached token in memory
+    if _igdb_token:
+        expires_at = _igdb_token.get('expires_at')
+        if expires_at and datetime.now() < datetime.fromisoformat(expires_at):
+            return _igdb_token['access_token']
+
+    # Check file cache
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    token_file = CACHE_DIR / "igdb_token.json"
+    if token_file.exists():
+        try:
+            with open(token_file) as f:
+                cached = json.load(f)
+            expires_at = cached.get('expires_at')
+            if expires_at and datetime.now() < datetime.fromisoformat(expires_at):
+                _igdb_token = cached
+                return cached['access_token']
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    # Need new token
+    creds = get_igdb_credentials()
+    if not creds:
+        return None
+
+    try:
+        data = urllib.parse.urlencode({
+            'client_id': creds['client_id'],
+            'client_secret': creds['client_secret'],
+            'grant_type': 'client_credentials'
+        }).encode()
+
+        req = urllib.request.Request(IGDB_TOKEN_URL, data=data, method='POST')
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            result = json.loads(resp.read().decode())
+
+        # Calculate expiry (tokens last ~60 days, but refresh at 50 days)
+        expires_in = result.get('expires_in', 5184000)  # Default 60 days
+        expires_at = datetime.now() + timedelta(seconds=expires_in - 864000)  # Refresh 10 days early
+
+        _igdb_token = {
+            'access_token': result['access_token'],
+            'expires_at': expires_at.isoformat()
+        }
+
+        # Save to cache
+        with open(token_file, 'w') as f:
+            json.dump(_igdb_token, f)
+
+        log_info(f"Obtained new IGDB token (expires: {expires_at})")
+        return result['access_token']
+
+    except Exception as e:
+        log_info(f"Failed to get IGDB token: {e}")
+        return None
+
+
+def normalize_score_title(title: str) -> str:
+    """Normalize game title for fuzzy matching across score databases.
+
+    - Remove ~Hack~, ~Homebrew~, [Subset] prefixes
+    - Remove region tags (USA), (Europe), (Japan)
+    - Remove version tags (Rev A), (v1.1)
+    - Handle "The" prefix variations
+    - Normalize punctuation
+    - Lowercase, strip extra whitespace
+    """
+    # Remove RA-specific prefixes
+    title = re.sub(r'^~(Hack|Homebrew|Prototype|Demo|Unlicensed)~\s*', '', title)
+    title = re.sub(r'\[Subset\s*-[^\]]+\]\s*', '', title)
+
+    # Remove region tags
+    title = re.sub(r'\s*\((USA|Europe|Japan|World|En|Ja|Fr|De|Es|It|Ko|Zh)\)', '', title, flags=re.I)
+    title = re.sub(r'\s*\((U|E|J|W)\)', '', title, flags=re.I)
+
+    # Remove version tags
+    title = re.sub(r'\s*\(Rev\s*[A-Z0-9]+\)', '', title, flags=re.I)
+    title = re.sub(r'\s*\(v[\d.]+\)', '', title, flags=re.I)
+    title = re.sub(r'\s*\(Beta[^)]*\)', '', title, flags=re.I)
+
+    # Remove other parenthetical info
+    title = re.sub(r'\s*\([^)]*\)\s*$', '', title)
+
+    # Normalize punctuation
+    title = title.replace('&', ' and ')
+    title = title.replace(': ', ' ')
+    title = title.replace(' - ', ' ')
+    title = re.sub(r'[^\w\s]', '', title)
+
+    # Handle "The" prefix - remove for matching
+    if title.lower().startswith('the '):
+        title = title[4:]
+
+    # Normalize whitespace and case
+    title = ' '.join(title.split())
+    title = title.lower()
+
+    return title
+
+
+def lookup_igdb(title: str, platform: str) -> Optional[ScoreResult]:
+    """Look up game in IGDB."""
+    token = get_igdb_token()
+    if not token:
+        return None
+
+    creds = get_igdb_credentials()
+    if not creds:
+        return None
+
+    # Get platform ID
+    igdb_platform = SCORE_PLATFORM_TO_IGDB.get(platform.lower())
+
+    # Normalize title for search
+    norm_title = normalize_score_title(title)
+
+    # Build query - search without platform filter, then filter results
+    query = (f'search "{norm_title}"; fields name,aggregated_rating,aggregated_rating_count,'
+             f'rating,rating_count,total_rating,platforms; limit 15;')
+
+    try:
+        req = urllib.request.Request(
+            IGDB_API_URL,
+            data=query.encode('utf-8'),
+            headers={
+                'Client-ID': creds['client_id'],
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'text/plain'
+            },
+            method='POST'
+        )
+
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            results = json.loads(resp.read().decode())
+
+        if not results:
+            return None
+
+        # Find best match - prefer exact title match on target platform
+        best = None
+        best_score = -1
+
+        for game in results:
+            game_norm = normalize_score_title(game.get('name', ''))
+            platforms = game.get('platforms', [])
+            has_platform = igdb_platform in platforms if igdb_platform else True
+            has_scores = game.get('aggregated_rating') or game.get('rating')
+
+            # Skip entries without scores
+            if not has_scores:
+                continue
+
+            # Scoring: exact title match + platform match is best
+            score = 0
+            if game_norm == norm_title:
+                score += 100
+            if has_platform:
+                score += 50
+            if game.get('aggregated_rating'):  # Prefer entries with critic scores
+                score += 10
+
+            if score > best_score:
+                best = game
+                best_score = score
+
+        if not best:
+            return None
+
+        # Extract scores
+        critic_score = best.get('aggregated_rating')  # Already 0-100
+        user_score = best.get('rating')  # Already 0-100
+
+        return ScoreResult(
+            source='IGDB',
+            critic_score=critic_score,
+            user_score=user_score,
+        )
+
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            log_info("IGDB auth error - token may have expired")
+            global _igdb_token
+            _igdb_token = None
+        else:
+            log_info(f"IGDB API error: {e}")
+        return None
+    except Exception as e:
+        log_info(f"IGDB lookup error: {e}")
+        return None
+
+
+# Score data caches
+_gamefaqs_cache: dict = {}
+_metacritic_cache: dict = {}
+_rawg_cache: dict = {}
+
+
+def load_gamefaqs_data() -> dict:
+    """Load GameFAQs data into memory, indexed by normalized title + platform."""
+    global _gamefaqs_cache  # noqa: F824 - assignment in loop below
+    if _gamefaqs_cache:
+        return _gamefaqs_cache
+
+    if not GAMEFAQS_CSV.exists():
+        log_info(f"Warning: GameFAQs data not found: {GAMEFAQS_CSV}")
+        return {}
+
+    log_info(f"Loading GameFAQs data from {GAMEFAQS_CSV}...")
+    with open(GAMEFAQS_CSV, 'r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            title = normalize_score_title(row['title'])
+            platform = row['platform'].upper()
+            key = (title, platform)
+
+            # Parse numeric fields (handle edge cases like "80.00+")
+            def parse_float(val):
+                if not val:
+                    return None
+                val = val.rstrip('+')  # Remove trailing +
+                try:
+                    return float(val)
+                except ValueError:
+                    return None
+
+            rating = parse_float(row.get('rating'))
+            difficulty = parse_float(row.get('dificulty'))
+            length = parse_float(row.get('length'))
+
+            _gamefaqs_cache[key] = {
+                'title': row['title'],
+                'platform': platform,
+                'rating': rating,
+                'difficulty': difficulty,
+                'length': length,
+            }
+
+    log_info(f"Loaded {len(_gamefaqs_cache)} GameFAQs entries")
+    return _gamefaqs_cache
+
+
+def lookup_gamefaqs(title: str, platform: str) -> Optional[ScoreResult]:
+    """Look up game in GameFAQs data."""
+    data = load_gamefaqs_data()
+    norm_title = normalize_score_title(title)
+    gfaq_platform = SCORE_PLATFORM_TO_GAMEFAQS.get(platform.lower(), platform.upper())
+
+    key = (norm_title, gfaq_platform)
+    if key in data:
+        entry = data[key]
+        return ScoreResult(
+            source='GFQ',
+            user_score=entry['rating'] * 20 if entry['rating'] else None,  # 0-5 -> 0-100
+            difficulty=entry['difficulty'],
+            length_hours=entry['length'],
+        )
+
+    # Try without platform restriction
+    for (t, p), entry in data.items():
+        if t == norm_title:
+            return ScoreResult(
+                source=f'GFQ({p})',
+                user_score=entry['rating'] * 20 if entry['rating'] else None,
+                difficulty=entry['difficulty'],
+                length_hours=entry['length'],
+            )
+
+    return None
+
+
+def load_metacritic_data() -> dict:
+    """Load Metacritic data into memory, indexed by normalized title."""
+    global _metacritic_cache  # noqa: F824 - assignment in loop below
+    if _metacritic_cache:
+        return _metacritic_cache
+
+    if not METACRITIC_CSV.exists():
+        log_info(f"Warning: Metacritic data not found: {METACRITIC_CSV}")
+        return {}
+
+    log_info(f"Loading Metacritic data from {METACRITIC_CSV}...")
+    with open(METACRITIC_CSV, 'r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            title = normalize_score_title(row['title'])
+
+            # Parse main scores (handle "tbd" and other non-numeric values)
+            def safe_float(val):
+                if not val or val.lower() == 'tbd':
+                    return None
+                try:
+                    return float(val)
+                except ValueError:
+                    return None
+
+            metascore = safe_float(row.get('metascore'))
+            userscore = safe_float(row.get('userscore'))
+
+            # Collect platforms
+            platforms = []
+            for i in range(12):
+                p = row.get(f'platforms/{i}')
+                if p:
+                    platforms.append(p)
+
+            # Store per-platform user reviews
+            platform_scores = {}
+            for plat, col in SCORE_PLATFORM_TO_METACRITIC_COL.items():
+                if col in row and row[col]:
+                    score = safe_float(row[col])
+                    if score and score > 0:
+                        platform_scores[plat] = score
+
+            if title not in _metacritic_cache:
+                _metacritic_cache[title] = []
+
+            _metacritic_cache[title].append({
+                'title': row['title'],
+                'metascore': metascore,
+                'userscore': userscore,
+                'platforms': platforms,
+                'platform_scores': platform_scores,
+            })
+
+    log_info(f"Loaded {len(_metacritic_cache)} unique Metacritic titles")
+    return _metacritic_cache
+
+
+def lookup_metacritic(title: str, platform: str) -> Optional[ScoreResult]:
+    """Look up game in Metacritic data."""
+    data = load_metacritic_data()
+    norm_title = normalize_score_title(title)
+
+    if norm_title not in data:
+        return None
+
+    entries = data[norm_title]
+
+    # Try to find platform-specific entry
+    for entry in entries:
+        # Check for per-platform user score
+        if platform.lower() in entry['platform_scores']:
+            plat_score = entry['platform_scores'][platform.lower()]
+            return ScoreResult(
+                source='MC',
+                critic_score=entry['metascore'],
+                user_score=plat_score,
+            )
+
+    # Fall back to first entry with scores
+    for entry in entries:
+        if entry['metascore'] or entry['userscore']:
+            return ScoreResult(
+                source='MC',
+                critic_score=entry['metascore'],
+                user_score=entry['userscore'] * 10 if entry['userscore'] else None,  # 0-10 -> 0-100
+            )
+
+    return None
+
+
+def load_rawg_data() -> dict:
+    """Load RAWG/VGE data into memory, indexed by normalized title."""
+    global _rawg_cache  # noqa: F824 - assignment in loop below
+    if _rawg_cache:
+        return _rawg_cache
+
+    if not RAWG_CSV.exists():
+        log_info(f"Warning: RAWG data not found: {RAWG_CSV}")
+        return {}
+
+    log_info(f"Loading RAWG data from {RAWG_CSV}...")
+    with open(RAWG_CSV, 'r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            title = normalize_score_title(row['name'])
+
+            # Parse scores
+            metacritic = float(row['metacritic']) if row.get('metacritic') else None
+            rating = float(row['rating']) if row.get('rating') else None
+
+            # Parse completion data
+            beaten = int(row['added_status_beaten']) if row.get('added_status_beaten') else 0
+            dropped = int(row['added_status_dropped']) if row.get('added_status_dropped') else 0
+            owned = int(row['added_status_owned']) if row.get('added_status_owned') else 0
+
+            # Calculate completion ratio
+            completion_ratio = None
+            if beaten + dropped > 0:
+                completion_ratio = (beaten / (beaten + dropped)) * 100
+
+            # Parse platforms
+            platforms = row.get('platforms', '').split('||') if row.get('platforms') else []
+
+            if title not in _rawg_cache:
+                _rawg_cache[title] = []
+
+            _rawg_cache[title].append({
+                'name': row['name'],
+                'metacritic': metacritic,
+                'rating': rating,
+                'platforms': platforms,
+                'completion_ratio': completion_ratio,
+                'popularity': owned + beaten,
+            })
+
+    log_info(f"Loaded {len(_rawg_cache)} unique RAWG titles")
+    return _rawg_cache
+
+
+def lookup_rawg(title: str, platform: str) -> Optional[ScoreResult]:
+    """Look up game in RAWG data."""
+    data = load_rawg_data()
+    norm_title = normalize_score_title(title)
+
+    if norm_title not in data:
+        return None
+
+    entries = data[norm_title]
+    rawg_platform = SCORE_PLATFORM_TO_RAWG.get(platform.lower())
+
+    # Try to find platform-specific entry
+    if rawg_platform:
+        for entry in entries:
+            if rawg_platform in entry['platforms']:
+                return ScoreResult(
+                    source='RAWG',
+                    critic_score=entry['metacritic'],
+                    user_score=entry['rating'] * 20 if entry['rating'] else None,  # 0-5 -> 0-100
+                    completion_ratio=entry['completion_ratio'],
+                )
+
+    # Fall back to first entry with scores
+    for entry in entries:
+        if entry['metacritic'] or entry['rating']:
+            return ScoreResult(
+                source='RAWG',
+                critic_score=entry['metacritic'],
+                user_score=entry['rating'] * 20 if entry['rating'] else None,
+                completion_ratio=entry['completion_ratio'],
+            )
+
+    return None
+
+
+def fetch_all_scores(title: str, platform: str, use_api: bool = True) -> AggregatedScores:
+    """Fetch scores from all sources and aggregate.
+
+    Args:
+        title: Game title
+        platform: Platform name (e.g., 'snes', 'psx')
+        use_api: If True, query IGDB API (slower but more accurate for some titles)
+    """
+    results = []
+
+    # IGDB API (primary source for critic scores)
+    if use_api:
+        igdb = lookup_igdb(title, platform)
+        if igdb:
+            results.append(igdb)
+
+    # Local CSV sources (instant lookups)
+    gfaq = lookup_gamefaqs(title, platform)
+    if gfaq:
+        results.append(gfaq)
+
+    mc = lookup_metacritic(title, platform)
+    if mc:
+        results.append(mc)
+
+    rawg = lookup_rawg(title, platform)
+    if rawg:
+        results.append(rawg)
+
+    # Aggregate
+    critic_scores = [r.critic_score for r in results if r.critic_score]
+    user_scores = [r.user_score for r in results if r.user_score]
+    lengths = [r.length_hours for r in results if r.length_hours]
+    difficulties = [r.difficulty for r in results if r.difficulty]
+    completions = [r.completion_ratio for r in results if r.completion_ratio]
+
+    critic_avg = sum(critic_scores) / len(critic_scores) if critic_scores else None
+    user_avg = sum(user_scores) / len(user_scores) if user_scores else None
+
+    combined = None
+    if critic_avg and user_avg:
+        combined = (critic_avg + user_avg) / 2
+    elif critic_avg:
+        combined = critic_avg
+    elif user_avg:
+        combined = user_avg
+
+    return AggregatedScores(
+        title=title,
+        platform=platform,
+        critic_score=critic_avg,
+        user_score=user_avg,
+        combined_score=combined,
+        length_hours=lengths[0] if lengths else None,
+        difficulty=difficulties[0] if difficulties else None,
+        completion_ratio=completions[0] if completions else None,
+        sources=results,
+    )
+
 
 # ============================================================================
 # ROM FILE EXTENSIONS - Comprehensive support for No-Intro, Redump, and more
@@ -896,29 +1648,73 @@ def fuzzy_match_rom(needle: str, haystack: list, threshold: int = COMPARE_MATCH_
 
 
 def parse_missing_file_for_compare(filepath: Path) -> list:
-    """Parse a *-missing.txt TSV file (basic or expanded format)."""
+    """Parse a *-missing.txt TSV file (basic, expanded, or scored format).
+
+    Detects format from header line and parses accordingly.
+
+    Formats:
+    - Basic: Title, Ach, Pts, URL, Hashes
+    - Expanded: + ROM_Name, Category, Labels, Patch_URL
+    - Scored: Title, Ach, Pts, Critic, User, Combined, Length, Diff, Sources, URL, Hashes[, extended...]
+    """
     entries = []
+    header_map = {}
+    is_scored = False
+
     with open(filepath, 'r', encoding='utf-8') as f:
         for line in f:
             line = line.strip()
-            if not line or line.startswith('#'):
+            if not line:
+                continue
+
+            # Parse header line to detect format
+            if line.startswith('#'):
+                header_text = line[1:].strip()  # Remove leading #
+                headers = [h.strip().lower() for h in header_text.split('\t')]
+                header_map = {h: i for i, h in enumerate(headers)}
+                # Detect scored format by presence of score columns
+                is_scored = 'critic' in header_map or 'combined' in header_map
                 continue
 
             parts = line.split('\t')
             if len(parts) < 4:
                 continue
 
-            title = parts[0]
-            achievements = int(parts[1]) if parts[1].isdigit() else 0
-            points = int(parts[2]) if parts[2].isdigit() else 0
-            url = parts[3]
-            hashes = parts[4].split(',') if len(parts) > 4 and parts[4] else []
+            # Parse based on detected format
+            if is_scored and header_map:
+                # Scored format: use header positions
+                title = parts[header_map.get('title', 0)]
+                ach_idx = header_map.get('ach', 1)
+                achievements = int(parts[ach_idx]) if parts[ach_idx].isdigit() else 0
+                pts_idx = header_map.get('pts', 2)
+                points = int(parts[pts_idx]) if parts[pts_idx].isdigit() else 0
+                url_idx = header_map.get('url', 9)
+                url = parts[url_idx] if len(parts) > url_idx else ''
+                hashes_idx = header_map.get('hashes', 10)
+                hashes = parts[hashes_idx].split(',') if len(parts) > hashes_idx and parts[hashes_idx] else []
 
-            # Extended columns (from --rom-info output)
-            rom_name = parts[5] if len(parts) > 5 else ''
-            file_category = parts[6] if len(parts) > 6 else ''
-            labels = parts[7].split(',') if len(parts) > 7 and parts[7] else []
-            patch_url = parts[8] if len(parts) > 8 else ''
+                # Extended columns (scored format places them after hashes)
+                rom_name_idx = header_map.get('rom_name', 11)
+                rom_name = parts[rom_name_idx] if len(parts) > rom_name_idx else ''
+                category_idx = header_map.get('category', 12)
+                file_category = parts[category_idx] if len(parts) > category_idx else ''
+                labels_idx = header_map.get('labels', 13)
+                labels = parts[labels_idx].split(',') if len(parts) > labels_idx and parts[labels_idx] else []
+                patch_url_idx = header_map.get('patch_url', 14)
+                patch_url = parts[patch_url_idx] if len(parts) > patch_url_idx else ''
+            else:
+                # Original fixed-position parsing for unscored format
+                title = parts[0]
+                achievements = int(parts[1]) if parts[1].isdigit() else 0
+                points = int(parts[2]) if parts[2].isdigit() else 0
+                url = parts[3]
+                hashes = parts[4].split(',') if len(parts) > 4 and parts[4] else []
+
+                # Extended columns (from --rom-info output)
+                rom_name = parts[5] if len(parts) > 5 else ''
+                file_category = parts[6] if len(parts) > 6 else ''
+                labels = parts[7].split(',') if len(parts) > 7 and parts[7] else []
+                patch_url = parts[8] if len(parts) > 8 else ''
 
             # Determine category (priority: file > patch_url > title)
             category = ''
@@ -1066,10 +1862,13 @@ def run_compare(missing_file: Path, rom_dir: Path, output_dir: Path,
 
 
 def get_api_key() -> str:
-    """Get API key from environment."""
-    key = os.environ.get("RA_API_KEY")
+    """Get RA API key from config file or environment."""
+    config = load_config()
+    key = config.get("ra_api_key")
     if not key:
-        print("Error: RA_API_KEY environment variable not set", file=sys.stderr)
+        print("Error: RA API key not configured", file=sys.stderr)
+        print(f"Set RA_API_KEY environment variable, or add to {CONFIG_FILE}:", file=sys.stderr)
+        print('  {"ra_api_key": "your_key_here"}', file=sys.stderr)
         print("Get your key from: https://retroachievements.org/settings (Keys section)", file=sys.stderr)
         sys.exit(1)
     return key
@@ -1550,6 +2349,105 @@ def write_missing_list_expanded(output_path: str, sorted_missing: list, rom_info
 
             f.write(f"{title}\t{info['achievements']}\t{info['points']}\t{url}\t"
                     f"{hashes}\t{rom_name}\t{category}\t{labels}\t{patch_url}\n")
+
+
+def enrich_missing_with_scores(sorted_missing: list, platform: str, use_api: bool = True) -> dict:
+    """Enrich missing games with scores from external databases.
+
+    Returns dict mapping title -> AggregatedScores
+    """
+    scores_map = {}
+    total = len(sorted_missing)
+
+    for i, (gid, info) in enumerate(sorted_missing):
+        title = info['title']
+        scores = fetch_all_scores(title, platform, use_api=use_api)
+        scores_map[title] = scores
+
+        if (i + 1) % 50 == 0:
+            print(f"Fetched scores for {i + 1}/{total} games...", file=sys.stderr)
+
+    return scores_map
+
+
+def write_missing_list_with_scores(output_path: str, sorted_missing: list, scores_map: dict,
+                                   rom_info: Optional[dict] = None):
+    """Write missing list TSV with score columns."""
+    with open(output_path, 'w', encoding='utf-8') as f:
+        if rom_info:
+            f.write("# Title\tAch\tPts\tCritic\tUser\tCombined\tLength\tDiff\tSources\t"
+                    "URL\tHashes\tROM_Name\tCategory\tLabels\tPatch_URL\n")
+        else:
+            f.write("# Title\tAch\tPts\tCritic\tUser\tCombined\tLength\tDiff\tSources\t"
+                    "URL\tHashes\n")
+
+        # Build lookup from rom_info by title
+        rom_lookup = {}
+        if rom_info:
+            for g in rom_info.get('base_games', []):
+                rom_lookup[g['title']] = ('base', g)
+            for g in rom_info.get('hacks_with_patches', []):
+                rom_lookup[g['title']] = ('hack_patched', g)
+            for g in rom_info.get('hacks_without_patches', []):
+                rom_lookup[g['title']] = ('hack_no_patch', g)
+            for g in rom_info.get('translations_skipped', []):
+                rom_lookup[g['title']] = ('translation_skipped', g)
+
+        for gid, info in sorted_missing:
+            title = info['title']
+            hashes = ','.join(info.get('hashes', [])[:5])
+            url = f"https://retroachievements.org/game/{gid}"
+
+            # Get scores
+            s = scores_map.get(title)
+            if s:
+                critic = f"{s.critic_score:.0f}" if s.critic_score else ""
+                user = f"{s.user_score:.0f}" if s.user_score else ""
+                combined = f"{s.combined_score:.0f}" if s.combined_score else ""
+                length = f"{s.length_hours:.0f}" if s.length_hours else ""
+                diff = f"{s.difficulty:.1f}" if s.difficulty else ""
+                sources = ",".join(r.source for r in s.sources)
+            else:
+                critic = user = combined = length = diff = sources = ""
+
+            if rom_info:
+                # Get ROM info if available
+                if title in rom_lookup:
+                    category, g = rom_lookup[title]
+                    rom_name = g.get('rom_names', [''])[0] if g.get('rom_names') else ''
+                    labels = ','.join(g.get('labels', []))
+                    patch_url = ''
+                    if g.get('patches'):
+                        patch_url = g['patches'][0].get('patch_url', '')
+                else:
+                    rom_name = category = labels = patch_url = ''
+
+                f.write(f"{title}\t{info['achievements']}\t{info['points']}\t"
+                        f"{critic}\t{user}\t{combined}\t{length}\t{diff}\t{sources}\t"
+                        f"{url}\t{hashes}\t{rom_name}\t{category}\t{labels}\t{patch_url}\n")
+            else:
+                f.write(f"{title}\t{info['achievements']}\t{info['points']}\t"
+                        f"{critic}\t{user}\t{combined}\t{length}\t{diff}\t{sources}\t"
+                        f"{url}\t{hashes}\n")
+
+
+def sort_missing_by_score(sorted_missing: list, scores_map: dict, sort_by: str) -> list:
+    """Re-sort missing list by score criteria."""
+    if sort_by == 'achievements':
+        return sorted_missing  # Already sorted by achievements
+
+    def sort_key(item):
+        gid, info = item
+        s = scores_map.get(info['title'])
+        if sort_by == 'combined':
+            return s.combined_score if s and s.combined_score else -1
+        elif sort_by == 'critic':
+            return s.critic_score if s and s.critic_score else -1
+        elif sort_by == 'user':
+            return s.user_score if s and s.user_score else -1
+        return -1
+
+    return sorted(sorted_missing, key=sort_key, reverse=True)
 
 
 # ============================================================================
@@ -2702,13 +3600,37 @@ def cmd_check(args):
 
             # Write missing list with expanded columns (ROM info was fetched)
             if missing_list_file:
-                write_missing_list_expanded(
-                    missing_list_file, sorted_missing, rom_info)
+                # Check for --scores flag
+                use_scores = getattr(args, 'scores', False)
+                if use_scores:
+                    use_api = not getattr(args, 'no_api', False)
+                    sort_by = getattr(args, 'sort_by', 'achievements')
+                    print(f"Fetching scores for {len(sorted_missing)} games...", file=sys.stderr)
+                    scores_map = enrich_missing_with_scores(sorted_missing, system_name, use_api=use_api)
+                    if sort_by != 'achievements':
+                        sorted_missing = sort_missing_by_score(sorted_missing, scores_map, sort_by)
+                    write_missing_list_with_scores(
+                        missing_list_file, sorted_missing, scores_map, rom_info)
+                else:
+                    write_missing_list_expanded(
+                        missing_list_file, sorted_missing, rom_info)
                 print(f"MISSING list saved to: {missing_list_file}", file=sys.stderr)
 
         elif missing_list_file:
             # Write basic missing list (no ROM info)
-            write_missing_list_basic(missing_list_file, sorted_missing)
+            # Check for --scores flag
+            use_scores = getattr(args, 'scores', False)
+            if use_scores:
+                use_api = not getattr(args, 'no_api', False)
+                sort_by = getattr(args, 'sort_by', 'achievements')
+                print(f"Fetching scores for {len(sorted_missing)} games...", file=sys.stderr)
+                scores_map = enrich_missing_with_scores(sorted_missing, system_name, use_api=use_api)
+                if sort_by != 'achievements':
+                    sorted_missing = sort_missing_by_score(sorted_missing, scores_map, sort_by)
+                write_missing_list_with_scores(
+                    missing_list_file, sorted_missing, scores_map, None)
+            else:
+                write_missing_list_basic(missing_list_file, sorted_missing)
             print(f"MISSING list saved to: {missing_list_file}", file=sys.stderr)
 
         # Run comparison if --compare flag was used
@@ -2852,6 +3774,164 @@ def cmd_compare(args):
 
         print(f"\n  TOTAL: {total_missing} truly missing, "
               f"{total_matches} possible matches", file=sys.stderr)
+
+
+def process_scores_file(missing_file: Path, platform: str, args) -> dict:
+    """Process a single missing file to add scores.
+
+    Returns dict with stats for summary.
+    """
+    stem = missing_file.stem
+
+    # Parse missing file
+    games = []
+    with open(missing_file, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            parts = line.split('\t')
+            if len(parts) >= 1:
+                games.append({
+                    'title': parts[0],
+                    'achievements': parts[1] if len(parts) > 1 else '',
+                    'points': parts[2] if len(parts) > 2 else '',
+                    'url': parts[3] if len(parts) > 3 else '',
+                    'hashes': parts[4] if len(parts) > 4 else '',
+                })
+
+    print(f"Loaded {len(games)} games from {missing_file}", file=sys.stderr)
+
+    # Fetch scores
+    use_api = not getattr(args, 'no_api', False)
+    enriched = []
+    for i, game in enumerate(games):
+        scores = fetch_all_scores(game['title'], platform, use_api=use_api)
+        game['scores'] = scores
+        enriched.append(game)
+        if (i + 1) % 50 == 0:
+            print(f"Processed {i + 1}/{len(games)} games...", file=sys.stderr)
+
+    # Sort
+    sort_by = getattr(args, 'sort_by', 'combined')
+    if sort_by == 'combined':
+        enriched.sort(key=lambda g: g['scores'].combined_score or -1, reverse=True)
+    elif sort_by == 'critic':
+        enriched.sort(key=lambda g: g['scores'].critic_score or -1, reverse=True)
+    elif sort_by == 'user':
+        enriched.sort(key=lambda g: g['scores'].user_score or -1, reverse=True)
+    elif sort_by == 'length':
+        enriched.sort(key=lambda g: g['scores'].length_hours or 9999)
+    elif sort_by == 'achievements':
+        enriched.sort(key=lambda g: int(g['achievements']) if g['achievements'].isdigit() else 0, reverse=True)
+
+    # Determine output file
+    output_file = getattr(args, 'output', None)
+    if getattr(args, 'in_place', False):
+        output_file = missing_file
+    elif not output_file:
+        output_file = missing_file.with_stem(f"{stem}-scored")
+
+    # Write output
+    with open(output_file, 'w', encoding='utf-8') as f:
+        # Header
+        f.write("# Title\tAch\tPts\tCritic\tUser\tCombined\tLength\tDiff\tSources\tURL\tHashes\n")
+
+        for game in enriched:
+            s = game['scores']
+            critic = f"{s.critic_score:.0f}" if s.critic_score else ""
+            user = f"{s.user_score:.0f}" if s.user_score else ""
+            combined = f"{s.combined_score:.0f}" if s.combined_score else ""
+            length = f"{s.length_hours:.0f}" if s.length_hours else ""
+            diff = f"{s.difficulty:.1f}" if s.difficulty else ""
+            sources = ",".join(r.source for r in s.sources)
+
+            f.write(f"{game['title']}\t{game['achievements']}\t{game['points']}\t")
+            f.write(f"{critic}\t{user}\t{combined}\t{length}\t{diff}\t{sources}\t")
+            f.write(f"{game['url']}\t{game['hashes']}\n")
+
+    print(f"Wrote enriched data to: {output_file}", file=sys.stderr)
+
+    # Stats
+    with_scores = sum(1 for g in enriched if g['scores'].combined_score)
+    return {
+        'file': str(missing_file),
+        'platform': platform,
+        'total': len(enriched),
+        'with_scores': with_scores,
+        'output': str(output_file),
+        'top10': enriched[:10],
+    }
+
+
+def cmd_scores(args):
+    """Add game scores to a missing file."""
+    global VERBOSE
+    VERBOSE = getattr(args, 'verbose', False)
+
+    # Collect files to process
+    missing_files = []
+
+    if getattr(args, 'all', False):
+        # Find all *-missing*.txt files (exclude scored/truly-missing/possible-matches)
+        for f in Path('.').glob('*-missing*.txt'):
+            stem_lower = f.stem.lower()
+            if any(x in stem_lower for x in ['scored', 'truly-missing', 'possible-matches']):
+                continue
+            missing_files.append(f)
+        missing_files.sort()
+        if not missing_files:
+            print("No *-missing.txt files found in current directory.", file=sys.stderr)
+            sys.exit(1)
+    elif args.file:
+        missing_files.append(Path(args.file))
+    else:
+        print("Error: Specify a file or use --all", file=sys.stderr)
+        sys.exit(1)
+
+    # Process each file
+    all_stats = []
+    for missing_file in missing_files:
+        if not missing_file.exists():
+            print(f"Warning: File not found: {missing_file}, skipping", file=sys.stderr)
+            continue
+
+        # Detect platform (--platform override takes precedence)
+        if getattr(args, 'platform', None):
+            platform = args.platform.lower()
+        else:
+            stem = missing_file.stem
+            platform = stem.split('-')[0].lower()
+            if platform not in PLATFORM_TO_FOLDER:
+                print(f"Warning: Unknown platform '{platform}' from {missing_file}, use --platform",
+                      file=sys.stderr)
+                continue
+
+        log_info(f"\nProcessing {missing_file} (platform: {platform})...")
+        stats = process_scores_file(missing_file, platform, args)
+        all_stats.append(stats)
+
+    # Summary
+    if all_stats:
+        print("\n" + "=" * 60, file=sys.stderr)
+        print("SUMMARY", file=sys.stderr)
+        print("=" * 60, file=sys.stderr)
+
+        total_games = sum(s['total'] for s in all_stats)
+        total_with_scores = sum(s['with_scores'] for s in all_stats)
+
+        for s in all_stats:
+            print(f"  {s['platform'].upper()}: {s['with_scores']}/{s['total']} games with scores",
+                  file=sys.stderr)
+
+        print(f"\n  TOTAL: {total_with_scores}/{total_games} games with scores", file=sys.stderr)
+
+        # Show top 10 from first file (or single file)
+        if len(all_stats) == 1:
+            print("\nTop 10 by score:")
+            for game in all_stats[0]['top10']:
+                s = game['scores']
+                print(f"  {s} - {game['title']}")
 
 
 # ============================================================================
@@ -3508,13 +4588,37 @@ def cmd_dedup(args):
 
             # Write missing list with expanded columns (ROM info was fetched)
             if missing_list_file:
-                write_missing_list_expanded(
-                    missing_list_file, sorted_missing, rom_info)
+                # Check for --scores flag
+                use_scores = getattr(args, 'scores', False)
+                if use_scores:
+                    use_api = not getattr(args, 'no_api', False)
+                    sort_by = getattr(args, 'sort_by', 'achievements')
+                    print(f"Fetching scores for {len(sorted_missing)} games...", file=sys.stderr)
+                    scores_map = enrich_missing_with_scores(sorted_missing, system_name, use_api=use_api)
+                    if sort_by != 'achievements':
+                        sorted_missing = sort_missing_by_score(sorted_missing, scores_map, sort_by)
+                    write_missing_list_with_scores(
+                        missing_list_file, sorted_missing, scores_map, rom_info)
+                else:
+                    write_missing_list_expanded(
+                        missing_list_file, sorted_missing, rom_info)
                 print(f"MISSING list saved to: {missing_list_file}", file=sys.stderr)
 
         elif missing_list_file:
             # Write basic missing list (no ROM info)
-            write_missing_list_basic(missing_list_file, sorted_missing)
+            # Check for --scores flag
+            use_scores = getattr(args, 'scores', False)
+            if use_scores:
+                use_api = not getattr(args, 'no_api', False)
+                sort_by = getattr(args, 'sort_by', 'achievements')
+                print(f"Fetching scores for {len(sorted_missing)} games...", file=sys.stderr)
+                scores_map = enrich_missing_with_scores(sorted_missing, system_name, use_api=use_api)
+                if sort_by != 'achievements':
+                    sorted_missing = sort_missing_by_score(sorted_missing, scores_map, sort_by)
+                write_missing_list_with_scores(
+                    missing_list_file, sorted_missing, scores_map, None)
+            else:
+                write_missing_list_basic(missing_list_file, sorted_missing)
             print(f"MISSING list saved to: {missing_list_file}", file=sys.stderr)
 
         # Run comparison if --compare flag was used
@@ -3577,13 +4681,24 @@ System names accepted (examples):
   psx, ps1, playstation, 12
   gba, "game boy advance", 5
 
-Environment Variables:
-  RA_API_KEY  - RetroAchievements Web API Key (required)
-  RA_HASHER   - Path to RAHasher executable (auto-detected if in PATH)
+Configuration:
+  Config file: ~/.config/ra_tool/config.json
+  {
+    "ra_api_key": "your_ra_web_api_key",
+    "igdb_client_id": "your_twitch_client_id",
+    "igdb_client_secret": "your_twitch_client_secret"
+  }
+
+Environment Variables (override config file):
+  RA_API_KEY          - RetroAchievements Web API Key
+  IGDB_CLIENT_ID      - Twitch/IGDB Client ID (for --scores)
+  IGDB_CLIENT_SECRET  - Twitch/IGDB Client Secret (for --scores)
+  RA_HASHER           - Path to RAHasher executable (auto-detected if in PATH)
 
 Cache:
   Systems list cached in ~/.cache/ra_tool/ra_systems.json (30 days)
   Hash databases cached in ~/.cache/ra_tool/ra_system_*.json (6 months)
+  IGDB token cached in ~/.cache/ra_tool/igdb_token.json (50 days)
         """
     )
 
@@ -3638,6 +4753,12 @@ Cache:
                            help='Output directory for downloaded patches (default: ./ra_patches)')
     sub_check.add_argument('--compare', nargs='?', const=True, default=None, metavar='ROM_DIR',
                            help='Compare missing against local ROMs (default: same dir)')
+    sub_check.add_argument('--scores', action='store_true',
+                           help='Add game scores to missing output (IGDB, GameFAQs, Metacritic, RAWG)')
+    sub_check.add_argument('--no-api', action='store_true',
+                           help='Skip IGDB API lookups (faster, local CSVs only)')
+    sub_check.add_argument('--sort-by', choices=['achievements', 'combined', 'critic', 'user'],
+                           default='achievements', help='Sort missing games by (default: achievements)')
     sub_check.set_defaults(func=cmd_check)
 
     # dedup command
@@ -3676,6 +4797,12 @@ Cache:
                            help='Copy matched ROMs to destination (creates subfolders)')
     sub_dedup.add_argument('--copy-mode', choices=['copy', 'move', 'symlink'], default='copy',
                            help='How to transfer files: copy (default), move, or symlink')
+    sub_dedup.add_argument('--scores', action='store_true',
+                           help='Add game scores to missing output (IGDB, GameFAQs, Metacritic, RAWG)')
+    sub_dedup.add_argument('--no-api', action='store_true',
+                           help='Skip IGDB API lookups (faster, local CSVs only)')
+    sub_dedup.add_argument('--sort-by', choices=['achievements', 'combined', 'critic', 'user'],
+                           default='achievements', help='Sort missing games by (default: achievements)')
     sub_dedup.set_defaults(func=cmd_dedup)
 
     # hash command
@@ -3702,6 +4829,27 @@ Cache:
     sub_compare.add_argument('-v', '--verbose', action='store_true',
                              help='Show detailed progress output')
     sub_compare.set_defaults(func=cmd_compare)
+
+    # scores command
+    sub_scores = subparsers.add_parser('scores',
+                                       help='Add game scores to missing file')
+    sub_scores.add_argument('file', nargs='?',
+                            help='Missing file to enrich (e.g., snes-missing.txt)')
+    sub_scores.add_argument('--all', action='store_true',
+                            help='Process all *-missing.txt files in current directory')
+    sub_scores.add_argument('--platform', '-p',
+                            help='Override platform detection (e.g., snes, psx, n64)')
+    sub_scores.add_argument('-o', '--output', type=Path,
+                            help='Output file (default: <input>-scored.txt)')
+    sub_scores.add_argument('-i', '--in-place', action='store_true',
+                            help='Modify file in place')
+    sub_scores.add_argument('--sort-by', choices=['combined', 'critic', 'user', 'length', 'achievements'],
+                            default='combined', help='Sort order (default: combined)')
+    sub_scores.add_argument('--no-api', action='store_true',
+                            help='Skip IGDB API lookups (faster, local CSVs only)')
+    sub_scores.add_argument('-v', '--verbose', action='store_true',
+                            help='Show detailed progress output')
+    sub_scores.set_defaults(func=cmd_scores)
 
     args = parser.parse_args()
     args.func(args)
