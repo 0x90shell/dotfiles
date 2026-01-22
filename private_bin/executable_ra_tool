@@ -3916,15 +3916,24 @@ def process_scores_file(missing_file: Path, platform: str, args) -> dict:
 
     print(f"Loaded {len(games)} games from {missing_file}", file=sys.stderr)
 
-    # Fetch scores
+    # Fetch scores with progress bar
     use_api = not getattr(args, 'no_api', False)
     enriched = []
+    total = len(games)
+    bar_width = 40
+
     for i, game in enumerate(games):
         scores = fetch_all_scores(game['title'], platform, use_api=use_api)
         game['scores'] = scores
         enriched.append(game)
-        if (i + 1) % 50 == 0:
-            print(f"Processed {i + 1}/{len(games)} games...", file=sys.stderr)
+
+        # Update progress bar
+        progress = (i + 1) / total
+        filled = int(bar_width * progress)
+        bar = '█' * filled + '░' * (bar_width - filled)
+        print(f"\rFetching scores: [{bar}] {i + 1}/{total}", end='', file=sys.stderr)
+
+    print(file=sys.stderr)  # Newline after progress bar
 
     # Sort
     sort_by = getattr(args, 'sort_by', 'combined')
