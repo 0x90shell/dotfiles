@@ -20,6 +20,18 @@ nnoremap <silent> <C-l> :if getloclist(0, {'winid':0}).winid != 0 \| lclose \| e
 set pastetoggle=<F3>
 nnoremap <leader>p :set paste!<CR>
 set clipboard^=unnamed,unnamedplus
+" OSC 52 clipboard support (works over SSH/tmux when DISPLAY unavailable)
+if empty($DISPLAY) && (exists('$TMUX') || exists('$SSH_TTY'))
+    let g:clipboard = {
+          \   'name': 'OSC 52',
+          \   'copy': {
+          \      '+': {lines, regtype -> chansend(v:stderr, printf("\033]52;c;%s\007", system('base64 | tr -d "\n"', join(lines, "\n"))))},
+          \      '*': {lines, regtype -> chansend(v:stderr, printf("\033]52;c;%s\007", system('base64 | tr -d "\n"', join(lines, "\n"))))},
+          \    },
+          \   'paste': {'+': [], '*': []},
+          \ }
+endif
+
 {{- if (and (ne .chezmoi.osRelease.id "arch") (ne .chezmoi.osRelease.id "endeavouros")) }}
 source ~/.vim/plugins/ale.vim
 {{ end -}}
