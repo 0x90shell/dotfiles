@@ -265,6 +265,15 @@ SCORE_PLATFORM_TO_GAMEFAQS = {
     'c64': 'C64',
     'amiga': 'AMI',
     'dos': 'PC',
+    '3do': '3DO',
+    'wonderswan': 'WS',
+    'wonderswancolor': 'WSC',
+    'ngp': 'NGP',
+    'ngpc': 'NGPC',
+    'virtualboy': 'VBOY',
+    'vectrex': 'VEC',
+    'sg1000': 'SG1K',
+    'pokemini': 'PMIN',
 }
 
 # Platform mappings: RA/ES-DE name -> RAWG platform names
@@ -345,7 +354,28 @@ SCORE_PLATFORM_TO_IGDB = {
     'c64': 15,        # Commodore C64/128
     'amiga': 16,      # Amiga
     'dos': 13,        # DOS
+    '3do': 50,        # 3DO Interactive Multiplayer
+    'wonderswan': 57,  # WonderSwan
+    'wonderswancolor': 123,  # WonderSwan Color
+    'ngp': 119,        # Neo Geo Pocket
+    'ngpc': 120,       # Neo Geo Pocket Color
+    'virtualboy': 87,  # Virtual Boy
+    'vectrex': 70,    # Vectrex
+    'sg1000': 84,     # Sega SG-1000
+    'x68000': 79,     # Sharp X68000
+    'pc88': 94,       # NEC PC-8801
+    'pc98': 95,       # NEC PC-9801
+    'pokemini': 211,  # Pokemon Mini
+    'supervision': 216,  # Watara Supervision
 }
+
+# Combined set of all valid score platforms (for validation)
+VALID_SCORE_PLATFORMS = (
+    set(SCORE_PLATFORM_TO_GAMEFAQS.keys()) |
+    set(SCORE_PLATFORM_TO_RAWG.keys()) |
+    set(SCORE_PLATFORM_TO_METACRITIC_COL.keys()) |
+    set(SCORE_PLATFORM_TO_IGDB.keys())
+)
 
 
 @dataclass
@@ -3986,7 +4016,7 @@ def cmd_scores(args):
         else:
             stem = missing_file.stem
             platform = stem.split('-')[0].lower()
-            if platform not in PLATFORM_TO_FOLDER:
+            if platform not in VALID_SCORE_PLATFORMS:
                 print(f"Warning: Unknown platform '{platform}' from {missing_file}, use --platform",
                       file=sys.stderr)
                 continue
@@ -4019,17 +4049,242 @@ def cmd_scores(args):
 
 
 # ============================================================================
+# SETUP HELPERS
+# ============================================================================
+
+
+def setup_check_config() -> dict:
+    """Check config file status. Returns status dict."""
+    status = {'exists': False, 'ra_key': False, 'igdb_creds': False, 'path': CONFIG_FILE}
+
+    if CONFIG_FILE.exists():
+        status['exists'] = True
+        try:
+            config = load_config()
+            status['ra_key'] = bool(config.get('ra_api_key'))
+            status['igdb_creds'] = bool(config.get('igdb_client_id') and config.get('igdb_client_secret'))
+        except Exception:
+            pass
+
+    return status
+
+
+def setup_check_datasets() -> dict:
+    """Check dataset files status. Returns status dict."""
+    status = {'dir_exists': False, 'files': {}}
+
+    if DATASETS_DIR.exists():
+        status['dir_exists'] = True
+
+    for name, path in [('gamefaqs', GAMEFAQS_CSV), ('metacritic', METACRITIC_CSV), ('rawg', RAWG_CSV)]:
+        csv_exists = path.exists()
+        archive_exists = Path(str(path) + '.7z').exists()
+        status['files'][name] = {
+            'csv': csv_exists,
+            'archive': archive_exists,
+            'ok': csv_exists or archive_exists,
+        }
+
+    return status
+
+
+def setup_check_decompressor() -> dict:
+    """Check 7z/py7zr availability. Returns status dict."""
+    status = {'system_7z': False, 'py7zr': False}
+
+    # Check system 7z
+    import subprocess
+    try:
+        result = subprocess.run(['7z', '--help'], capture_output=True)
+        status['system_7z'] = result.returncode == 0
+    except FileNotFoundError:
+        pass
+
+    # Check py7zr
+    try:
+        import py7zr  # noqa: F401 - checking availability
+        status['py7zr'] = True
+    except ImportError:
+        pass
+
+    return status
+
+
+def setup_check_rahasher() -> dict:
+    """Check RAHasher status. Returns status dict."""
+    status = {'installed': False, 'path': None, 'version': None, 'up_to_date': None}
+
+    rahasher = find_rahasher()
+    if rahasher:
+        status['installed'] = True
+        status['path'] = rahasher
+        version_info = check_rahasher_version(rahasher, verbose=False)
+        status['version'] = version_info.get('installed')
+        status['up_to_date'] = version_info.get('up_to_date')
+
+    return status
+
+
+def setup_interactive_config():
+    """Interactively set up config file."""
+    print("\n" + "=" * 60)
+    print("CONFIG SETUP")
+    print("=" * 60)
+
+    # Ensure config dir exists
+    CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+    # Load existing config or start fresh
+    config = {}
+    if CONFIG_FILE.exists():
+        try:
+            config = load_config()
+            print(f"Loaded existing config from {CONFIG_FILE}")
+        except Exception:
+            pass
+
+    # RA API key
+    current_ra = config.get('ra_api_key', '')
+    print("\nRetroAchievements API Key")
+    print("  Get yours at: https://retroachievements.org/controlpanel.php")
+    if current_ra:
+        print(f"  Current: {current_ra[:8]}...{current_ra[-4:]}")
+        ra_input = input("  New key (Enter to keep current): ").strip()
+        if ra_input:
+            config['ra_api_key'] = ra_input
+    else:
+        ra_input = input("  API key: ").strip()
+        if ra_input:
+            config['ra_api_key'] = ra_input
+
+    # IGDB credentials
+    print("\nIGDB/Twitch API Credentials (for game scores)")
+    print("  Get yours at: https://dev.twitch.tv/console/apps")
+    current_id = config.get('igdb_client_id', '')
+    current_secret = config.get('igdb_client_secret', '')
+
+    if current_id:
+        print(f"  Current Client ID: {current_id[:8]}...")
+        id_input = input("  New Client ID (Enter to keep): ").strip()
+        if id_input:
+            config['igdb_client_id'] = id_input
+    else:
+        id_input = input("  Client ID: ").strip()
+        if id_input:
+            config['igdb_client_id'] = id_input
+
+    if current_secret:
+        print(f"  Current Client Secret: {current_secret[:8]}...")
+        secret_input = input("  New Client Secret (Enter to keep): ").strip()
+        if secret_input:
+            config['igdb_client_secret'] = secret_input
+    else:
+        secret_input = input("  Client Secret: ").strip()
+        if secret_input:
+            config['igdb_client_secret'] = secret_input
+
+    # Save config
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump(config, f, indent=2)
+    print(f"\n✓ Config saved to {CONFIG_FILE}")
+
+
+def setup_show_status():
+    """Show full setup status."""
+    print("=" * 60)
+    print("ra_tool SETUP STATUS")
+    print("=" * 60)
+
+    # Config
+    cfg = setup_check_config()
+    print(f"\n[Config] {cfg['path']}")
+    if cfg['exists']:
+        print(f"  RA API Key:    {'✓ configured' if cfg['ra_key'] else '✗ missing'}")
+        print(f"  IGDB Creds:    {'✓ configured' if cfg['igdb_creds'] else '✗ missing (scores will skip IGDB)'}")
+    else:
+        print("  ✗ Config file not found")
+
+    # Datasets
+    ds = setup_check_datasets()
+    print(f"\n[Datasets] {DATASETS_DIR}")
+    if ds['dir_exists']:
+        for name, info in ds['files'].items():
+            if info['csv']:
+                print(f"  {name}.csv:    ✓ present")
+            elif info['archive']:
+                print(f"  {name}.csv:    ○ will decompress from .7z")
+            else:
+                print(f"  {name}.csv:    ✗ missing")
+    else:
+        print("  ✗ Datasets directory not found")
+
+    # Decompressor
+    dec = setup_check_decompressor()
+    print("\n[Decompressor]")
+    if dec['system_7z']:
+        print("  7z command:    ✓ available")
+    elif dec['py7zr']:
+        print("  py7zr:         ✓ available (fallback)")
+    else:
+        print("  ✗ Neither 7z nor py7zr available")
+        print("    Install: sudo pacman -S 7zip  OR  pip install py7zr")
+
+    # RAHasher
+    rh = setup_check_rahasher()
+    print("\n[RAHasher]")
+    if rh['installed']:
+        ver_str = rh['version'] or 'unknown version'
+        up_str = '✓' if rh['up_to_date'] else '↑ update available'
+        print(f"  Status:        ✓ installed ({ver_str}) {up_str}")
+        print(f"  Path:          {rh['path']}")
+    else:
+        print("  Status:        ✗ not installed")
+        print("  Run:           ./ra_tool setup --rahasher")
+
+    # Summary
+    print("\n" + "-" * 60)
+    all_ok = (cfg['ra_key'] and ds['dir_exists'] and
+              all(f['ok'] for f in ds['files'].values()) and
+              (dec['system_7z'] or dec['py7zr']))
+    if all_ok:
+        print("✓ Core setup complete. RAHasher optional for most systems.")
+    else:
+        print("Some components need attention. Run: ./ra_tool setup --all")
+
+
+# ============================================================================
 # MAIN
 # ============================================================================
 
 
 def cmd_setup(args):
-    """Download and install RAHasher."""
+    """Setup wizard for ra_tool."""
     import platform
     import stat
 
+    # Handle different setup modes
+    do_status = not any([getattr(args, 'rahasher', False),
+                         getattr(args, 'config', False),
+                         getattr(args, 'all', False)])
+    do_config = getattr(args, 'config', False) or getattr(args, 'all', False)
+    do_rahasher = getattr(args, 'rahasher', False) or getattr(args, 'all', False)
+
+    # Legacy flags
     upgrade = getattr(args, 'upgrade', False)
     check_only = getattr(args, 'check', False)
+
+    # Status-only mode (default when no flags)
+    if do_status and not upgrade and not check_only:
+        setup_show_status()
+        return
+
+    # Config setup
+    if do_config:
+        setup_interactive_config()
+
+    # RAHasher setup (original logic)
+    if not (do_rahasher or upgrade or check_only):
+        return
 
     # Check if RAHasher is already installed
     existing = find_rahasher()
@@ -4789,11 +5044,18 @@ Cache:
     subparsers = parser.add_subparsers(dest='command', required=True)
 
     # setup command
-    sub_setup = subparsers.add_parser('setup', help='Download and install RAHasher')
+    sub_setup = subparsers.add_parser('setup',
+                                      help='Setup wizard (show status, configure API keys, install RAHasher)')
+    sub_setup.add_argument('--all', '-a', action='store_true',
+                           help='Run full setup (config + RAHasher)')
+    sub_setup.add_argument('--config', action='store_true',
+                           help='Interactive config setup (API keys)')
+    sub_setup.add_argument('--rahasher', action='store_true',
+                           help='Install/update RAHasher')
     sub_setup.add_argument('--upgrade', '-u', action='store_true',
                            help='Upgrade RAHasher even if already installed')
     sub_setup.add_argument('--check', '-c', action='store_true',
-                           help='Just check version, don\'t install')
+                           help='Just check RAHasher version')
     sub_setup.set_defaults(func=cmd_setup)
 
     # systems command
