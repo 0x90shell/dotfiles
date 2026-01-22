@@ -7,6 +7,9 @@ set -g display-time 2000  # 2 seconds
 # Fix environment for clipboard/SSH in existing panes after attaching (prefix + e)
 bind e send-keys 'eval "$(tmux show-env -s DISPLAY 2>/dev/null)"; eval "$(tmux show-env -s WAYLAND_DISPLAY 2>/dev/null)"; eval "$(tmux show-env -s SSH_AUTH_SOCK 2>/dev/null)"; tmux display-message "Environment updated (DISPLAY=${DISPLAY:-unset})"' C-m
 
+# Enable OSC 52 clipboard (works over SSH/nested sessions)
+set -g set-clipboard on
+
 # remap prefix from 'C-b' to 'C-a'
 #unbind C-b
 #set-option -g prefix C-a
