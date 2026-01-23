@@ -431,7 +431,7 @@ for i in "${!SRC[@]}"; do
     now=$(date +%s); elapsed=$(( now - start_ts ))
     prog_bytes=$done_bytes
     eta=$(( prog_bytes > 0 ? elapsed * (total_bytes - prog_bytes) / prog_bytes : 0 ))
-    global_pct=$(( (prog_bytes*100)/total_bytes ))
+    global_pct=$(( total_bytes > 0 ? (prog_bytes*100)/total_bytes : 0 ))
     print_bar "$global_pct" "$prog_bytes" "$total_bytes" "$eta" $((i+1)) "$n" "$base" "$conv_type"
     printf "\n"
 
@@ -460,7 +460,7 @@ for i in "${!SRC[@]}"; do
   now=$(date +%s); elapsed=$(( now - start_ts ))
   prog_bytes=$done_bytes
   eta=$(( prog_bytes > 0 ? elapsed * (total_bytes - prog_bytes) / prog_bytes : 0 ))
-  global_pct=$(( (prog_bytes*100)/total_bytes ))
+  global_pct=$(( total_bytes > 0 ? (prog_bytes*100)/total_bytes : 0 ))
   print_bar "$global_pct" "$prog_bytes" "$total_bytes" "$eta" $((i+1)) "$n" "$base" "$conv_type"
   last_global_pct=$global_pct
 
@@ -477,7 +477,7 @@ for i in "${!SRC[@]}"; do
           (( p > 100 )) && p=100
           now=$(date +%s); elapsed=$(( now - start_ts ))
           prog_bytes=$(( done_bytes + fbytes*p/100 ))
-          global_pct=$(( (prog_bytes*100)/total_bytes ))
+          global_pct=$(( total_bytes > 0 ? (prog_bytes*100)/total_bytes : 0 ))
           if (( global_pct != last_global_pct )); then
             eta=$(( prog_bytes > 0 ? elapsed * (total_bytes - prog_bytes) / prog_bytes : 0 ))
             print_bar "$global_pct" "$prog_bytes" "$total_bytes" "$eta" $((i+1)) "$n" "$base" "$conv_type"
@@ -498,7 +498,7 @@ for i in "${!SRC[@]}"; do
           (( p > 100 )) && p=100
           now=$(date +%s); elapsed=$(( now - start_ts ))
           prog_bytes=$(( done_bytes + fbytes*p/100 ))
-          global_pct=$(( (prog_bytes*100)/total_bytes ))
+          global_pct=$(( total_bytes > 0 ? (prog_bytes*100)/total_bytes : 0 ))
           if (( global_pct != last_global_pct )); then
             eta=$(( prog_bytes > 0 ? elapsed * (total_bytes - prog_bytes) / prog_bytes : 0 ))
             print_bar "$global_pct" "$prog_bytes" "$total_bytes" "$eta" $((i+1)) "$n" "$base" "$conv_type"
@@ -519,7 +519,7 @@ for i in "${!SRC[@]}"; do
           (( p > 100 )) && p=100
           now=$(date +%s); elapsed=$(( now - start_ts ))
           prog_bytes=$(( done_bytes + fbytes*p/100 ))
-          global_pct=$(( (prog_bytes*100)/total_bytes ))
+          global_pct=$(( total_bytes > 0 ? (prog_bytes*100)/total_bytes : 0 ))
           if (( global_pct != last_global_pct )); then
             eta=$(( prog_bytes > 0 ? elapsed * (total_bytes - prog_bytes) / prog_bytes : 0 ))
             print_bar "$global_pct" "$prog_bytes" "$total_bytes" "$eta" $((i+1)) "$n" "$base" "$conv_type"
@@ -542,7 +542,7 @@ for i in "${!SRC[@]}"; do
   fi
   
   now=$(date +%s); prog_bytes=$done_bytes
-  global_pct=$(( (prog_bytes*100)/total_bytes ))
+  global_pct=$(( total_bytes > 0 ? (prog_bytes*100)/total_bytes : 0 ))
   print_bar "$global_pct" "$prog_bytes" "$total_bytes" 0 $((i+1)) "$n" "$base" "$conv_type"
 done
 
