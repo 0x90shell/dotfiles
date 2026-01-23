@@ -35,21 +35,28 @@ export QT_SCALE_FACTOR=1.5
 {{- end }}
 
 #Oh My ZSH Plugins
-{{- if eq .chezmoi.osRelease.id "arch" "endeavouros" }}
 plugins=(
   git
+  history
 )
 
-#source for AUR installed plugins
+#History info
+export HISTFILE=$HOME/.zsh_history
+export HISTSIZE=1000000000
+export HIST_STAMPS="mm/dd/yyyy"
+export SAVEHIST=$HISTSIZE
+setopt hist_ignore_all_dups
+setopt INC_APPEND_HISTORY
+setopt HIST_SAVE_NO_DUPS
+setopt HIST_FIND_NO_DUPS
+
+
 source $ZSH/oh-my-zsh.sh
+{{- if eq .chezmoi.osRelease.id "arch" "endeavouros" }}
+#source for AUR installed plugins
 source /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
 source /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 {{- else }}
-plugins=(
-  git
-)
-
-source $ZSH/oh-my-zsh.sh
 #source for APT installed plugins
 source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
@@ -166,13 +173,3 @@ alias cp='cp -i'
 alias del='trash'
 
 source ~/.zsh_aliases
-
-#History info
-export HISTFILE=$HOME/.zsh_history
-export HISTSIZE=1000000000
-export HIST_STAMPS="mm-dd-yyyy"
-export SAVEHIST=$HISTSIZE
-setopt hist_ignore_all_dups
-setopt INC_APPEND_HISTORY
-setopt HIST_SAVE_NO_DUPS
-setopt HIST_FIND_NO_DUPS
