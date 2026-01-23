@@ -74,6 +74,11 @@ command -v chdman >/dev/null 2>&1 || {
   exit 1
 }
 
+command -v xxd >/dev/null 2>&1 || {
+  echo "Error: xxd not found in PATH (needed for ISO platform detection)." >&2
+  exit 1
+}
+
 # Check for DolphinTool (optional, only needed if GC/Wii ISOs are present)
 DOLPHIN_TOOL=""
 if command -v DolphinTool >/dev/null 2>&1; then
