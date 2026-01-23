@@ -1,16 +1,57 @@
 #!/usr/bin/env bash
-# Recursively convert images to CHD or RVZ with minimal output by default.
-# - .iso (GameCube/Wii) -> DolphinTool RVZ (zstd)
-# - .iso (other)        -> chdman createdvd (DVD)
-# - .cue                -> chdman createcd  (CD, multi-track aware)
-# - .gdi                -> chdman createcd  (Dreamcast GDI descriptor)
+# rom-bulkconvert - Recursively convert disc images to CHD or RVZ
 #
-# Non-verbose: single-line global progress bar with adaptive ETA.
+# Supported conversions:
+#   .iso (GameCube/Wii) -> RVZ (via DolphinTool, zstd compression)
+#   .iso (other)        -> CHD (via chdman createdvd, zstd compression)
+#   .cue                -> CHD (via chdman createcd, zstd compression)
+#   .gdi                -> CHD (via chdman createcd, zstd compression)
 #
-# Verbose (-v): print a header line matching non-verbose format, then tool's own dynamic bar.
+# Compression:
+#   CHD DVD: zstd,zlib,huff,flac  (fast decompression, ~2% larger than lzma)
+#   CHD CD:  cdzs,cdzl,cdfl       (zstd for CD sectors)
+#   RVZ:     zstd level 22        (DolphinTool default)
 #
+# Progress:
+#   Non-verbose: single-line progress bar with adaptive ETA
+#   Verbose (-v): header line + tool's native progress output
 
 set -euo pipefail
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [-v] [-h] [directory]
+
+Recursively convert disc images to CHD (chdman) or RVZ (DolphinTool).
+
+Options:
+  -v          Verbose mode - show tool output instead of progress bar
+  -h          Show this help message
+
+Arguments:
+  directory   Directory to scan (default: current directory)
+
+Supported formats:
+  .iso        -> .chd (DVD) or .rvz (GameCube/Wii)
+  .cue        -> .chd (CD, preserves multi-track)
+  .gdi        -> .chd (Dreamcast GDI)
+
+Compression settings:
+  DVD/ISO:    chdman createdvd -c zstd,zlib,huff,flac
+  CD/CUE/GDI: chdman createcd -c cdzs,cdzl,cdfl
+  GC/Wii:     DolphinTool -c zstd -l 22
+
+Requirements:
+  chdman      Required for CHD conversion (from MAME)
+  DolphinTool Optional for GameCube/Wii RVZ conversion
+
+Notes:
+  - Skips files that already have corresponding output
+  - ZSTD compression: ~3x faster decompression, ~2% larger than LZMA
+  - Compatible with RetroArch, PCSX2, PPSSPP, Flycast, DuckStation
+EOF
+  exit 0
+}
 
 ROOT="."
 VERBOSE=0
@@ -18,9 +59,10 @@ RVZ_COMPRESSION="zstd"
 RVZ_LEVEL=22
 RVZ_BLOCK_SIZE=131072
 
-while getopts ":v" opt; do
+while getopts ":vh" opt; do
   case "$opt" in
     v) VERBOSE=1 ;;
+    h) usage ;;
     *) ;;
   esac
 done
@@ -204,9 +246,9 @@ run_chdman_verbose() {
 
   local cmd
   if [[ "$typ" == "dvd" ]]; then
-    cmd=(chdman createdvd -i "$src" -o "$out")
+    cmd=(chdman createdvd -c "zstd,zlib,huff,flac" -i "$src" -o "$out")
   else
-    cmd=(chdman createcd  -i "$src" -o "$out")
+    cmd=(chdman createcd -c "cdzs,cdzl,cdfl" -i "$src" -o "$out")
   fi
 
   local cmd_str
@@ -445,7 +487,7 @@ for i in "${!SRC[@]}"; do
     dvd)
       # DVD/ISO conversion
       set +e
-      chdman createdvd -i "$src" -o "$out" 2>&1 | while IFS= read -r line; do
+      chdman createdvd -c "zstd,zlib,huff,flac" -i "$src" -o "$out" 2>&1 | while IFS= read -r line; do
         if [[ "$line" =~ ([0-9]{1,3})% ]]; then
           p="${BASH_REMATCH[1]}"
           (( p > 100 )) && p=100
@@ -466,7 +508,7 @@ for i in "${!SRC[@]}"; do
     *)
       # CD/GDI conversion
       set +e
-      chdman createcd -i "$src" -o "$out" 2>&1 | while IFS= read -r line; do
+      chdman createcd -c "cdzs,cdzl,cdfl" -i "$src" -o "$out" 2>&1 | while IFS= read -r line; do
         if [[ "$line" =~ ([0-9]{1,3})% ]]; then
           p="${BASH_REMATCH[1]}"
           (( p > 100 )) && p=100
