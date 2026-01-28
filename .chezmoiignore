@@ -50,4 +50,5 @@ bin/yaycache
 .config/autostart/jslisten-hotkeys.desktop
 .config/autostart/dropbox.desktop
 .config/autostart/org.keepassxc.KeePassXC.desktop
+.config/makepkg.conf
 {{ end }}
