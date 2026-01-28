@@ -19,8 +19,8 @@
     },
     {
       "name": "ES-DE",
-      "cmd": "/home/gandalf/bin/esdepull",
-      "image-path": "esde.png"
+      "cmd": "{{ .chezmoi.homeDir }}/bin/esdepull",
+      "image-path": "{{ .chezmoi.homeDir }}/.config/sunshine/assets/esde.png"
     },
     {
       "name": "Steam Big Picture",
@@ -34,11 +34,6 @@
         }
       ],
       "image-path": "steam.png"
-    },
-    {
-      "name": "Spotify",
-      "cmd": "/home/gandalf/bin/spotpull",
-      "image-path": "spotify.png"
     }
   ]
 }
