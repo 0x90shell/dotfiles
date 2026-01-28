@@ -1,0 +1,30 @@
+#!/bin/bash
+{{- if or (eq .chezmoi.hostname "Glamdring") (eq .chezmoi.hostname "Excalibur") }}
+set -euo pipefail
+
+CHEZMOI_SOURCE="{{ .chezmoi.sourceDir }}"
+HOST="{{ .chezmoi.hostname | lower }}"
+SERVICE_DIR="${CHEZMOI_SOURCE}/ignore-etc/${HOST}/firewalld/services"
+
+echo "Deploying firewalld services for ${HOST}..."
+
+# Ensure base services are enabled
+sudo firewall-cmd --permanent --add-service=ssh 2>/dev/null || true
+sudo firewall-cmd --permanent --add-service=dhcpv6-client 2>/dev/null || true
+
+# Copy custom service files if they exist
+if [[ -d "$SERVICE_DIR" ]]; then
+    for xml in "${SERVICE_DIR}"/*.xml; do
+        [[ -f "$xml" ]] || continue
+        sudo cp "$xml" /etc/firewalld/services/
+        service_name=$(basename "$xml" .xml)
+        sudo firewall-cmd --permanent --add-service="$service_name" 2>/dev/null || true
+        echo "  Added: $service_name"
+    done
+fi
+
+sudo firewall-cmd --reload
+
+echo "Active services:"
+sudo firewall-cmd --list-services
+{{- end }}

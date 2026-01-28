@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<service>
+  <short>Sunshine</short>
+  <description>Sunshine Game Streaming Server</description>
+  <port protocol="tcp" port="47984-47990"/>
+  <port protocol="udp" port="47998-48000"/>
+  <port protocol="udp" port="48002"/>
+  <port protocol="udp" port="48010"/>
+</service>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<service>
+  <short>Steam Remote Play</short>
+  <description>Steam Remote Play and Steam Link</description>
+  <port protocol="udp" port="27031-27036"/>
+  <port protocol="tcp" port="27036-27037"/>
+</service>
