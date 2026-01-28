@@ -1144,6 +1144,7 @@ libutempter
 libutf8proc
 libuv
 libva
+libva-utils
 libvdpau
 libverto
 libvisio
