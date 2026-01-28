@@ -2,7 +2,7 @@
 #!/bin/bash
 sourceDir="$HOME/.local/share/chezmoi"
 pkgFile="$sourceDir/ignore-pkgs/yay-glamdring.pkgs"
-cmd1="yay -S --needed --noconfirm - < $pkgFile"
+cmd1="yay -S ---batchinstall=false --sudoloop --needed --noconfirm - < $pkgFile"
 echo "running $cmd1"
 sleep 1
 bash -c "$cmd1"
@@ -10,7 +10,7 @@ bash -c "$cmd1"
 #!/bin/bash
 sourceDir="$HOME/.local/share/chezmoi"
 pkgFile="$sourceDir/ignore-pkgs/yay-excalibur.pkgs"
-cmd1="yay -S --needed --noconfirm - < $pkgFile"
+cmd1="yay -S --batchinstall=false --sudoloop --needed --noconfirm - < $pkgFile"
 echo "running $cmd1"
 sleep 1
 bash -c "$cmd1"
