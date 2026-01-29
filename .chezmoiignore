@@ -10,6 +10,7 @@ bin/test-setup*
 .config/autostart/redshift-gtk.desktop
 {{ else }}
 .config/systemd/user/esde-backup.service
+.config/systemd/user/emu-backup.service
 .config/systemd/user/jslisten.service
 .config/systemd/user/jstimeout.service
 .config/systemd/user/btpowerfix.service
