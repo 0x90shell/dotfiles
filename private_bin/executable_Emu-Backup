@@ -1,0 +1,904 @@
+#!/bin/bash
+# =============================================================================
+# Emu-Backup - Emulator Configuration & Save Backup Tool
+# =============================================================================
+# Backs up emulator configs and game saves with versioning and recovery options.
+# Supports archive mode (timestamped tar.xz with rotation) and mirror mode
+# (rsync with .previous protection).
+#
+# Version: 4.1
+# =============================================================================
+
+set -euo pipefail
+IFS=$'\n\t'
+
+# --- Configuration ---
+SCRIPT_NAME="$(basename "$0")"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CONFIG_FILE="${EMU_BACKUP_CONFIG:-$SCRIPT_DIR/.emu-backup.conf}"
+VERBOSE=false
+DRY_RUN=false
+QUIET=false
+SOURCES_FILTER=()
+
+# Defaults (can be overridden by config) - empty means not configured
+CONFIGS_DIR=""
+SAVES_DIR=""
+NAS_CONFIGS_DIR=""
+NAS_SAVES_DIR=""
+DEFAULT_RETENTION=7
+GLOBAL_EXCLUDES=""
+
+# Resolved primary directories (set after config parsing)
+PRIMARY_CONFIGS_DIR=""
+PRIMARY_SAVES_DIR=""
+
+# Hardcoded shader exclusions (always applied - these are large and regenerated)
+SHADER_EXCLUDES="shaders Shaders shader_cache ShaderCache StaticShaders GraphicPacks"
+
+# Required tools
+REQUIRED_TOOLS=(tar rsync find systemd-inhibit)
+
+# --- Help Function ---
+show_help() {
+    cat << EOF
+Emu-Backup v4.1 - Emulator Backup Tool
+
+DESCRIPTION:
+    Backs up emulator configurations and game saves with smart exclusions.
+    Supports archive mode (tar.xz with rotation) and mirror mode (rsync).
+
+USAGE:
+    $SCRIPT_NAME [OPTIONS] [SOURCE...]
+
+OPTIONS:
+    -c, --config FILE  Use alternate config file (default: .emu-backup.conf)
+    --init             Create a template config file (requires manual editing)
+    -n, --dry-run      Show what would be done without making changes
+    -l, --list         List configured backup sources and exit
+    -q, --quiet        Suppress non-essential output (for cron/systemd)
+    -v, --verbose      Enable verbose output (debug mode)
+    -h, --help         Show this help message
+
+MODES:
+    archive  - Creates timestamped tar.xz archives, keeps last N versions
+    mirror   - Direct rsync copy with .previous directory for recovery
+
+TYPES:
+    config   - Stores in configs directory (default)
+    save     - Stores in saves directory
+
+BACKUP DESTINATIONS:
+    Configure local dirs (configs_dir, saves_dir) and/or NAS dirs
+    (nas_configs_dir, nas_saves_dir). Flexible options:
+
+    - Local only:  Set configs_dir/saves_dir, leave nas_* empty
+    - NAS only:    Set nas_configs_dir/nas_saves_dir, leave local empty
+    - Both:        Set all four - backs up to local first, then syncs to NAS
+
+HARDCODED EXCLUSIONS (always skipped):
+    Shader folders: shaders, Shaders, shader_cache, ShaderCache, StaticShaders
+
+SOURCES:
+    Optionally specify which sources to back up (e.g., retroarch gamesaves).
+    If omitted, all configured sources are processed.
+
+EXAMPLES:
+    $SCRIPT_NAME                    # Back up all sources
+    $SCRIPT_NAME retroarch esde     # Back up only retroarch and esde
+    $SCRIPT_NAME -v --dry-run       # Verbose dry run of all sources
+    $SCRIPT_NAME -l                 # List all configured sources
+
+CONFIG FILE:
+    $CONFIG_FILE
+
+EOF
+}
+
+# --- Logging Functions ---
+# All logs go to stdout/stderr for systemd journal capture
+
+log_info() {
+    [[ "$QUIET" == true ]] && return
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+}
+
+log_success() {
+    # Always show success messages, even in quiet mode
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+}
+
+log_verbose() {
+    [[ "$VERBOSE" != true ]] && return
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] VERBOSE: $*"
+}
+
+log_warn() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $*" >&2
+}
+
+log_error() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" >&2
+    exit 1
+}
+
+# --- Config Template ---
+
+create_template_config() {
+    local config_file="$1"
+
+    # Safety check - don't clobber existing config
+    if [[ -f "$config_file" ]]; then
+        log_error "Config file already exists: $config_file
+       Remove it first if you want to regenerate the template."
+    fi
+
+    cat > "$config_file" << 'TEMPLATE'
+# =============================================================================
+# Emu-Backup Configuration
+# =============================================================================
+# This is a template config. You MUST edit this file before backups will run.
+#
+# QUICK START:
+#   1. Set your backup directories in [global] (uncomment and edit paths)
+#   2. Uncomment and configure at least one backup source below
+#   3. Run: ./Emu-Backup --list   (to verify your config)
+#   4. Run: ./Emu-Backup --dry-run (to preview what will happen)
+#   5. Run: ./Emu-Backup          (to actually run backups)
+#
+# FORMAT:
+#   [source-name]
+#   path = /path/to/source
+#   mode = archive | mirror
+#   type = config | save
+#   retention = N              (optional, for archive mode)
+#   excludes = pattern1 pattern2 pattern3
+#
+# MODES:
+#   archive - Creates timestamped tar.xz archives, auto-prunes old versions
+#   mirror  - Direct rsync copy with .previous directory for recovery
+#
+# TYPES:
+#   config - Stored in $configs_dir (default if not specified)
+#   save   - Stored in $saves_dir
+#
+# BACKUP DESTINATIONS:
+#   - Local only:  Set configs_dir/saves_dir, leave nas_* commented
+#   - NAS only:    Set nas_configs_dir/nas_saves_dir, leave local commented
+#   - Both:        Set all four - backs up to local first, then syncs to NAS
+#
+# =============================================================================
+
+# --- Global Settings ---
+[global]
+# Uncomment and set at least one pair of directories:
+
+# Local backup (fast, always available)
+# configs_dir = ~/Backups/Configs
+# saves_dir = ~/Backups/Saves
+
+# NAS backup (synced after local when both are set)
+# nas_configs_dir = ~/mnt/Backups/Configs
+# nas_saves_dir = ~/mnt/Backups/Saves
+
+# Number of archive versions to keep (can be overridden per-source)
+retention = 7
+
+# Global excludes applied to ALL sources (space-separated)
+global_excludes = *.log *.tmp
+
+# =============================================================================
+# BACKUP SOURCES
+# Uncomment and edit the sources you want to back up.
+# =============================================================================
+
+# --- Large Emulator Configs (mirror mode recommended) ---
+
+# [retroarch]
+# path = ~/.config/retroarch
+# mode = mirror
+# type = config
+# excludes = thumbnails database cheats system overlays autoconfig shaders
+
+# [esde]
+# path = ~/ES-DE
+# mode = mirror
+# type = config
+# excludes = downloaded_media gamelists/.*.tmp
+
+# --- Game Saves ---
+
+# [gamesaves]
+# path = ~/Games/Saves
+# mode = mirror
+# type = save
+# excludes =
+
+# --- Small Emulator Configs (archive mode for dated snapshots) ---
+
+# [dolphin]
+# path = ~/.config/dolphin-emu
+# mode = archive
+# type = config
+# excludes = Cache Shaders ShaderCache StaticShaders
+
+# [pcsx2]
+# path = ~/.config/PCSX2
+# mode = archive
+# type = config
+# excludes = cache shaders shader_cache textures
+
+# [rpcs3]
+# path = ~/.config/rpcs3
+# mode = archive
+# type = config
+# excludes = cache shaders shader_cache
+
+# [ppsspp]
+# path = ~/.config/ppsspp
+# mode = archive
+# type = config
+# excludes = shaders PSP/SYSTEM/CACHE
+
+# [duckstation]
+# path = ~/.config/duckstation
+# mode = archive
+# type = config
+# excludes = cache shaders shader_cache
+
+# [cemu]
+# path = ~/.config/Cemu
+# mode = archive
+# type = config
+# excludes = shaderCache graphicPacks/downloadedGraphicPacks
+TEMPLATE
+
+    echo "Created template config at: $config_file"
+    echo ""
+    echo "NOTE: This config requires manual editing before backups will run."
+    echo "      Edit the file to set your backup paths and uncomment sources."
+    exit 0
+}
+
+# --- Dependency Checks ---
+
+check_dependencies() {
+    local missing=()
+
+    for tool in "${REQUIRED_TOOLS[@]}"; do
+        if ! command -v "$tool" &>/dev/null; then
+            missing+=("$tool")
+        fi
+    done
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        log_error "Missing required tools: ${missing[*]}
+Install with: sudo pacman -S ${missing[*]}"
+    fi
+
+    log_verbose "All dependencies found: ${REQUIRED_TOOLS[*]}"
+}
+
+# --- Config Parsing ---
+
+# Associative arrays for parsed config (initialized empty for set -u compatibility)
+declare -A SOURCE_PATHS=()
+declare -A SOURCE_MODES=()
+declare -A SOURCE_TYPES=()
+declare -A SOURCE_EXCLUDES=()
+declare -A SOURCE_RETENTION=()
+
+parse_config() {
+    local config_file="$1"
+    local current_section=""
+    local line_num=0
+
+    if [[ ! -f "$config_file" ]]; then
+        log_error "Config file not found: $config_file
+Run '$SCRIPT_NAME --init' to create a template config."
+    fi
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        ((++line_num))
+
+        # Skip empty lines and comments
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+
+        # Trim whitespace
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
+
+        # Section header [name]
+        if [[ "$line" =~ ^\[([a-zA-Z0-9_-]+)\]$ ]]; then
+            current_section="${BASH_REMATCH[1]}"
+            log_verbose "Parsing section: $current_section"
+            continue
+        fi
+
+        # Key = value pairs
+        if [[ "$line" =~ ^([a-zA-Z_]+)[[:space:]]*=[[:space:]]*(.*)$ ]]; then
+            local key="${BASH_REMATCH[1]}"
+            local value="${BASH_REMATCH[2]}"
+
+            # Expand ~ to $HOME
+            value="${value/#\~/$HOME}"
+
+            if [[ "$current_section" == "global" ]]; then
+                case "$key" in
+                    configs_dir) CONFIGS_DIR="$value" ;;
+                    saves_dir) SAVES_DIR="$value" ;;
+                    nas_configs_dir) NAS_CONFIGS_DIR="$value" ;;
+                    nas_saves_dir) NAS_SAVES_DIR="$value" ;;
+                    retention) DEFAULT_RETENTION="$value" ;;
+                    global_excludes) GLOBAL_EXCLUDES="$value" ;;
+                esac
+            else
+                case "$key" in
+                    path) SOURCE_PATHS["$current_section"]="$value" ;;
+                    mode) SOURCE_MODES["$current_section"]="$value" ;;
+                    type) SOURCE_TYPES["$current_section"]="$value" ;;
+                    excludes) SOURCE_EXCLUDES["$current_section"]="$value" ;;
+                    retention) SOURCE_RETENTION["$current_section"]="$value" ;;
+                esac
+            fi
+        fi
+    done < "$config_file"
+
+    log_verbose "Loaded ${#SOURCE_PATHS[@]} backup sources"
+}
+
+# Resolve primary backup directories based on what's configured
+resolve_directories() {
+    # Configs: prefer local, fall back to NAS
+    if [[ -n "$CONFIGS_DIR" ]]; then
+        PRIMARY_CONFIGS_DIR="$CONFIGS_DIR"
+    elif [[ -n "$NAS_CONFIGS_DIR" ]]; then
+        PRIMARY_CONFIGS_DIR="$NAS_CONFIGS_DIR"
+    fi
+
+    # Saves: prefer local, fall back to NAS
+    if [[ -n "$SAVES_DIR" ]]; then
+        PRIMARY_SAVES_DIR="$SAVES_DIR"
+    elif [[ -n "$NAS_SAVES_DIR" ]]; then
+        PRIMARY_SAVES_DIR="$NAS_SAVES_DIR"
+    fi
+
+    # Validate at least one destination is configured
+    if [[ -z "$PRIMARY_CONFIGS_DIR" && -z "$PRIMARY_SAVES_DIR" ]]; then
+        log_error "No backup directories configured. Set configs_dir/saves_dir or nas_configs_dir/nas_saves_dir in config."
+    fi
+
+    log_verbose "Primary configs dir: ${PRIMARY_CONFIGS_DIR:-<not set>}"
+    log_verbose "Primary saves dir: ${PRIMARY_SAVES_DIR:-<not set>}"
+}
+
+# Check if NAS sync should run (both local AND NAS configured)
+should_sync_to_nas() {
+    local type="$1"
+    case "$type" in
+        config)
+            [[ -n "$CONFIGS_DIR" && -n "$NAS_CONFIGS_DIR" ]]
+            ;;
+        save)
+            [[ -n "$SAVES_DIR" && -n "$NAS_SAVES_DIR" ]]
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+list_sources() {
+    echo "Configured backup sources:"
+    echo ""
+    printf "%-15s %-8s %-8s %s\n" "SOURCE" "MODE" "TYPE" "PATH"
+    printf "%-15s %-8s %-8s %s\n" "------" "----" "----" "----"
+    if [[ ${#SOURCE_PATHS[@]} -eq 0 ]]; then
+        echo "(none configured)"
+    else
+        for source in "${!SOURCE_PATHS[@]}"; do
+            local path="${SOURCE_PATHS[$source]}"
+            local mode="${SOURCE_MODES[$source]:-archive}"
+            local type="${SOURCE_TYPES[$source]:-config}"
+            local exists="[OK]"
+            [[ ! -d "$path" ]] && exists="[MISSING]"
+            printf "%-15s %-8s %-8s %s %s\n" "$source" "$mode" "$type" "$path" "$exists"
+        done
+    fi
+    echo ""
+    echo "Backup destinations:"
+    if [[ -n "$CONFIGS_DIR" ]]; then
+        echo "  configs_dir (local): $CONFIGS_DIR"
+    fi
+    if [[ -n "$NAS_CONFIGS_DIR" ]]; then
+        echo "  nas_configs_dir:     $NAS_CONFIGS_DIR"
+    fi
+    if [[ -n "$SAVES_DIR" ]]; then
+        echo "  saves_dir (local):   $SAVES_DIR"
+    fi
+    if [[ -n "$NAS_SAVES_DIR" ]]; then
+        echo "  nas_saves_dir:       $NAS_SAVES_DIR"
+    fi
+    echo ""
+    echo "Backup strategy:"
+    if [[ -n "$CONFIGS_DIR" && -n "$NAS_CONFIGS_DIR" ]]; then
+        echo "  configs: local first, then sync to NAS"
+    elif [[ -n "$CONFIGS_DIR" ]]; then
+        echo "  configs: local only"
+    elif [[ -n "$NAS_CONFIGS_DIR" ]]; then
+        echo "  configs: NAS only"
+    else
+        echo "  configs: NOT CONFIGURED"
+    fi
+    if [[ -n "$SAVES_DIR" && -n "$NAS_SAVES_DIR" ]]; then
+        echo "  saves:   local first, then sync to NAS"
+    elif [[ -n "$SAVES_DIR" ]]; then
+        echo "  saves:   local only"
+    elif [[ -n "$NAS_SAVES_DIR" ]]; then
+        echo "  saves:   NAS only"
+    else
+        echo "  saves:   NOT CONFIGURED"
+    fi
+    echo ""
+    echo "Settings:"
+    echo "  retention: $DEFAULT_RETENTION"
+}
+
+# --- Core Functions ---
+
+# Get the primary base directory for a source based on its type
+get_base_dir() {
+    local type="$1"
+    case "$type" in
+        save)
+            if [[ -n "$PRIMARY_SAVES_DIR" ]]; then
+                echo "$PRIMARY_SAVES_DIR"
+            else
+                echo "$PRIMARY_CONFIGS_DIR"  # fallback if saves not configured
+            fi
+            ;;
+        *)
+            if [[ -n "$PRIMARY_CONFIGS_DIR" ]]; then
+                echo "$PRIMARY_CONFIGS_DIR"
+            else
+                echo "$PRIMARY_SAVES_DIR"  # fallback if configs not configured
+            fi
+            ;;
+    esac
+}
+
+# Build rsync/tar exclude arguments from space-separated patterns
+# Combines: hardcoded shader excludes + global excludes + source-specific excludes
+build_excludes() {
+    local excludes="$1"
+    local args=()
+
+    # shellcheck disable=SC2086
+    for pattern in $SHADER_EXCLUDES $GLOBAL_EXCLUDES $excludes; do
+        [[ -n "$pattern" ]] && args+=("--exclude=$pattern")
+    done
+
+    echo "${args[*]}"
+}
+
+# Check if any files have changed since last backup (recursive)
+# Respects exclude patterns for change detection
+detect_changes() {
+    local source_dir="$1"
+    local backup_ref="$2"  # File or directory to compare against
+    local excludes="$3"
+
+    # If backup doesn't exist, changes detected
+    if [[ ! -e "$backup_ref" ]]; then
+        log_verbose "No existing backup found - backup needed"
+        return 0
+    fi
+
+    # Build find exclusions from all exclude sources
+    local find_excludes=()
+    # shellcheck disable=SC2086
+    for pattern in $SHADER_EXCLUDES $GLOBAL_EXCLUDES $excludes; do
+        [[ -n "$pattern" ]] && find_excludes+=(-not -path "*/$pattern/*" -not -name "$pattern")
+    done
+
+    # Check for any file newer than the backup (recursive), excluding patterns
+    if find "$source_dir" -type f "${find_excludes[@]}" -newer "$backup_ref" 2>/dev/null | head -1 | grep -q .; then
+        log_verbose "Found files newer than backup"
+        return 0
+    fi
+
+    # No changes detected
+    return 1
+}
+
+# Find the most recent archive for a source (for change detection)
+find_latest_archive() {
+    local base_dir="$1"
+    local source_name="$2"
+
+    # Find archives matching pattern: source_name-YYYY-MM-DD_HHMMSS.tar.xz
+    local latest
+    latest=$(find "$base_dir" -maxdepth 1 -name "${source_name}-*.tar.xz" -type f 2>/dev/null | sort -r | head -1)
+    echo "$latest"
+}
+
+# Prune old archives, keeping only the most recent N
+prune_archives() {
+    local base_dir="$1"
+    local source_name="$2"
+    local retention="$3"
+
+    log_verbose "Pruning archives for $source_name (keeping $retention)"
+
+    # Get list of archives sorted by name (newest first due to timestamp format)
+    local archives
+    mapfile -t archives < <(find "$base_dir" -maxdepth 1 -name "${source_name}-*.tar.xz" -type f 2>/dev/null | sort -r)
+
+    local count=${#archives[@]}
+    if [[ $count -le $retention ]]; then
+        log_verbose "Have $count archives, retention is $retention - no pruning needed"
+        return 0
+    fi
+
+    # Delete archives beyond retention limit
+    local to_delete=$((count - retention))
+    log_verbose "Pruning $to_delete old archive(s)"
+
+    for ((i = retention; i < count; i++)); do
+        local archive="${archives[$i]}"
+        if [[ "$DRY_RUN" == true ]]; then
+            log_info "DRY RUN: Would delete old archive: $(basename "$archive")"
+        else
+            log_verbose "Deleting old archive: $(basename "$archive")"
+            rm -f "$archive"
+        fi
+    done
+}
+
+# Create archive backup (tar.xz) with timestamp
+backup_archive() {
+    local source_name="$1"
+    local source_dir="$2"
+    local excludes="$3"
+    local base_dir="$4"
+    local retention="$5"
+
+    local timestamp
+    timestamp=$(date '+%Y-%m-%d_%H%M%S')
+    local backup_file="$base_dir/${source_name}-${timestamp}.tar.xz"
+    local temp_file="${backup_file}.tmp"
+
+    log_info "[$source_name] Creating archive..."
+    log_verbose "Source: $source_dir"
+    log_verbose "Target: $backup_file"
+
+    if [[ "$DRY_RUN" == true ]]; then
+        log_info "[$source_name] DRY RUN: Would create $backup_file"
+        prune_archives "$base_dir" "$source_name" "$retention"
+        return 0
+    fi
+
+    mkdir -p "$base_dir"
+
+    # Build exclude args (same format works for tar)
+    local exclude_args
+    exclude_args=$(build_excludes "$excludes")
+
+    # Create compressed tar archive with sleep inhibition
+    # Use temp file to avoid partial archives on failure
+    local tar_opts="-cJf"
+    [[ "$VERBOSE" == true ]] && tar_opts="-cvJf"
+
+    log_verbose "Exclude args: $exclude_args"
+
+    # systemd-inhibit prevents sleep/idle during the entire tar operation
+    # shellcheck disable=SC2086
+    if ! systemd-inhibit --what="idle:sleep" --why="Emu-Backup: archiving $source_name" \
+        tar $tar_opts "$temp_file" $exclude_args \
+        -C "$(dirname "$source_dir")" "$(basename "$source_dir")"; then
+        rm -f "$temp_file"
+        log_warn "[$source_name] Archive creation failed"
+        return 1
+    fi
+
+    # Atomic move on success
+    mv "$temp_file" "$backup_file"
+
+    local size
+    size=$(du -h "$backup_file" | cut -f1)
+    log_success "[$source_name] Archive created: $backup_file ($size)"
+
+    # Prune old archives
+    prune_archives "$base_dir" "$source_name" "$retention"
+}
+
+# Mirror backup (rsync direct copy with .previous protection)
+backup_mirror() {
+    local source_name="$1"
+    local source_dir="$2"
+    local excludes="$3"
+    local base_dir="$4"
+    local backup_dir="$base_dir/$source_name"
+
+    log_info "[$source_name] Syncing mirror..."
+    log_verbose "Source: $source_dir"
+    log_verbose "Target: $backup_dir"
+
+    if [[ "$DRY_RUN" == true ]]; then
+        log_info "[$source_name] DRY RUN: Would sync to $backup_dir"
+        return 0
+    fi
+
+    mkdir -p "$backup_dir"
+
+    # Build exclude args (also exclude .previous from source if it somehow exists)
+    local exclude_args
+    exclude_args=$(build_excludes "$excludes")
+    exclude_args+=" --exclude=.previous"
+
+    # Use --backup and --backup-dir to preserve one previous version of changed files
+    local rsync_opts="-a --delete --backup --backup-dir=.previous"
+    [[ "$VERBOSE" == true ]] && rsync_opts="-av --delete --backup --backup-dir=.previous --info=progress2"
+
+    log_verbose "Exclude args: $exclude_args"
+
+    # systemd-inhibit prevents sleep/idle during the entire rsync operation
+    # shellcheck disable=SC2086
+    if ! systemd-inhibit --what="idle:sleep" --why="Emu-Backup: syncing $source_name" \
+        rsync $rsync_opts $exclude_args "$source_dir/" "$backup_dir/"; then
+        log_warn "[$source_name] Mirror sync failed"
+        return 1
+    fi
+
+    log_success "[$source_name] Mirror sync complete"
+}
+
+# Process a single backup source
+process_source() {
+    local source_name="$1"
+    local source_dir="${SOURCE_PATHS[$source_name]}"
+    local mode="${SOURCE_MODES[$source_name]:-archive}"
+    local type="${SOURCE_TYPES[$source_name]:-config}"
+    local excludes="${SOURCE_EXCLUDES[$source_name]:-}"
+    local retention="${SOURCE_RETENTION[$source_name]:-$DEFAULT_RETENTION}"
+
+    # Get base directory based on type
+    local base_dir
+    base_dir=$(get_base_dir "$type")
+
+    # Validate we have a destination
+    if [[ -z "$base_dir" ]]; then
+        log_warn "[$source_name] No backup directory configured for type '$type' (skipping)"
+        return 0
+    fi
+
+    # Validate source exists
+    if [[ ! -d "$source_dir" ]]; then
+        log_warn "[$source_name] Source directory not found: $source_dir (skipping)"
+        return 0
+    fi
+
+    # Determine backup reference for change detection
+    local backup_ref
+    if [[ "$mode" == "archive" ]]; then
+        backup_ref=$(find_latest_archive "$base_dir" "$source_name")
+        [[ -z "$backup_ref" ]] && backup_ref="$base_dir/${source_name}-nonexistent.tar.xz"
+    else
+        backup_ref="$base_dir/$source_name"
+    fi
+
+    # Check for changes
+    if ! detect_changes "$source_dir" "$backup_ref" "$excludes"; then
+        log_info "[$source_name] No changes detected - skipping"
+        return 0
+    fi
+
+    # Perform backup based on mode
+    case "$mode" in
+        archive)
+            backup_archive "$source_name" "$source_dir" "$excludes" "$base_dir" "$retention"
+            ;;
+        mirror)
+            backup_mirror "$source_name" "$source_dir" "$excludes" "$base_dir"
+            ;;
+        *)
+            log_warn "[$source_name] Unknown mode '$mode' - skipping"
+            return 0
+            ;;
+    esac
+}
+
+# Sync local backup to NAS (only when both local AND NAS are configured)
+sync_to_nas() {
+    local sync_needed=false
+    local sync_failed=0
+
+    # Check if any sync is needed
+    if should_sync_to_nas "config" || should_sync_to_nas "save"; then
+        sync_needed=true
+    fi
+
+    if [[ "$sync_needed" == false ]]; then
+        log_verbose "NAS sync not configured (need both local and NAS dirs) - skipping"
+        return 0
+    fi
+
+    local rsync_opts="-a --delete"
+    [[ "$VERBOSE" == true ]] && rsync_opts="-av --delete --info=progress2"
+
+    # Sync configs to NAS (only if both local and NAS are configured)
+    if should_sync_to_nas "config"; then
+        if [[ ! -d "$(dirname "$NAS_CONFIGS_DIR")" ]]; then
+            log_warn "NAS configs path not accessible: $NAS_CONFIGS_DIR (skipping)"
+            sync_failed=1
+        else
+            log_info "Syncing configs to NAS..."
+            if [[ "$DRY_RUN" == true ]]; then
+                log_info "DRY RUN: Would sync $CONFIGS_DIR to $NAS_CONFIGS_DIR"
+            else
+                mkdir -p "$NAS_CONFIGS_DIR"
+                # shellcheck disable=SC2086
+                if ! systemd-inhibit --what="idle:sleep" --why="Emu-Backup: syncing configs to NAS" \
+                    rsync $rsync_opts "$CONFIGS_DIR/" "$NAS_CONFIGS_DIR/"; then
+                    log_warn "NAS configs sync failed"
+                    sync_failed=1
+                fi
+            fi
+        fi
+    fi
+
+    # Sync saves to NAS (only if both local and NAS are configured)
+    if should_sync_to_nas "save"; then
+        if [[ ! -d "$(dirname "$NAS_SAVES_DIR")" ]]; then
+            log_warn "NAS saves path not accessible: $NAS_SAVES_DIR (skipping)"
+            sync_failed=1
+        else
+            log_info "Syncing saves to NAS..."
+            if [[ "$DRY_RUN" == true ]]; then
+                log_info "DRY RUN: Would sync $SAVES_DIR to $NAS_SAVES_DIR"
+            else
+                mkdir -p "$NAS_SAVES_DIR"
+                # shellcheck disable=SC2086
+                if ! systemd-inhibit --what="idle:sleep" --why="Emu-Backup: syncing saves to NAS" \
+                    rsync $rsync_opts "$SAVES_DIR/" "$NAS_SAVES_DIR/"; then
+                    log_warn "NAS saves sync failed"
+                    sync_failed=1
+                fi
+            fi
+        fi
+    fi
+
+    if [[ $sync_failed -eq 0 ]]; then
+        log_success "NAS sync complete"
+        return 0
+    else
+        return 1
+    fi
+}
+
+# --- Main Function ---
+main() {
+    local list_only=false
+    local init_config=false
+    local exit_code=0
+
+    # Parse command line arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_help
+                exit 0
+                ;;
+            --init)
+                init_config=true
+                shift
+                ;;
+            -v|--verbose)
+                VERBOSE=true
+                shift
+                ;;
+            -q|--quiet)
+                QUIET=true
+                shift
+                ;;
+            -n|--dry-run)
+                DRY_RUN=true
+                shift
+                ;;
+            -l|--list)
+                list_only=true
+                shift
+                ;;
+            -c|--config)
+                [[ -z "${2:-}" ]] && log_error "-c/--config requires a file path argument"
+                CONFIG_FILE="$2"
+                shift 2
+                ;;
+            -*)
+                log_error "Unknown option: $1 (use -h for help)"
+                ;;
+            *)
+                # Positional args are source filters
+                SOURCES_FILTER+=("$1")
+                shift
+                ;;
+        esac
+    done
+
+    # Handle --init before anything else (doesn't need dependencies)
+    if [[ "$init_config" == true ]]; then
+        create_template_config "$CONFIG_FILE"
+    fi
+
+    # Check required tools are installed
+    check_dependencies
+
+    # Parse configuration file
+    parse_config "$CONFIG_FILE"
+
+    # Resolve primary backup directories
+    resolve_directories
+
+    # List mode - just show sources and exit
+    if [[ "$list_only" == true ]]; then
+        list_sources
+        exit 0
+    fi
+
+    log_info "Starting Emu-Backup..."
+    [[ "$DRY_RUN" == true ]] && log_info "DRY RUN MODE - no changes will be made"
+
+    # Ensure primary backup directories exist
+    [[ -n "$PRIMARY_CONFIGS_DIR" ]] && mkdir -p "$PRIMARY_CONFIGS_DIR"
+    [[ -n "$PRIMARY_SAVES_DIR" ]] && mkdir -p "$PRIMARY_SAVES_DIR"
+
+    # Determine which sources to process
+    local sources_to_process=()
+    if [[ ${#SOURCES_FILTER[@]} -gt 0 ]]; then
+        # User specified specific sources
+        for source in "${SOURCES_FILTER[@]}"; do
+            if [[ -n "${SOURCE_PATHS[$source]:-}" ]]; then
+                sources_to_process+=("$source")
+            else
+                log_warn "Unknown source: $source (skipping)"
+            fi
+        done
+    else
+        # Process all sources
+        if [[ ${#SOURCE_PATHS[@]} -gt 0 ]]; then
+            sources_to_process=("${!SOURCE_PATHS[@]}")
+        fi
+    fi
+
+    if [[ ${#sources_to_process[@]} -eq 0 ]]; then
+        log_error "No valid sources to process. Edit your config to add backup sources."
+    fi
+
+    # Process each source, track failures
+    local processed=0
+    local failed=0
+    for source in "${sources_to_process[@]}"; do
+        if ! process_source "$source"; then
+            ((++failed))
+        fi
+        ((++processed))
+    done
+
+    # Sync to NAS (if both local and NAS are configured)
+    local nas_failed=0
+    sync_to_nas || nas_failed=1
+
+    # Summary
+    if [[ $failed -gt 0 || $nas_failed -gt 0 ]]; then
+        [[ $failed -gt 0 ]] && log_warn "Backup: $failed failure(s) out of $processed source(s)"
+        [[ $nas_failed -gt 0 ]] && log_warn "NAS sync: failed"
+        exit_code=1
+    else
+        log_success "Backup complete: $processed source(s) processed"
+    fi
+
+    exit $exit_code
+}
+
+# --- Entry Point ---
+main "$@"

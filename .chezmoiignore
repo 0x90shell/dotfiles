@@ -26,6 +26,8 @@ bin/bash*
 bin/apt*
 {{ else }}
 bin/emucloser
+bin/Emu-Backup
+bin/.emu-backup.conf
 bin/esdepull
 bin/ESDE*
 bin/kernel-purge
