@@ -473,9 +473,11 @@ get_base_dir() {
 build_excludes() {
     local -n _arr=$1  # nameref to caller's array
     local excludes="$2"
+    local pattern
 
     _arr=()
-    # shellcheck disable=SC2086
+    # Temporarily reset IFS to split on spaces (script uses IFS=$'\n\t')
+    local IFS=' '
     for pattern in $SHADER_EXCLUDES $GLOBAL_EXCLUDES $excludes; do
         [[ -n "$pattern" ]] && _arr+=("--exclude=$pattern")
     done
@@ -487,6 +489,7 @@ detect_changes() {
     local source_dir="$1"
     local backup_ref="$2"  # File or directory to compare against
     local excludes="$3"
+    local pattern
 
     # If backup doesn't exist, changes detected
     if [[ ! -e "$backup_ref" ]]; then
@@ -496,7 +499,8 @@ detect_changes() {
 
     # Build find exclusions from all exclude sources
     local find_excludes=()
-    # shellcheck disable=SC2086
+    # Temporarily reset IFS to split on spaces (script uses IFS=$'\n\t')
+    local IFS=' '
     for pattern in $SHADER_EXCLUDES $GLOBAL_EXCLUDES $excludes; do
         [[ -n "$pattern" ]] && find_excludes+=(-not -path "*/$pattern/*" -not -name "$pattern")
     done
