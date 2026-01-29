@@ -637,15 +637,14 @@ backup_mirror() {
     exclude_args+=("--exclude=.previous")
 
     # Use --backup and --backup-dir to preserve one previous version of changed files
-    local rsync_opts="-a --delete --backup --backup-dir=.previous"
-    [[ "$VERBOSE" == true ]] && rsync_opts="-av --delete --backup --backup-dir=.previous --info=progress2"
+    local rsync_opts=(-a --delete --backup --backup-dir=.previous)
+    [[ "$VERBOSE" == true ]] && rsync_opts=(-av --delete --backup --backup-dir=.previous --info=progress2)
 
     log_verbose "Exclude args: ${exclude_args[*]}"
 
     # systemd-inhibit prevents sleep/idle during the entire rsync operation
-    # shellcheck disable=SC2086
     if ! systemd-inhibit --what="idle:sleep" --why="Emu-Backup: syncing $source_name" \
-        rsync $rsync_opts "${exclude_args[@]}" "$source_dir/" "$backup_dir/"; then
+        rsync "${rsync_opts[@]}" "${exclude_args[@]}" "$source_dir/" "$backup_dir/"; then
         log_warn "[$source_name] Mirror sync failed"
         return 1
     fi
@@ -723,8 +722,8 @@ sync_to_nas() {
         return 0
     fi
 
-    local rsync_opts="-a --delete"
-    [[ "$VERBOSE" == true ]] && rsync_opts="-av --delete --info=progress2"
+    local rsync_opts=(-a --delete)
+    [[ "$VERBOSE" == true ]] && rsync_opts=(-av --delete --info=progress2)
 
     # Sync configs to NAS (only if both local and NAS are configured)
     if should_sync_to_nas "config"; then
@@ -737,9 +736,8 @@ sync_to_nas() {
                 log_info "DRY RUN: Would sync $CONFIGS_DIR to $NAS_CONFIGS_DIR"
             else
                 mkdir -p "$NAS_CONFIGS_DIR"
-                # shellcheck disable=SC2086
                 if ! systemd-inhibit --what="idle:sleep" --why="Emu-Backup: syncing configs to NAS" \
-                    rsync $rsync_opts "$CONFIGS_DIR/" "$NAS_CONFIGS_DIR/"; then
+                    rsync "${rsync_opts[@]}" "$CONFIGS_DIR/" "$NAS_CONFIGS_DIR/"; then
                     log_warn "NAS configs sync failed"
                     sync_failed=1
                 fi
@@ -758,9 +756,8 @@ sync_to_nas() {
                 log_info "DRY RUN: Would sync $SAVES_DIR to $NAS_SAVES_DIR"
             else
                 mkdir -p "$NAS_SAVES_DIR"
-                # shellcheck disable=SC2086
                 if ! systemd-inhibit --what="idle:sleep" --why="Emu-Backup: syncing saves to NAS" \
-                    rsync $rsync_opts "$SAVES_DIR/" "$NAS_SAVES_DIR/"; then
+                    rsync "${rsync_opts[@]}" "$SAVES_DIR/" "$NAS_SAVES_DIR/"; then
                     log_warn "NAS saves sync failed"
                     sync_failed=1
                 fi
