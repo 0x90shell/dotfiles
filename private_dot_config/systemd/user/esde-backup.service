@@ -1,7 +1,0 @@
-[Unit]
-Description="A script to backup ES-DE configs and data."
-
-[Service]
-Type=oneshot
-ExecStart=/home/gandalf/bin/ESDE-backup
-
