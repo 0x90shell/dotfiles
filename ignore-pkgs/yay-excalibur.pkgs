@@ -244,6 +244,7 @@ eos-settings-xfce4
 eos-translations
 eos-update
 eos-update-notifier
+etherwake
 ethtool
 evtest
 ex-vi-compat
