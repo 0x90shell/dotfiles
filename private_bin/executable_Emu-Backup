@@ -469,16 +469,16 @@ get_base_dir() {
 
 # Build rsync/tar exclude arguments from space-separated patterns
 # Combines: hardcoded shader excludes + global excludes + source-specific excludes
+# Uses nameref to populate caller's array (avoids IFS word-splitting issues)
 build_excludes() {
-    local excludes="$1"
-    local args=()
+    local -n _arr=$1  # nameref to caller's array
+    local excludes="$2"
 
+    _arr=()
     # shellcheck disable=SC2086
     for pattern in $SHADER_EXCLUDES $GLOBAL_EXCLUDES $excludes; do
-        [[ -n "$pattern" ]] && args+=("--exclude=$pattern")
+        [[ -n "$pattern" ]] && _arr+=("--exclude=$pattern")
     done
-
-    echo "${args[*]}"
 }
 
 # Check if any files have changed since last backup (recursive)
@@ -580,21 +580,21 @@ backup_archive() {
 
     mkdir -p "$base_dir"
 
-    # Build exclude args (same format works for tar)
-    local exclude_args
-    exclude_args=$(build_excludes "$excludes")
+    # Build exclude args array (same format works for tar)
+    local exclude_args=()
+    build_excludes exclude_args "$excludes"
 
     # Create compressed tar archive with sleep inhibition
     # Use temp file to avoid partial archives on failure
     local tar_opts="-cJf"
     [[ "$VERBOSE" == true ]] && tar_opts="-cvJf"
 
-    log_verbose "Exclude args: $exclude_args"
+    log_verbose "Exclude args: ${exclude_args[*]}"
 
     # systemd-inhibit prevents sleep/idle during the entire tar operation
     # shellcheck disable=SC2086
     if ! systemd-inhibit --what="idle:sleep" --why="Emu-Backup: archiving $source_name" \
-        tar $tar_opts "$temp_file" $exclude_args \
+        tar $tar_opts "$temp_file" "${exclude_args[@]}" \
         -C "$(dirname "$source_dir")" "$(basename "$source_dir")"; then
         rm -f "$temp_file"
         log_warn "[$source_name] Archive creation failed"
@@ -631,21 +631,21 @@ backup_mirror() {
 
     mkdir -p "$backup_dir"
 
-    # Build exclude args (also exclude .previous from source if it somehow exists)
-    local exclude_args
-    exclude_args=$(build_excludes "$excludes")
-    exclude_args+=" --exclude=.previous"
+    # Build exclude args array (also exclude .previous from source if it somehow exists)
+    local exclude_args=()
+    build_excludes exclude_args "$excludes"
+    exclude_args+=("--exclude=.previous")
 
     # Use --backup and --backup-dir to preserve one previous version of changed files
     local rsync_opts="-a --delete --backup --backup-dir=.previous"
     [[ "$VERBOSE" == true ]] && rsync_opts="-av --delete --backup --backup-dir=.previous --info=progress2"
 
-    log_verbose "Exclude args: $exclude_args"
+    log_verbose "Exclude args: ${exclude_args[*]}"
 
     # systemd-inhibit prevents sleep/idle during the entire rsync operation
     # shellcheck disable=SC2086
     if ! systemd-inhibit --what="idle:sleep" --why="Emu-Backup: syncing $source_name" \
-        rsync $rsync_opts $exclude_args "$source_dir/" "$backup_dir/"; then
+        rsync $rsync_opts "${exclude_args[@]}" "$source_dir/" "$backup_dir/"; then
         log_warn "[$source_name] Mirror sync failed"
         return 1
     fi
