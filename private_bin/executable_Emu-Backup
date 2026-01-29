@@ -491,8 +491,8 @@ detect_changes() {
     local excludes="$3"
     local pattern
 
-    # If backup doesn't exist, changes detected
-    if [[ ! -e "$backup_ref" ]]; then
+    # If backup doesn't exist OR is an empty directory, changes detected
+    if [[ ! -e "$backup_ref" ]] || { [[ -d "$backup_ref" ]] && [[ -z "$(ls -A "$backup_ref" 2>/dev/null)" ]]; }; then
         log_verbose "No existing backup found - backup needed"
         return 0
     fi
