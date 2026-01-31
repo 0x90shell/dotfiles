@@ -55,4 +55,5 @@ bin/yaycache
 .config/autostart/dropbox.desktop
 .config/autostart/org.keepassxc.KeePassXC.desktop
 .config/makepkg.conf
+.local/share/perfectdark
 {{ end }}
