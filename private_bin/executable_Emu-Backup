@@ -6,7 +6,7 @@
 # Supports archive mode (timestamped tar.xz with rotation) and mirror mode
 # (rsync with .previous protection).
 #
-# Version: 4.2
+# Version: 4.3
 # =============================================================================
 
 set -euo pipefail
@@ -42,7 +42,7 @@ REQUIRED_TOOLS=(tar rsync find systemd-inhibit)
 # --- Help Function ---
 show_help() {
     cat << EOF
-Emu-Backup v4.2 - Emulator Backup Tool
+Emu-Backup v4.3 - Emulator Backup Tool
 
 DESCRIPTION:
     Backs up emulator configurations and game saves with smart exclusions.
@@ -503,18 +503,23 @@ build_excludes() {
 }
 
 # Build rsync include arguments for selective file backup
-# Order matters: include dirs first, then patterns, then exclude everything else
+# Order matters: excludes first, then include dirs, then patterns, then exclude rest
 build_includes() {
     # shellcheck disable=SC2178  # nameref is intentional
     local -n _arr=$1  # nameref to caller's array
     local includes="$2"
+    local excludes="${3:-}"
     local pattern
 
     _arr=()
     [[ -z "$includes" ]] && return
 
     local IFS=' '
-    # First: allow directory traversal (required for rsync to descend into dirs)
+    # First: exclude specific folders (must come before includes)
+    for pattern in $excludes; do
+        [[ -n "$pattern" ]] && _arr+=("--exclude=$pattern")
+    done
+    # Then: allow directory traversal (required for rsync to descend into dirs)
     _arr+=("--include=*/")
     # Then: include each specified pattern
     for pattern in $includes; do
@@ -543,6 +548,7 @@ detect_changes() {
 
     # If includes are specified, only check those files (use -L to follow symlinks)
     if [[ -n "$includes" ]]; then
+        # Build include patterns
         local find_includes=()
         local first=true
         for pattern in $includes; do
@@ -550,8 +556,13 @@ detect_changes() {
             find_includes+=(-name "$pattern")
             first=false
         done
-        # Find files matching any include pattern, newer than backup
-        if find -L "$source_dir" -type f \( "${find_includes[@]}" \) -newer "$backup_ref" 2>/dev/null | head -1 | grep -q .; then
+        # Build exclude patterns (also apply to includes mode)
+        local find_excludes=()
+        for pattern in $excludes; do
+            [[ -n "$pattern" ]] && find_excludes+=(-not -path "*/$pattern/*" -not -name "$pattern")
+        done
+        # Find files matching any include pattern, excluding specified, newer than backup
+        if find -L "$source_dir" -type f \( "${find_includes[@]}" \) "${find_excludes[@]}" -newer "$backup_ref" 2>/dev/null | head -1 | grep -q .; then
             log_verbose "Found included files newer than backup"
             return 0
         fi
@@ -655,8 +666,14 @@ backup_archive() {
             find_patterns+=(-name "$pattern")
             first=false
         done
+        # Build find exclusions
+        local find_excludes=()
+        for pattern in $excludes; do
+            [[ -n "$pattern" ]] && find_excludes+=(-not -path "*/$pattern/*" -not -name "$pattern")
+        done
 
         log_verbose "Include patterns: ${find_patterns[*]}"
+        [[ ${#find_excludes[@]} -gt 0 ]] && log_verbose "Exclude patterns: ${find_excludes[*]}"
 
         # Use find -L to follow symlinks, pipe file list to tar -T
         # cd to parent dir so paths are relative (e.g., ROMs/desktop/script.sh)
@@ -665,7 +682,7 @@ backup_archive() {
 
         # shellcheck disable=SC2086
         if ! systemd-inhibit --what="idle:sleep" --why="Emu-Backup: archiving $source_name" \
-            bash -c "cd \"$(dirname "$source_dir")\" && find -L \"$(basename "$source_dir")\" -type f \\( ${find_patterns[*]} \\) | tar $tar_opts \"$temp_file\" -T -"; then
+            bash -c "cd \"$(dirname "$source_dir")\" && find -L \"$(basename "$source_dir")\" -type f \\( ${find_patterns[*]} \\) ${find_excludes[*]} | tar $tar_opts \"$temp_file\" -T -"; then
             rm -f "$temp_file"
             log_warn "[$source_name] Archive creation failed"
             return 1
@@ -737,7 +754,7 @@ backup_mirror() {
     # Handle includes mode (selective file backup with symlink following)
     if [[ -n "$includes" ]]; then
         local include_args=()
-        build_includes include_args "$includes"
+        build_includes include_args "$includes" "$excludes"
 
         # Use -L to follow symlinks (e.g., ports -> /mnt/Games1/ports)
         local rsync_opts=(-aL --delete)
