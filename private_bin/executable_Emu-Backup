@@ -6,7 +6,7 @@
 # Supports archive mode (timestamped tar.xz with rotation) and mirror mode
 # (rsync with .previous protection).
 #
-# Version: 4.1
+# Version: 4.2
 # =============================================================================
 
 set -euo pipefail
@@ -42,7 +42,7 @@ REQUIRED_TOOLS=(tar rsync find systemd-inhibit)
 # --- Help Function ---
 show_help() {
     cat << EOF
-Emu-Backup v4.1 - Emulator Backup Tool
+Emu-Backup v4.2 - Emulator Backup Tool
 
 DESCRIPTION:
     Backs up emulator configurations and game saves with smart exclusions.
@@ -75,6 +75,11 @@ BACKUP DESTINATIONS:
     - Local only:  Set configs_dir/saves_dir, leave nas_* empty
     - NAS only:    Set nas_configs_dir/nas_saves_dir, leave local empty
     - Both:        Set all four - backs up to local first, then syncs to NAS
+
+INCLUDES (selective backup):
+    Use 'includes' instead of 'excludes' to back up ONLY matching files.
+    Follows symlinks (-L) for traversing linked directories.
+    Example: includes = *.sh *.desktop systeminfo.txt
 
 HARDCODED EXCLUSIONS (always skipped):
     Shader folders: shaders, Shaders, shader_cache, ShaderCache, StaticShaders
@@ -153,6 +158,7 @@ create_template_config() {
 #   type = config | save
 #   retention = N              (optional, for archive mode)
 #   excludes = pattern1 pattern2 pattern3
+#   includes = *.sh *.txt      (optional, backs up ONLY matching files)
 #
 # MODES:
 #   archive - Creates timestamped tar.xz archives, auto-prunes old versions
@@ -213,6 +219,15 @@ global_excludes = *.log *.tmp
 # mode = mirror
 # type = save
 # excludes =
+
+# --- Selective Backup (includes mode) ---
+# Use 'includes' to back up ONLY specific file types (follows symlinks)
+
+# [esde-scripts]
+# path = ~/ROMs
+# mode = mirror
+# type = config
+# includes = *.sh *.desktop systeminfo.txt
 
 # --- Small Emulator Configs (archive mode for dated snapshots) ---
 
@@ -286,6 +301,7 @@ declare -A SOURCE_PATHS=()
 declare -A SOURCE_MODES=()
 declare -A SOURCE_TYPES=()
 declare -A SOURCE_EXCLUDES=()
+declare -A SOURCE_INCLUDES=()
 declare -A SOURCE_RETENTION=()
 
 parse_config() {
@@ -338,6 +354,7 @@ Run '$SCRIPT_NAME --init' to create a template config."
                     mode) SOURCE_MODES["$current_section"]="$value" ;;
                     type) SOURCE_TYPES["$current_section"]="$value" ;;
                     excludes) SOURCE_EXCLUDES["$current_section"]="$value" ;;
+                    includes) SOURCE_INCLUDES["$current_section"]="$value" ;;
                     retention) SOURCE_RETENTION["$current_section"]="$value" ;;
                 esac
             fi
@@ -400,9 +417,11 @@ list_sources() {
             local path="${SOURCE_PATHS[$source]}"
             local mode="${SOURCE_MODES[$source]:-archive}"
             local type="${SOURCE_TYPES[$source]:-config}"
+            local includes="${SOURCE_INCLUDES[$source]:-}"
             local exists="[OK]"
             [[ ! -d "$path" ]] && exists="[MISSING]"
             printf "%-15s %-8s %-8s %s %s\n" "$source" "$mode" "$type" "$path" "$exists"
+            [[ -n "$includes" ]] && printf "%-15s          includes: %s\n" "" "$includes"
         done
     fi
     echo ""
@@ -483,12 +502,35 @@ build_excludes() {
     done
 }
 
+# Build rsync include arguments for selective file backup
+# Order matters: include dirs first, then patterns, then exclude everything else
+build_includes() {
+    # shellcheck disable=SC2178  # nameref is intentional
+    local -n _arr=$1  # nameref to caller's array
+    local includes="$2"
+    local pattern
+
+    _arr=()
+    [[ -z "$includes" ]] && return
+
+    local IFS=' '
+    # First: allow directory traversal (required for rsync to descend into dirs)
+    _arr+=("--include=*/")
+    # Then: include each specified pattern
+    for pattern in $includes; do
+        [[ -n "$pattern" ]] && _arr+=("--include=$pattern")
+    done
+    # Finally: exclude everything else
+    _arr+=("--exclude=*")
+}
+
 # Check if any files have changed since last backup (recursive)
-# Respects exclude patterns for change detection
+# Respects exclude/include patterns for change detection
 detect_changes() {
     local source_dir="$1"
     local backup_ref="$2"  # File or directory to compare against
     local excludes="$3"
+    local includes="${4:-}"
     local pattern
 
     # If backup doesn't exist OR is an empty directory, changes detected
@@ -497,10 +539,27 @@ detect_changes() {
         return 0
     fi
 
-    # Build find exclusions from all exclude sources
-    local find_excludes=()
-    # Temporarily reset IFS to split on spaces (script uses IFS=$'\n\t')
     local IFS=' '
+
+    # If includes are specified, only check those files (use -L to follow symlinks)
+    if [[ -n "$includes" ]]; then
+        local find_includes=()
+        local first=true
+        for pattern in $includes; do
+            [[ "$first" != true ]] && find_includes+=(-o)
+            find_includes+=(-name "$pattern")
+            first=false
+        done
+        # Find files matching any include pattern, newer than backup
+        if find -L "$source_dir" -type f \( "${find_includes[@]}" \) -newer "$backup_ref" 2>/dev/null | head -1 | grep -q .; then
+            log_verbose "Found included files newer than backup"
+            return 0
+        fi
+        return 1
+    fi
+
+    # Standard exclude-based detection
+    local find_excludes=()
     for pattern in $SHADER_EXCLUDES $GLOBAL_EXCLUDES $excludes; do
         [[ -n "$pattern" ]] && find_excludes+=(-not -path "*/$pattern/*" -not -name "$pattern")
     done
@@ -566,6 +625,7 @@ backup_archive() {
     local excludes="$3"
     local base_dir="$4"
     local retention="$5"
+    local includes="${6:-}"
 
     local timestamp
     timestamp=$(date '+%Y-%m-%d_%H%M%S')
@@ -584,7 +644,45 @@ backup_archive() {
 
     mkdir -p "$base_dir"
 
-    # Build exclude args array (same format works for tar)
+    # Handle includes mode (selective file backup)
+    if [[ -n "$includes" ]]; then
+        # Build find pattern for included files
+        local find_patterns=()
+        local IFS=' '
+        local first=true
+        for pattern in $includes; do
+            [[ "$first" != true ]] && find_patterns+=(-o)
+            find_patterns+=(-name "$pattern")
+            first=false
+        done
+
+        log_verbose "Include patterns: ${find_patterns[*]}"
+
+        # Use find -L to follow symlinks, pipe file list to tar -T
+        # cd to parent dir so paths are relative (e.g., ROMs/desktop/script.sh)
+        local tar_opts="-cJf"
+        [[ "$VERBOSE" == true ]] && tar_opts="-cvJf"
+
+        # shellcheck disable=SC2086
+        if ! systemd-inhibit --what="idle:sleep" --why="Emu-Backup: archiving $source_name" \
+            bash -c "cd \"$(dirname "$source_dir")\" && find -L \"$(basename "$source_dir")\" -type f \\( ${find_patterns[*]} \\) | tar $tar_opts \"$temp_file\" -T -"; then
+            rm -f "$temp_file"
+            log_warn "[$source_name] Archive creation failed"
+            return 1
+        fi
+
+        # Atomic move on success
+        mv "$temp_file" "$backup_file"
+
+        local size
+        size=$(du -h "$backup_file" | cut -f1)
+        log_success "[$source_name] Archive created: $backup_file ($size)"
+
+        prune_archives "$base_dir" "$source_name" "$retention"
+        return 0
+    fi
+
+    # Standard exclude mode
     local exclude_args=()
     build_excludes exclude_args "$excludes"
 
@@ -622,6 +720,7 @@ backup_mirror() {
     local source_dir="$2"
     local excludes="$3"
     local base_dir="$4"
+    local includes="${5:-}"
     local backup_dir="$base_dir/$source_name"
 
     log_info "[$source_name] Syncing mirror..."
@@ -635,7 +734,28 @@ backup_mirror() {
 
     mkdir -p "$backup_dir"
 
-    # Build exclude args array (also exclude .previous from source if it somehow exists)
+    # Handle includes mode (selective file backup with symlink following)
+    if [[ -n "$includes" ]]; then
+        local include_args=()
+        build_includes include_args "$includes"
+
+        # Use -L to follow symlinks (e.g., ports -> /mnt/Games1/ports)
+        local rsync_opts=(-aL --delete)
+        [[ "$VERBOSE" == true ]] && rsync_opts=(-avL --delete --info=progress2)
+
+        log_verbose "Include args: ${include_args[*]}"
+
+        if ! systemd-inhibit --what="idle:sleep" --why="Emu-Backup: syncing $source_name" \
+            rsync "${rsync_opts[@]}" "${include_args[@]}" "$source_dir/" "$backup_dir/"; then
+            log_warn "[$source_name] Mirror sync failed"
+            return 1
+        fi
+
+        log_success "[$source_name] Mirror sync complete"
+        return 0
+    fi
+
+    # Standard exclude mode
     local exclude_args=()
     build_excludes exclude_args "$excludes"
     exclude_args+=("--exclude=.previous")
@@ -663,6 +783,7 @@ process_source() {
     local mode="${SOURCE_MODES[$source_name]:-archive}"
     local type="${SOURCE_TYPES[$source_name]:-config}"
     local excludes="${SOURCE_EXCLUDES[$source_name]:-}"
+    local includes="${SOURCE_INCLUDES[$source_name]:-}"
     local retention="${SOURCE_RETENTION[$source_name]:-$DEFAULT_RETENTION}"
 
     # Get base directory based on type
@@ -690,8 +811,8 @@ process_source() {
         backup_ref="$base_dir/$source_name"
     fi
 
-    # Check for changes
-    if ! detect_changes "$source_dir" "$backup_ref" "$excludes"; then
+    # Check for changes (pass includes for include-mode detection)
+    if ! detect_changes "$source_dir" "$backup_ref" "$excludes" "$includes"; then
         log_info "[$source_name] No changes detected - skipping"
         return 0
     fi
@@ -699,10 +820,10 @@ process_source() {
     # Perform backup based on mode
     case "$mode" in
         archive)
-            backup_archive "$source_name" "$source_dir" "$excludes" "$base_dir" "$retention"
+            backup_archive "$source_name" "$source_dir" "$excludes" "$base_dir" "$retention" "$includes"
             ;;
         mirror)
-            backup_mirror "$source_name" "$source_dir" "$excludes" "$base_dir"
+            backup_mirror "$source_name" "$source_dir" "$excludes" "$base_dir" "$includes"
             ;;
         *)
             log_warn "[$source_name] Unknown mode '$mode' - skipping"
