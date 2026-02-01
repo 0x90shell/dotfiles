@@ -132,6 +132,7 @@ clutter
 clutter-gst
 clutter-gtk
 cmake
+cmark
 cogl
 colord
 colord-sane
@@ -1275,6 +1276,8 @@ minizip-ng
 miopen-hip
 mirage
 mjpegtools
+mkvtoolnix-cli
+mkvtoolnix-gui
 mlt
 mobile-broadband-provider-info
 modemmanager
