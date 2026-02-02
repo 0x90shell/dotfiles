@@ -1345,6 +1345,7 @@ nss-mdns
 ntfs-3g
 ntp
 numactl
+nvm
 oath-toolkit
 ocl-icd
 oh-my-zsh-git
@@ -2038,6 +2039,7 @@ utf8cpp
 util-linux
 util-linux-libs
 v4l-utils
+vacuumtube
 vapoursynth
 verdict
 vesktop
