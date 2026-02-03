@@ -1,0 +1,25 @@
+#!/bin/bash
+# rules-hash: {{ joinPath .chezmoi.sourceDir "ignore-etc" (.chezmoi.hostname | lower) "udev/rules.d" | glob | join "\n" | sha256sum }}
+{{- if or (eq .chezmoi.hostname "Glamdring") (eq .chezmoi.hostname "Excalibur") }}
+set -euo pipefail
+
+CHEZMOI_SOURCE="{{ .chezmoi.sourceDir }}"
+HOST="{{ .chezmoi.hostname | lower }}"
+UDEV_DIR="${CHEZMOI_SOURCE}/ignore-etc/${HOST}/udev/rules.d"
+
+echo "Deploying udev rules for ${HOST}..."
+
+if [[ -d "$UDEV_DIR" ]]; then
+    for rule in "${UDEV_DIR}"/*.rules; do
+        [[ -f "$rule" ]] || continue
+        rule_name=$(basename "$rule")
+        sudo cp "$rule" /etc/udev/rules.d/
+        echo "  Added: $rule_name"
+    done
+fi
+
+sudo udevadm control --reload-rules
+sudo udevadm trigger --subsystem-match=input
+
+echo "Udev rules reloaded."
+{{- end }}

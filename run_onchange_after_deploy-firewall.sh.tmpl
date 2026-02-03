@@ -1,4 +1,5 @@
 #!/bin/bash
+# rules-hash: {{ joinPath .chezmoi.sourceDir "ignore-etc" (.chezmoi.hostname | lower) "firewalld/services" | glob | join "\n" | sha256sum }}
 {{- if or (eq .chezmoi.hostname "Glamdring") (eq .chezmoi.hostname "Excalibur") }}
 set -euo pipefail
 
@@ -28,3 +29,4 @@ sudo firewall-cmd --reload
 echo "Active services:"
 sudo firewall-cmd --list-services
 {{- end }}
+
