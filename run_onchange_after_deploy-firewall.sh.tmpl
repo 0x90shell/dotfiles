@@ -1,5 +1,7 @@
 #!/bin/bash
-# rules-hash: {{ range (glob (joinPath .chezmoi.sourceDir "ignore-etc" (.chezmoi.hostname | lower) "firewalld/services" "*")) }}{{ include . }}{{ end }}
+{{- range (glob (joinPath .chezmoi.sourceDir "ignore-etc" (.chezmoi.hostname | lower) "firewalld/services" "*")) }}
+# {{ . | include | sha256sum }}
+{{- end }}
 {{- if or (eq .chezmoi.hostname "Glamdring") (eq .chezmoi.hostname "Excalibur") }}
 set -euo pipefail
 
