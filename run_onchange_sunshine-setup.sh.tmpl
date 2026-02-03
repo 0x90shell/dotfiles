@@ -1,0 +1,66 @@
+{{- if or (eq .chezmoi.hostname "Glamdring") (eq .chezmoi.hostname "Excalibur") }}
+#!/bin/bash
+set -euo pipefail
+
+# =============================================================================
+# Sunshine Setup - Pacman hook + wrapper for cap persistence + systemd reload
+# =============================================================================
+
+# Deploy setcap wrapper script
+# Needed because /usr/bin/sunshine is a symlink to a versioned binary
+# (e.g. sunshine-2025.924.154138) that changes on every update.
+# Pacman hook Exec doesn't run through a shell, so we can't inline readlink.
+sudo tee /usr/local/bin/sunshine-setcap.sh > /dev/null << 'WRAPPER'
+#!/bin/bash
+set -euo pipefail
+
+target="$(readlink -f /usr/bin/sunshine)"
+
+if [[ ! -f "$target" ]]; then
+    echo "ERROR: Sunshine binary not found at $target" >&2
+    exit 1
+fi
+
+setcap cap_sys_admin+p "$target"
+echo "Set cap_sys_admin on $target"
+WRAPPER
+sudo chmod 755 /usr/local/bin/sunshine-setcap.sh
+
+echo "Deployed wrapper: /usr/local/bin/sunshine-setcap.sh"
+
+# Deploy pacman hook for capability persistence across package upgrades
+sudo mkdir -p /etc/pacman.d/hooks
+sudo tee /etc/pacman.d/hooks/sunshine-caps.hook > /dev/null << 'HOOK'
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = sunshine
+
+[Action]
+Description = Restoring Sunshine capabilities...
+When = PostTransaction
+Exec = /usr/local/bin/sunshine-setcap.sh
+HOOK
+
+echo "Deployed pacman hook: /etc/pacman.d/hooks/sunshine-caps.hook"
+
+# Set capability now if sunshine is installed and cap is missing
+if [[ -x /usr/bin/sunshine ]]; then
+    target="$(readlink -f /usr/bin/sunshine)"
+    if ! getcap "$target" 2>/dev/null | grep -q cap_sys_admin; then
+        sudo setcap cap_sys_admin+p "$target"
+        echo "Set cap_sys_admin on $target"
+    else
+        echo "cap_sys_admin already set on $target"
+    fi
+else
+    echo "Sunshine not installed yet — pacman hook will handle caps on install"
+fi
+
+# Reload systemd user units if override exists
+if [[ -f "${HOME}/.config/systemd/user/sunshine.service.d/override.conf" ]]; then
+    systemctl --user daemon-reload
+    echo "Reloaded systemd user units"
+fi
+{{- end }}
