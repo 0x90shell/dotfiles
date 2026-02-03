@@ -1,0 +1,32 @@
+{{- if or (eq .chezmoi.hostname "Glamdring") (eq .chezmoi.hostname "Excalibur") -}}
+#!/bin/bash
+set -euo pipefail
+
+ESP=$(bootctl --print-esp-path 2>/dev/null || true)
+
+if [[ -z "$ESP" ]]; then
+    echo "No ESP found (systemd-boot not installed?), skipping"
+    exit 0
+fi
+
+LOADER_CONF="$ESP/loader/loader.conf"
+
+DESIRED_CONTENT="default *-zen.conf
+timeout 5
+console-mode auto"
+
+# Clear any EFI variable override so loader.conf is authoritative
+if bootctl is-installed &>/dev/null; then
+    sudo bootctl set-default ""
+fi
+
+if [[ -f "$LOADER_CONF" ]] && [[ "$(cat "$LOADER_CONF")" == "$DESIRED_CONTENT" ]]; then
+    echo "loader.conf already correct"
+    exit 0
+fi
+
+sudo mkdir -p "$ESP/loader"
+echo "$DESIRED_CONTENT" | sudo tee "$LOADER_CONF" > /dev/null
+echo "loader.conf written to $LOADER_CONF"
+{{- end }}
+
