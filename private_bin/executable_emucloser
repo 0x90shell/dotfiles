@@ -1,12 +1,40 @@
 #!/bin/bash
+# emucloser — close running emulators/media apps via gamepad hotkey
+# Called by evsieve-gamepad (Select + L1)
 export DISPLAY=:0
-#Close Cemu
-xdotool search --classname 'Cemu' search --name 'Cemu 2.0' windowquit
-#Simple64 Close
-xdotool search --class 'simple64-gui' search --name 'simple64    build: ......' windowquit
 
-#Media Player Close
-xdotool search --class 'Kodi' windowquit
-kill -9 $(pgrep kodi.bin)
-xdotool search --class 'jellyfin' windowquit
-xdotool search --class 'vacuumtube' windowquit
+echo "emucloser: running"
+
+# Cemu
+if pkill -15 cemu 2>/dev/null; then
+  echo "emucloser: closed Cemu"
+fi
+
+# simple64
+if xdotool search --class 'simple64-gui' windowquit 2>/dev/null; then
+  { sleep 2; pkill -9 simple64-gui 2>/dev/null; } &
+  echo "emucloser: closed simple64"
+fi
+
+# Kodi
+if xdotool search --class 'Kodi' windowquit 2>/dev/null; then
+  pkill -15 kodi.bin 2>/dev/null
+  { sleep 2; pkill -9 kodi.bin 2>/dev/null; } &
+  echo "emucloser: closed Kodi"
+fi
+
+# Jellyfin Media Player
+if xdotool search --class 'jellyfin' windowquit 2>/dev/null; then
+  pkill -15 jellyfin 2>/dev/null
+  echo "emucloser: closed Jellyfin"
+fi
+
+# VacuumTube
+if xdotool search --class 'vacuumtube' windowquit 2>/dev/null; then
+  pkill -15 vacuumtube 2>/dev/null
+  echo "emucloser: closed VacuumTube"
+fi
+
+echo "emucloser: done"
+exit 0
+

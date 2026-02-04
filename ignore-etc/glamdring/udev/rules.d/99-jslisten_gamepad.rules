@@ -1,2 +1,0 @@
-SUBSYSTEM=="input", KERNEL=="js*", SUBSYSTEMS=="usb", SYMLINK+="input/gamepad0"
-SUBSYSTEM=="input", KERNEL=="js*", SUBSYSTEMS=="bluetooth", SYMLINK+="input/gamepad0"

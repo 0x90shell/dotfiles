@@ -1,9 +1,0 @@
-{{- if eq .chezmoi.hostname "Glamdring" -}} 
-#! /bin/bash
-cmd1="yay -S --noconfirm --needed jslisten-git"
-
-echo "running $cmd1"
-sleep 1
-bash -c "$cmd1"
-
-{{- end -}}

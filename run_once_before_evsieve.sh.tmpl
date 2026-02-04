@@ -1,0 +1,14 @@
+{{- if eq .chezmoi.hostname "Glamdring" -}}
+#!/bin/bash
+set -euo pipefail
+
+echo "=== Setting up evsieve gamepad hotkeys ==="
+
+echo "[1/2] Installing evsieve..."
+yay -S --noconfirm --needed evsieve
+
+echo "[2/2] Enabling evsieve-gamepad service..."
+systemctl --user daemon-reload
+systemctl --user enable --now evsieve-gamepad.service
+{{- end -}}
+

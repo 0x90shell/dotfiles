@@ -38,6 +38,7 @@ atkmm
 attr
 audit
 autoconf
+autoconf-archive
 automake
 avahi
 ayatana-ido
@@ -148,12 +149,14 @@ dosfstools
 dotnet-host
 dotnet-runtime
 dotnet-runtime-6.0
+dotnet-sdk
+dotnet-targeting-pack
 double-conversion
 downgrade
 dracut
 dropbox
 dropbox-cli
-duckstation-git
+duckstation-qt-bin
 duf
 duktape
 dwarfs
@@ -192,6 +195,7 @@ eos-translations
 eos-update
 eos-update-notifier
 ethtool
+evsieve
 evtest
 ex-vi-compat
 exfatprogs
@@ -1338,6 +1342,7 @@ nss-mdns
 ntfs-3g
 ntp
 numactl
+nvm
 oath-toolkit
 ocl-icd
 oh-my-zsh-git
@@ -1493,6 +1498,7 @@ python-distutils-extra
 python-entrypoints
 python-evdev
 python-filelock
+python-firewall
 python-flake8
 python-fonttools
 python-gobject
@@ -1527,6 +1533,7 @@ python-pip
 python-pipx
 python-platformdirs
 python-pluggy
+python-prettytable
 python-psutil
 python-ptyprocess
 python-pyaml

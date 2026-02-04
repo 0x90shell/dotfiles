@@ -1,0 +1,1 @@
+SUBSYSTEM=="input", KERNEL=="event*", SUBSYSTEMS=="hid", ENV{ID_INPUT_JOYSTICK}=="1", SYMLINK+="input/gamepad0"

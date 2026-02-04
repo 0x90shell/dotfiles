@@ -1,0 +1,18 @@
+#!/bin/bash
+# evsieve gamepad hotkey config
+# DS3 button combos → script execution
+# No grab = nonexclusive read, games still see controller
+# persist=reopen = survives Bluetooth disconnect/reconnect
+DEVICE="/dev/input/gamepad0"
+
+# Wait for controller to appear
+while [[ ! -e "$DEVICE" ]]; do
+  sleep 1
+done
+
+exec evsieve \
+  --input "$DEVICE" persist=reopen \
+  --hook btn:select btn:tl                    period=200 exec-shell="emucloser" \
+  --hook btn:start  btn:tr      btn:dpad_down period=200 exec-shell="esdepull" \
+  --hook btn:start  btn:tr2     btn:dpad_down period=200 exec-shell="steampull" \
+  --hook btn:start  btn:tl      btn:dpad_down period=200 exec-shell="spotpull"

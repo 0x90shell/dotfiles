@@ -1,0 +1,14 @@
+[Unit]
+Description=evsieve gamepad hotkey daemon
+Documentation=https://github.com/KarsMulder/evsieve
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/bin/evsieve-gamepad
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+
