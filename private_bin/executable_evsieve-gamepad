@@ -4,6 +4,7 @@
 # No grab = nonexclusive read, games still see controller
 # persist=reopen = survives Bluetooth disconnect/reconnect
 DEVICE="/dev/input/gamepad0"
+export PATH="$HOME/bin:$HOME/.local/bin:$PATH"
 
 # Wait for controller to appear
 while [[ ! -e "$DEVICE" ]]; do
