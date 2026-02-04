@@ -11,15 +11,13 @@ bin/test-setup*
 {{ else }}
 .config/systemd/user/esde-backup.service
 .config/systemd/user/emu-backup.service
-.config/systemd/user/jslisten.service
+.config/systemd/user/evsieve-gamepad.service
 .config/systemd/user/jstimeout.service
 .config/systemd/user/btpowerfix.service
 .config/systemd/user/default.target.wants/weekly@esde-backup.timer
 .config/sunshine/
-.jslisten
 .kodi/
 .config/autostart/bt-headset-autoconnect.desktop
-.config/autostart/jslisten-hotkeys.desktop
 {{ end }}
 {{- if eq .chezmoi.osRelease.id "arch" "endeavouros" }}
 .vim/plugins/
@@ -30,6 +28,7 @@ bin/emucloser
 bin/Emu-Backup
 bin/.emu-backup.conf
 bin/esdepull
+bin/evsieve-gamepad
 bin/ESDE*
 bin/kernel-purge
 bin/steampull
@@ -51,7 +50,6 @@ bin/yaycache
 .config/xfce4/panel/launcher-25
 .config/xfce4/panel/launcher-7
 .config/autostart/bt-headset-autoconnect.desktop
-.config/autostart/jslisten-hotkeys.desktop
 .config/autostart/dropbox.desktop
 .config/autostart/org.keepassxc.KeePassXC.desktop
 .config/makepkg.conf
