@@ -6,8 +6,10 @@ export DISPLAY=:0
 echo "emucloser: running"
 
 # Cemu
-if pkill -15 cemu 2>/dev/null; then
-  echo "emucloser: closed Cemu"
+if xdotool search --classname 'Cemu' search --name 'Cemu ' windowquit 2>/dev/null; then 
+  pkill -15 cemu 2>/dev/null
+  { sleep 2; pkill -9 cemu 2>/dev/null; } &
+cho "emucloser: closed Cemu"
 fi
 
 # simple64
