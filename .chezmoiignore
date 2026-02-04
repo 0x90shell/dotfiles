@@ -6,7 +6,6 @@ bin/test-setup*
 {{ end }}
 {{ if eq .chezmoi.hostname "Glamdring" }}
 .config/autostart/Caffeine-ng.desktop
-.config/autostart/caffeine.desktop
 .config/autostart/redshift-gtk.desktop
 {{ else }}
 .config/systemd/user/esde-backup.service
