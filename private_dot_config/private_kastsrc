@@ -1,0 +1,24 @@
+[Appearance]
+interfaceMode=Desktop
+showPodcastTitle=true
+showTrayIcon=true
+
+[General]
+StoragePath=file:///home/overflow/Music/Podcasts
+autoFeedUpdateInterval=24
+markAsPlayedBeforeEnd=120
+markUnreadOnNewFeed=All
+prioritizeStreaming=true
+refreshOnStartup=true
+
+[Playback Settings]
+mediabackend=Qt
+
+[Synchronization]
+syncDevice=kasts-Excalibur
+syncDeviceName=Kasts on Excalibur
+syncEnabled=true
+syncUsername=hiphophippo
+
+[UiSettings]
+ColorScheme=KritaDarkOrange

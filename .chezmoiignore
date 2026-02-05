@@ -19,6 +19,9 @@ bin/test-setup*
 .kodi/
 .config/autostart/bt-headset-autoconnect.desktop
 {{ end }}
+{{ if ne .chezmoi.hostname "Excalibur" }}
+.config/kastsrc  
+{{ end }}
 {{- if eq .chezmoi.osRelease.id "arch" "endeavouros" }}
 .vim/plugins/
 bin/bash*
