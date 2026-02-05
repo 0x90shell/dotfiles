@@ -9,6 +9,7 @@ bin/test-setup*
 .config/autostart/redshift-gtk.desktop
 {{ else }}
 .config/systemd/user/esde-backup.service
+.config/systemd/user/screenshot-optimize.service
 .config/systemd/user/emu-backup.service
 .config/systemd/user/evsieve-gamepad.service
 .config/systemd/user/jstimeout.service
@@ -36,6 +37,7 @@ bin/rom-bulkconvert
 bin/ra_tool
 bin/.ratool_datasets
 bin/rgt_downloader
+bin/optimize-ra_screenshots
 bin/ps2-bootcheck
 bin/post-skraper
 bin/jstimeout
