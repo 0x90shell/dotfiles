@@ -260,6 +260,12 @@ alias upg-dist='apt update; apt upgrade -y; apt dist-upgrade -y; bleachbit -c --
 alias upg="apt update; apt upgrade -y; bleachbit -c --preset"
 {{ end -}}
 
+{{- if eq .chezmoi.osRelease.id "arch" "endeavouros" }}
+# Claude Code quick aliases
+alias ch='claude -p --model haiku'
+alias cs='claude -p --model sonnet'
+{{ end -}}
+
 {{- if eq .chezmoi.osRelease.id "kali" }}
 #Kali 
 alias aircrack-ng="aircrack-ng -z"
