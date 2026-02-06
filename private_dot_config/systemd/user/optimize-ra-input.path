@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch retroarch.cfg for changes
+
+[Path]
+PathModified=%h/.config/retroarch/retroarch.cfg
+Unit=optimize-ra-input.service
+
+[Install]
+WantedBy=default.target

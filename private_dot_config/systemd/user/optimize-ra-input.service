@@ -1,0 +1,6 @@
+[Unit]
+Description=Clean stale joypad bindings from retroarch.cfg
+
+[Service]
+Type=oneshot
+ExecStart=%h/bin/optimize-ra --input-only

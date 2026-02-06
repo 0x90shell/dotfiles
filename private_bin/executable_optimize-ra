@@ -1,0 +1,91 @@
+#!/bin/bash
+set -euo pipefail
+
+RETROARCH_CFG="${RETROARCH_CFG:-$HOME/.config/retroarch/retroarch.cfg}"
+SCREENSHOT_DIR="${RETROARCH_SCREENSHOT_DIR:-$HOME/.config/retroarch/screenshots}"
+
+clean_joypad_bindings() {
+    if [[ ! -f "$RETROARCH_CFG" ]]; then
+        echo "Config not found: $RETROARCH_CFG"
+        return 0
+    fi
+
+    # Only modify if stale (non-nul) joypad bindings exist
+    if grep -qP '^input_player\d+_\w+_(btn|axis) = "(?!nul")' "$RETROARCH_CFG"; then
+        sed -i -E \
+            -e 's/^(input_player[0-9]+_[a-z0-9_]+_btn = )"[^"]+"/\1"nul"/' \
+            -e 's/^(input_player[0-9]+_[a-z0-9_]+_axis = )"[^"]+"/\1"nul"/' \
+            -e 's/^(input_player[0-9]+_analog_dpad_mode = )"[^"]+"/\1"0"/' \
+            "$RETROARCH_CFG"
+        echo "Cleaned stale joypad bindings from $RETROARCH_CFG"
+    else
+        echo "No stale joypad bindings found"
+    fi
+}
+
+optimize_screenshots() {
+    if [[ ! -d "$SCREENSHOT_DIR" ]]; then
+        echo "Screenshot directory not found: $SCREENSHOT_DIR"
+        return 0
+    fi
+
+    local timestamp_file="$SCREENSHOT_DIR/.screenshot_optimize_last_run"
+
+    cd "$SCREENSHOT_DIR" || return 1
+
+    if [[ -f "$timestamp_file" ]]; then
+        while IFS= read -r -d '' file; do
+            echo "Processing new file: $file"
+            if ! pngquant --quality=65-80 --ext .png --force "$file" 2>/dev/null; then
+                optipng -o5 "$file"
+            fi
+        done < <(find . -name "*.png" -newer "$timestamp_file" -print0)
+    else
+        while IFS= read -r -d '' file; do
+            echo "Processing: $file"
+            if ! pngquant --quality=65-80 --ext .png --force "$file" 2>/dev/null; then
+                optipng -o5 "$file"
+            fi
+        done < <(find . -name "*.png" -print0)
+    fi
+
+    touch "$timestamp_file"
+    echo "Screenshot optimization complete at $(date)"
+}
+
+main() {
+    local run_input=true
+    local run_screenshots=true
+
+    for arg in "$@"; do
+        case "$arg" in
+            --input-only)
+                run_screenshots=false
+                ;;
+            --screenshots-only)
+                run_input=false
+                ;;
+            --help|-h)
+                echo "Usage: optimize-ra [--input-only|--screenshots-only]"
+                echo "  --input-only        Only clean stale joypad bindings"
+                echo "  --screenshots-only  Only optimize screenshots"
+                echo "  (no flags)          Run both"
+                exit 0
+                ;;
+            *)
+                echo "Unknown option: $arg" >&2
+                exit 1
+                ;;
+        esac
+    done
+
+    if [[ "$run_input" == true ]]; then
+        clean_joypad_bindings
+    fi
+
+    if [[ "$run_screenshots" == true ]]; then
+        optimize_screenshots
+    fi
+}
+
+main "$@"

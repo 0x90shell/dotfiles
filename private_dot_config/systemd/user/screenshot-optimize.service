@@ -1,7 +1,0 @@
-[Unit]
-Description=Optimize RetroArch Screenshots
-
-[Service]
-Type=oneshot
-ExecStart=%h/bin/optimize-ra_screenshots
-WorkingDirectory=%h
