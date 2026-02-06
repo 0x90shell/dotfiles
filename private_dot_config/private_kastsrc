@@ -2,6 +2,7 @@
 interfaceMode=Desktop
 showPodcastTitle=true
 showTrayIcon=true
+trayIconType=Colorful
 
 [General]
 StoragePath=file:///home/overflow/Music/Podcasts
