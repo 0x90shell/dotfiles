@@ -1,39 +1,80 @@
 {
-  "env": {
-    "PATH": "$(PATH):$(HOME)/.local/bin"
-  },
-  "apps": [
-    {
-      "name": "Desktop",
-      "image-path": "desktop.png"
-    },
-    {
-      "name": "Low Res Desktop",
-      "image-path": "desktop.png",
-      "prep-cmd": [
+    "apps": [
         {
-          "do": "xrandr --output HDMI-1 --mode 1920x1080",
-          "undo": "xrandr --output HDMI-1 --mode 1920x1200"
-        }
-      ]
-    },
-    {
-      "name": "ES-DE",
-      "cmd": "{{ .chezmoi.homeDir }}/bin/esdepull",
-      "image-path": "{{ .chezmoi.homeDir }}/.config/sunshine/assets/esde.png"
-    },
-    {
-      "name": "Steam Big Picture",
-      "detached": [
-        "setsid steam steam://open/bigpicture"
-      ],
-      "prep-cmd": [
+            "auto-detach": true,
+            "exclude-global-prep-cmd": false,
+            "exit-timeout": 5,
+            "image-path": "desktop.png",
+            "name": "Desktop",
+            "prep-cmd": [
+                {
+                    "do": "xset dpms force on && xset -dpms && xset s off",
+                    "undo": "xset s on"
+                }
+            ],
+            "wait-all": true
+        },
         {
-          "do": "",
-          "undo": "setsid steam steam://close/bigpicture"
+            "auto-detach": true,
+            "cmd": "/home/gandalf/bin/esdepull",
+            "exclude-global-prep-cmd": false,
+            "exit-timeout": 5,
+            "image-path": "/home/gandalf/.config/sunshine/assets/esde.png",
+            "name": "ES-DE",
+            "prep-cmd": [
+                {
+                    "do": "xset dpms force on && xset -dpms && xset s off",
+                    "undo": "xset s on"
+                }
+            ],
+            "wait-all": true
+        },
+        {
+            "image-path": "desktop.png",
+            "name": "Low Res Desktop",
+            "prep-cmd": [
+                {
+                    "do": "xrandr --output HDMI-1 --mode 1920x1080",
+                    "undo": "xrandr --output HDMI-1 --mode 1920x1200"
+                }
+            ]
+        },
+        {
+            "auto-detach": true,
+            "cmd": "perfect-dark",
+            "elevated": false,
+            "exclude-global-prep-cmd": false,
+            "exit-timeout": 5,
+            "image-path": "",
+            "name": "Perfect Dark",
+            "output": "",
+            "prep-cmd": [
+                {
+                    "do": "xset dpms force on && xset -dpms && xset s off",
+                    "undo": ""
+                }
+            ],
+            "wait-all": true
+        },
+        {
+            "auto-detach": true,
+            "detached": [
+                "setsid steam steam://open/bigpicture"
+            ],
+            "exclude-global-prep-cmd": false,
+            "exit-timeout": 5,
+            "image-path": "steam.png",
+            "name": "Steam Big Picture",
+            "prep-cmd": [
+                {
+                    "do": "xset dpms force on && xset -dpms && xset s off",
+                    "undo": "xset +dpms && xset s on &&setsid steam steam://close/bigpicture"
+                }
+            ],
+            "wait-all": true
         }
-      ],
-      "image-path": "steam.png"
+    ],
+    "env": {
+        "PATH": "$(PATH):$(HOME)/.local/bin"
     }
-  ]
 }
