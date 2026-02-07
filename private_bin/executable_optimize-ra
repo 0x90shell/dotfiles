@@ -1,8 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-RETROARCH_CFG="${RETROARCH_CFG:-$HOME/.config/retroarch/retroarch.cfg}"
-SCREENSHOT_DIR="${RETROARCH_SCREENSHOT_DIR:-$HOME/.config/retroarch/screenshots}"
+RETROARCH_DIR="${RETROARCH_DIR:-$HOME/.config/retroarch}"
+RETROARCH_CFG="${RETROARCH_CFG:-$RETROARCH_DIR/retroarch.cfg}"
+SCREENSHOT_DIR="${RETROARCH_SCREENSHOT_DIR:-$RETROARCH_DIR/screenshots}"
+STATES_DIR="${RETROARCH_STATES_DIR:-$RETROARCH_DIR/states}"
 
 clean_joypad_bindings() {
     if [[ ! -f "$RETROARCH_CFG" ]]; then
@@ -24,30 +26,26 @@ clean_joypad_bindings() {
 }
 
 optimize_screenshots() {
-    if [[ ! -d "$SCREENSHOT_DIR" ]]; then
-        echo "Screenshot directory not found: $SCREENSHOT_DIR"
+    local timestamp_file="$RETROARCH_DIR/.screenshot_optimize_last_run"
+    local -a dirs=()
+
+    [[ -d "$SCREENSHOT_DIR" ]] && dirs+=("$SCREENSHOT_DIR")
+    [[ -d "$STATES_DIR" ]] && dirs+=("$STATES_DIR")
+
+    if [[ ${#dirs[@]} -eq 0 ]]; then
+        echo "No screenshot or states directories found"
         return 0
     fi
 
-    local timestamp_file="$SCREENSHOT_DIR/.screenshot_optimize_last_run"
+    local -a newer_args=()
+    [[ -f "$timestamp_file" ]] && newer_args=(-newer "$timestamp_file")
 
-    cd "$SCREENSHOT_DIR" || return 1
-
-    if [[ -f "$timestamp_file" ]]; then
-        while IFS= read -r -d '' file; do
-            echo "Processing new file: $file"
-            if ! pngquant --quality=65-80 --ext .png --force "$file" 2>/dev/null; then
-                optipng -o5 "$file"
-            fi
-        done < <(find . -name "*.png" -newer "$timestamp_file" -print0)
-    else
-        while IFS= read -r -d '' file; do
-            echo "Processing: $file"
-            if ! pngquant --quality=65-80 --ext .png --force "$file" 2>/dev/null; then
-                optipng -o5 "$file"
-            fi
-        done < <(find . -name "*.png" -print0)
-    fi
+    while IFS= read -r -d '' file; do
+        echo "Processing: $file"
+        if ! pngquant --quality=65-80 --ext .png --force "$file" 2>/dev/null; then
+            optipng -o5 "$file"
+        fi
+    done < <(find -L "${dirs[@]}" -name "*.png" "${newer_args[@]}" -print0)
 
     touch "$timestamp_file"
     echo "Screenshot optimization complete at $(date)"
