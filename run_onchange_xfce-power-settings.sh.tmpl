@@ -1,0 +1,18 @@
+{{- if eq .chezmoi.hostname "Glamdring" -}}
+#!/bin/bash
+# XFCE Power Manager - 30/60/90 DPMS escalation
+xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/blank-on-ac -s 30
+xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/dpms-enabled -s true -t bool
+xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/dpms-on-ac-sleep -s 60
+xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/dpms-on-ac-off -s 90
+xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/lock-screen-suspend-hibernate -s false -t bool
+
+# XFCE Screensaver - blank only, no lock, idle activation on
+xfconf-query -c xfce4-screensaver -p /saver/enabled -s true -t bool
+xfconf-query -c xfce4-screensaver -p /saver/mode -s 0
+xfconf-query -c xfce4-screensaver -p /saver/idle-activation/enabled -s true -t bool
+xfconf-query -c xfce4-screensaver -p /saver/idle-activation/delay -s 30
+xfconf-query -c xfce4-screensaver -p /saver/fullscreen-inhibit -s true -t bool
+xfconf-query -c xfce4-screensaver -p /lock/enabled -s false -t bool
+xfconf-query -c xfce4-screensaver -p /lock/sleep-activation -s false -t bool
+{{ end -}}
