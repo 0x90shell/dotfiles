@@ -8,7 +8,7 @@
             "name": "Desktop",
             "prep-cmd": [
                 {
-                    "do": "xdotool mousemove_relative 1 0; xdotool mousemove_relative -- -1 0",
+                    "do": "/home/gandalf/bin/wake-display",
                     "undo": ""
                 }
             ],
@@ -23,7 +23,7 @@
             "name": "ES-DE",
             "prep-cmd": [
                 {
-                    "do": "xdotool mousemove_relative 1 0; xdotool mousemove_relative -- -1 0",
+                    "do": "/home/gandalf/bin/wake-display",
                     "undo": ""
                 }
             ],
@@ -50,7 +50,7 @@
             "output": "",
             "prep-cmd": [
                 {
-                    "do": "xdotool mousemove_relative 1 0; xdotool mousemove_relative -- -1 0",
+                    "do": "/home/gandalf/bin/wake-display",
                     "undo": ""
                 }
             ],
@@ -67,7 +67,7 @@
             "name": "Steam Big Picture",
             "prep-cmd": [
                 {
-                    "do": "xdotool mousemove_relative 1 0; xdotool mousemove_relative -- -1 0",
+                    "do": "/home/gandalf/bin/wake-display",
                     "undo": "setsid steam steam://close/bigpicture"
                 }
             ],

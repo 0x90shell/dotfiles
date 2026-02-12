@@ -1,0 +1,10 @@
+#!/bin/bash
+export DISPLAY=:0
+export XAUTHORITY=/home/gandalf/.Xauthority
+export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus
+
+xfce4-screensaver-command -d
+xset dpms force on
+xset s reset
+xdotool mousemove_relative 1 0
+xdotool mousemove_relative -- -1 0
