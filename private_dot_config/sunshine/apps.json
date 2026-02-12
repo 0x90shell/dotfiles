@@ -24,7 +24,7 @@
             "prep-cmd": [
                 {
                     "do": "/home/gandalf/bin/wake-display",
-                    "undo": ""
+                    "undo": "killall es-de"
                 }
             ],
             "wait-all": true
