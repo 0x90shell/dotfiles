@@ -1,0 +1,27 @@
+{{- if eq .chezmoi.osRelease.id "endeavouros" -}}
+#!/bin/bash
+set -euo pipefail
+
+HOOK_SRC="/usr/lib/kernel/install.d/90-loaderentry-kifd.install"
+HOOK_DST="/etc/kernel/install.d/90-loaderentry-kifd.install"
+
+if [[ ! -f "$HOOK_SRC" ]]; then
+    echo "Source hook not found, skipping"
+    exit 0
+fi
+
+# Check if fix already applied (SC2016: single quotes intentional - literal grep pattern)
+# shellcheck disable=SC2016
+if [[ -f "$HOOK_DST" ]] && grep -q 'SORT_KEY="$ID"$' "$HOOK_DST"; then
+    echo "kernel-install hook already patched"
+    exit 0
+fi
+
+sudo mkdir -p "$(dirname "$HOOK_DST")"
+sudo cp "$HOOK_SRC" "$HOOK_DST"
+# shellcheck disable=SC2016
+sudo sed -i 's/SORT_KEY="$ID-$KERNEL_VERSION"/SORT_KEY="$ID"/' "$HOOK_DST"
+
+echo "Patched kernel-install hook to use stable sort-key"
+{{- end }}
+
