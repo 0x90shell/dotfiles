@@ -46,6 +46,7 @@ bin/post-skraper
 bin/jstimeout
 bin/.jstimeout.devices
 bin/.jstimeout-source/
+bin/wake-display
 bin/yaycache
 .config/ra_tool
 .config/xfce4/panel/datetime-12.rc
