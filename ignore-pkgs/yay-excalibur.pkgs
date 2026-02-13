@@ -262,6 +262,7 @@ faad2
 fakeroot
 fallout1-ce-game
 fallout2-ce-game
+fast_float
 fceux
 fcitx5
 fd
@@ -326,6 +327,7 @@ gdbm
 gdk-pixbuf2
 gearboy
 gegl
+gendesk
 geoclue
 gettext
 gflags
@@ -809,10 +811,12 @@ libaio
 libao
 libappindicator
 libarchive
+libasan
 libass
 libassuan
 libasyncns
 libatasmart
+libatomic
 libatomic_ops
 libavc1394
 libavif
@@ -898,15 +902,18 @@ libfreeaptx
 libfreehand
 libftdi
 libfyaml
+libgcc
 libgcrypt
 libgdiplus
 libgexiv2
+libgfortran
 libgirepository
 libgit2
 libglade
 libglvnd
 libgme
 libgnomekbd
+libgomp
 libgoom2
 libgpg-error
 libgphoto2
@@ -947,6 +954,7 @@ libldac
 libldap
 liblqr
 liblrdf
+liblsan
 libltc
 liblzf
 libmad
@@ -997,6 +1005,7 @@ libnotify
 libnsl
 libnumbertext
 libnvme
+libobjc
 libodfgen
 libogg
 liboggz
@@ -1026,6 +1035,7 @@ libqaccessibilityclient-qt6
 libqalculate
 libqmi
 libqrtr-glib
+libquadmath
 libqxp
 libraqm
 libraw
@@ -1104,6 +1114,7 @@ libsrtp
 libssh
 libssh2
 libstaroffice
+libstdc++
 libstemmer
 libsysprof-capture
 libtar
@@ -1119,6 +1130,8 @@ libtomcrypt
 libtommath
 libtool
 libtorrent-rasterbar
+libtsan
+libubsan
 libunibreak
 libunistring
 libunrar
@@ -1475,6 +1488,7 @@ pkgfile
 playerctl
 plocate
 pngquant
+pnpm
 podofo
 polkit
 polkit-gnome
@@ -1517,6 +1531,7 @@ python-aiohappyeyeballs
 python-aiohttp
 python-aiosignal
 python-alive-progress
+python-annotated-doc
 python-annotated-types
 python-anyio
 python-aotriton
@@ -1561,6 +1576,7 @@ python-fastjsonschema
 python-faust-cchardet
 python-feedparser
 python-filelock
+python-firewall
 python-flake8
 python-fonttools
 python-frozenlist
@@ -1633,11 +1649,13 @@ python-pexpect
 python-pillow
 python-pip
 python-pipx
+python-pkg_resources
 python-platformdirs
 python-pluggy
 python-podcastparser
 python-polib
 python-pooch
+python-prettytable
 python-propcache
 python-psutil
 python-ptyprocess
@@ -1968,6 +1986,7 @@ srb2kart-data
 srt
 startup-notification
 steam
+steam-devices
 steamtinkerlaunch
 stella
 stoken
@@ -1982,6 +2001,7 @@ supertux
 supertuxkart
 svt-av1
 svt-hevc
+swig
 syncthing
 syndication
 sysfsutils
@@ -2289,6 +2309,7 @@ zbar
 zenity
 zeromq
 zimg
+zint
 zip
 zix
 zlib
