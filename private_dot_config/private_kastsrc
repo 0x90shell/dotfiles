@@ -12,9 +12,6 @@ markUnreadOnNewFeed=All
 prioritizeStreaming=true
 refreshOnStartup=true
 
-[Playback Settings]
-mediabackend=Qt
-
 [Synchronization]
 syncDevice=kasts-Excalibur
 syncDeviceName=Kasts on Excalibur
