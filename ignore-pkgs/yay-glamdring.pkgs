@@ -98,6 +98,7 @@ chrono-date
 cifs-utils
 citra-canary-bin
 clang
+claude-code
 clucene
 cmake
 colord
@@ -852,10 +853,12 @@ libaio
 libao
 libappindicator
 libarchive
+libasan
 libass
 libassuan
 libasyncns
 libatasmart
+libatomic
 libatomic_ops
 libavc1394
 libavif
@@ -938,13 +941,16 @@ libfreeaptx
 libfreehand
 libftdi
 libfyaml
+libgcc
 libgcrypt
 libgdiplus
+libgfortran
 libgirepository
 libgit2
 libglvnd
 libgme
 libgnomekbd
+libgomp
 libgoom2
 libgpg-error
 libgphoto2
@@ -982,6 +988,7 @@ libldac
 libldap
 liblqr
 liblrdf
+liblsan
 libltc
 libmad
 libmakepkg-dropins
@@ -1030,6 +1037,7 @@ libnotify
 libnsl
 libnumbertext
 libnvme
+libobjc
 libodfgen
 libogg
 libopenmpt
@@ -1056,6 +1064,7 @@ libpulse
 libqaccessibilityclient-qt6
 libqmi
 libqrtr-glib
+libquadmath
 libqxp
 libraqm
 libraw
@@ -1133,6 +1142,7 @@ libsrtp
 libssh
 libssh2
 libstaroffice
+libstdc++
 libstemmer
 libsysprof-capture
 libtasn1
@@ -1145,6 +1155,8 @@ libtiger
 libtirpc
 libtommath
 libtool
+libtsan
+libubsan
 libunibreak
 libunistring
 libunwind
@@ -1459,6 +1471,7 @@ pkgconf
 pkgfile
 plocate
 pngquant
+pnpm
 polkit
 polkit-gnome
 poppler
@@ -1544,6 +1557,7 @@ python-pexpect
 python-pillow
 python-pip
 python-pipx
+python-pkg_resources
 python-platformdirs
 python-pluggy
 python-prettytable
@@ -1781,6 +1795,7 @@ srb2kart-data
 srt
 startup-notification
 steam
+steam-devices
 steamtinkerlaunch
 stella
 stoken
@@ -2089,6 +2104,7 @@ zbar
 zenity
 zeromq
 zimg
+zint
 zip
 zix
 zlib
