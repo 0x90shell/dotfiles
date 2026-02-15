@@ -1,0 +1,382 @@
+#!/bin/bash
+# generate-esde-steam.sh
+# Generates .desktop files for installed Steam games in ~/ROMs/steam/
+# for use with ES-DE (EmulationStation Desktop Edition)
+#
+# Parses Steam appmanifest_*.acf files to discover installed games,
+# then creates XDG .desktop entries that launch via steam:// protocol.
+#
+# Usage: generate-esde-steam.sh [--dry-run] [--clean] [--steam-dir PATH] [--output-dir PATH]
+#   --dry-run       Show what would be created without writing files
+#   --clean         Remove existing .desktop files before generating
+#   --steam-dir     Override Steam library path (default: auto-detect)
+#   --output-dir    Override output directory (default: ~/ROMs/steam)
+#   --exclude FILE  Path to file with app IDs to exclude (one per line)
+#   -v, --verbose   Verbose output
+#   -h, --help      Show this help
+
+set -euo pipefail
+
+# --- Defaults ---
+STEAM_DIRS=()
+OUTPUT_DIR="$HOME/ROMs/steam"
+DRY_RUN=false
+CLEAN=false
+VERBOSE=false
+EXCLUDE_FILE=""
+
+
+# --- Functions ---
+
+usage() {
+    sed -n '2,/^$/s/^# //p' "$0"
+    exit 0
+}
+
+log_info() {
+    echo "[+] $*"
+}
+
+log_verbose() {
+    [[ "$VERBOSE" == true ]] && echo "    $*"
+}
+
+log_warn() {
+    echo "[!] $*" >&2
+}
+
+log_error() {
+    echo "[-] $*" >&2
+    exit 1
+}
+
+# Parse a simple key from a .acf (VDF) file
+# VDF format: "key" "value"  (with tabs/spaces and quotes)
+parse_acf_value() {
+    local file="$1"
+    local key="$2"
+    grep -m1 "\"$key\"" "$file" 2>/dev/null | sed 's/.*"'"$key"'"[[:space:]]*"\(.*\)"/\1/'
+}
+
+# Find all Steam library folders
+find_steam_libraries() {
+    local steam_root=""
+
+    # Auto-detect Steam installation
+    local candidates=(
+        "$HOME/.local/share/Steam"
+        "$HOME/.steam/steam"
+        "$HOME/.steam/debian-installation"
+    )
+
+    for dir in "${candidates[@]}"; do
+        if [[ -d "$dir/steamapps" ]]; then
+            steam_root="$dir"
+            break
+        fi
+    done
+
+    if [[ -z "$steam_root" ]]; then
+        log_error "Could not find Steam installation. Use --steam-dir to specify."
+    fi
+
+    log_verbose "Steam root: $steam_root"
+
+    # Always include the main steamapps directory
+    STEAM_DIRS+=("$steam_root/steamapps")
+
+    # Parse libraryfolders.vdf for additional library paths
+    local libfile="$steam_root/steamapps/libraryfolders.vdf"
+    if [[ -f "$libfile" ]]; then
+        # Extract "path" values from libraryfolders.vdf
+        while IFS= read -r libpath; do
+            local steamapps_dir="$libpath/steamapps"
+            if [[ -d "$steamapps_dir" ]] && [[ "$steamapps_dir" != "${STEAM_DIRS[0]}" ]]; then
+                STEAM_DIRS+=("$steamapps_dir")
+                log_verbose "Additional library: $steamapps_dir"
+            fi
+        done < <(grep '"path"' "$libfile" 2>/dev/null | sed 's/.*"path"[[:space:]]*"\(.*\)"/\1/')
+    fi
+
+    log_info "Found ${#STEAM_DIRS[@]} Steam library folder(s)"
+}
+
+# Check if an app ID should be excluded
+is_excluded() {
+    local appid="$1"
+
+    if [[ -n "$EXCLUDE_FILE" ]] && [[ -f "$EXCLUDE_FILE" ]]; then
+        grep -qx "$appid" "$EXCLUDE_FILE" 2>/dev/null && return 0
+    fi
+
+    return 1
+}
+
+# Title-case a single ALL-CAPS word (3+ chars), preserving short words
+# and handling hyphenated compounds like PAC-MAN → Pac-Man
+title_case_word() {
+    local word="$1"
+
+    # Preserve Roman numerals
+    case "$word" in
+        II|III|IV|VI|VII|VIII|IX|XI|XII|XIII|XIV|XV|XVI|XX) echo "$word"; return ;;
+    esac
+
+    # Preserve common acronyms / short all-caps (1-2 chars stay as-is)
+    if [[ ${#word} -le 2 ]]; then
+        echo "$word"
+        return
+    fi
+
+    # Only transform if the word is ALL CAPS (letters only, 3+ chars)
+    # Also handle possessives/contractions like DIRECTOR'S, DON'T
+    if [[ "$word" =~ ^[A-Z]+$ ]] || [[ "$word" =~ ^[A-Z]+\'[A-Z]+$ ]]; then
+        # Common lowercase articles/prepositions when mid-title
+        case "$word" in
+            THE) echo "the" ;;
+            AND) echo "and" ;;
+            FOR) echo "for" ;;
+            *)   local lower="${word,,}"; echo "${lower^}" ;;
+        esac
+        return
+    fi
+
+    # Handle hyphenated ALL-CAPS compounds: PAC-MAN → Pac-Man
+    if [[ "$word" == *-* ]] && [[ "$word" =~ ^[A-Z-]+$ ]]; then
+        local result=""
+        IFS='-' read -ra parts <<< "$word"
+        for i in "${!parts[@]}"; do
+            local part="${parts[$i]}"
+            if [[ ${#part} -ge 2 ]]; then
+                local plower="${part,,}"
+                part="${plower^}"
+            fi
+            [[ $i -gt 0 ]] && result+="-"
+            result+="$part"
+        done
+        echo "$result"
+        return
+    fi
+
+    # Not all caps — return as-is
+    echo "$word"
+}
+
+# Apply ALL CAPS → Title Case across an entire name string
+normalize_caps() {
+    local name="$1"
+    local result=""
+    local first=true
+
+    for word in $name; do
+        local converted
+        converted=$(title_case_word "$word")
+
+        # First word: capitalize articles/prepositions back up
+        if [[ "$first" == true ]]; then
+            case "$converted" in
+                the|and|for|of|in|to|a|an)
+                    converted="${converted^}"
+                    ;;
+            esac
+            first=false
+        fi
+
+        [[ -n "$result" ]] && result+=" "
+        result+="$converted"
+    done
+
+    echo "$result"
+}
+
+# Sanitize a game name for use as a filename
+sanitize_filename() {
+    local name="$1"
+
+    # 1. Replace colons with " -" (scraper-friendly)
+    name="${name//:/\ -}"
+
+    # 2. Strip trademark/registered/copyright symbols
+    name="${name//™/}"
+    name="${name//®/}"
+    name="${name//©/}"
+
+    # 3. Remove problematic filename characters
+    # Strip ? entirely (replacing with _ leaves ugly trailing artifacts)
+    name="${name//\?/}"
+    # Replace remaining dangerous chars with _
+    name="${name//\//_}"
+    name="${name//\\/_}"
+    name="${name//\*/_}"
+    name="${name//\"/_}"
+    name="${name//</_}"
+    name="${name//>/_}"
+    name="${name//|/_}"
+
+    # 4. Collapse redundant whitespace and trim
+    read -r name <<< "$(echo "$name" | tr -s ' ')"
+
+    # 5. Trim leading/trailing dashes, dots, and underscores
+    # (trailing dots break filenames on Windows and confuse scrapers)
+    while [[ "$name" == *[-._] ]]; do
+        name="${name%[-._]}"
+    done
+    while [[ "$name" == [-._]* ]]; do
+        name="${name#[-._]}"
+    done
+
+    # 6. ALL CAPS → Title Case
+    name=$(normalize_caps "$name")
+
+    echo "$name"
+}
+
+# Normalize a display name (for Name= field in .desktop)
+# Same as sanitize_filename but without filesystem character mangling
+normalize_display_name() {
+    local name="$1"
+
+    # Strip trademark/registered/copyright symbols
+    name="${name//™/}"
+    name="${name//®/}"
+    name="${name//©/}"
+
+    # Collapse redundant whitespace and trim
+    read -r name <<< "$(echo "$name" | tr -s ' ')"
+
+    # ALL CAPS → Title Case
+    name=$(normalize_caps "$name")
+
+    echo "$name"
+}
+
+# Generate .desktop file content
+generate_desktop() {
+    local appid="$1"
+    local name="$2"
+
+    cat <<EOF
+[Desktop Entry]
+Type=Application
+Name=$name
+Exec=steam steam://rungameid/$appid
+Icon=steam_icon_$appid
+Terminal=false
+Categories=Game;
+Comment=Steam App ID: $appid
+EOF
+}
+
+# --- Argument Parsing ---
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dry-run)    DRY_RUN=true; shift ;;
+        --clean)      CLEAN=true; shift ;;
+        --steam-dir)  STEAM_DIRS+=("$2/steamapps"); shift 2 ;;
+        --output-dir) OUTPUT_DIR="$2"; shift 2 ;;
+        --exclude)    EXCLUDE_FILE="$2"; shift 2 ;;
+        -v|--verbose) VERBOSE=true; shift ;;
+        -h|--help)    usage ;;
+        *)            log_error "Unknown option: $1" ;;
+    esac
+done
+
+# --- Main ---
+
+log_info "ES-DE Steam .desktop Generator"
+log_info "Output: $OUTPUT_DIR"
+
+# Find Steam libraries if none specified via --steam-dir
+if [[ ${#STEAM_DIRS[@]} -eq 0 ]]; then
+    find_steam_libraries
+fi
+
+# Create output directory
+if [[ "$DRY_RUN" == false ]]; then
+    mkdir -p "$OUTPUT_DIR"
+fi
+
+# Clean existing .desktop files if requested
+if [[ "$CLEAN" == true ]]; then
+    if [[ "$DRY_RUN" == true ]]; then
+        log_info "[DRY RUN] Would remove existing .desktop files from $OUTPUT_DIR"
+    else
+        find "$OUTPUT_DIR" -maxdepth 1 -name "*.desktop" -delete 2>/dev/null || true
+        log_info "Cleaned existing .desktop files"
+    fi
+fi
+
+# Process all appmanifest files
+created=0
+skipped=0
+excluded=0
+
+for steamapps_dir in "${STEAM_DIRS[@]}"; do
+    log_verbose "Scanning: $steamapps_dir"
+
+    for manifest in "$steamapps_dir"/appmanifest_*.acf; do
+        [[ -f "$manifest" ]] || continue
+
+        appid=$(parse_acf_value "$manifest" "appid")
+        name=$(parse_acf_value "$manifest" "name")
+        state_flags=$(parse_acf_value "$manifest" "StateFlags")
+
+        # Skip if missing critical fields
+        if [[ -z "$appid" ]] || [[ -z "$name" ]]; then
+            log_verbose "Skipping malformed manifest: $manifest"
+            skipped=$((skipped + 1))
+            continue
+        fi
+
+        # StateFlags is a bitmask; bit 4 (value 4) = fully installed
+        # e.g. 6=installed+update_needed, 68=installed+running
+        if [[ -z "$state_flags" ]] || (( (state_flags & 4) == 0 )); then
+            log_verbose "Skipping not-installed: $name (state=${state_flags:-empty})"
+            skipped=$((skipped + 1))
+            continue
+        fi
+
+        # Skip Steamworks common redistributables, Proton, etc.
+        if [[ "$name" == "Steamworks Common Redistributables" ]] || \
+           [[ "$name" =~ ^Proton ]] || \
+           [[ "$name" =~ ^Steam\ Linux\ Runtime ]] || \
+           [[ "$name" =~ ^SteamVR ]] || \
+           [[ "$name" == "Steam Controller Configs" ]]; then
+            log_verbose "Skipping tool/runtime: $name ($appid)"
+            skipped=$((skipped + 1))
+            continue
+        fi
+
+        # Check user exclusion list
+        if is_excluded "$appid"; then
+            log_verbose "Excluded by user: $name ($appid)"
+            excluded=$((excluded + 1))
+            continue
+        fi
+
+        safe_name=$(sanitize_filename "$name")
+        display_name=$(normalize_display_name "$name")
+        desktop_file="$OUTPUT_DIR/${safe_name}.desktop"
+
+        if [[ "$DRY_RUN" == true ]]; then
+            echo "  [DRY RUN] $safe_name.desktop (appid: $appid)"
+        else
+            generate_desktop "$appid" "$display_name" > "$desktop_file"
+            chmod +x "$desktop_file"
+            log_verbose "Created: $safe_name.desktop ($appid)"
+        fi
+
+        created=$((created + 1))
+    done
+done
+
+log_info "Done! Created: $created | Skipped: $skipped | Excluded: $excluded"
+
+if [[ "$DRY_RUN" == true ]]; then
+    log_info "(Dry run - no files were written)"
+fi
+
+if [[ $created -gt 0 ]] && [[ "$DRY_RUN" == false ]]; then
+    log_info "Restart ES-DE to see your Steam games."
+    log_info "You can scrape metadata via ES-DE's built-in scraper (use TheGamesDB or ScreenScraper)."
+fi
