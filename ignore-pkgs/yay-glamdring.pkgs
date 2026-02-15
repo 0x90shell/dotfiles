@@ -644,6 +644,7 @@ json-glib
 jsoncpp
 jxrlib
 karchive
+kasts
 kazam
 kbd
 kbookmarks
@@ -1469,6 +1470,7 @@ pixman
 pkcs11-helper
 pkgconf
 pkgfile
+playerctl
 plocate
 pngquant
 pnpm
@@ -1637,6 +1639,7 @@ qt6-svg
 qt6-translations
 qt6-wayland
 qt6-websockets
+qtkeychain-qt6
 quake3e-git
 quakespasm
 quakespasm-spiked-git
@@ -1812,6 +1815,7 @@ suyu-bin
 svt-av1
 svt-hevc
 syncthing
+syndication
 sysfsutils
 systemd
 systemd-libs
@@ -1830,6 +1834,7 @@ texinfo
 the-dark-mod-bin
 theforceengine-git
 thin-provisioning-tools
+threadweaver
 thunar
 thunar-archive-plugin
 thunar-dropbox
