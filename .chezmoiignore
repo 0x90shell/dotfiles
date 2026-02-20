@@ -33,6 +33,7 @@ bin/.emu-backup.conf
 bin/esdepull
 bin/evsieve-gamepad
 bin/ESDE*
+bin/.ESDE-genre-overrides.tsv
 bin/kernel-purge
 bin/steampull
 bin/ds3-search

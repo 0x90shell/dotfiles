@@ -1,0 +1,1574 @@
+#!/bin/bash
+set -euo pipefail
+IFS=$'\n\t'
+
+# =============================================================================
+# ES-DE ROM Management Script
+# =============================================================================
+# This script manages ROM files for ES-DE (EmulationStation Desktop Edition)
+# by syncing from NAS, scraping metadata, and organizing media files.
+#
+# Author: Your Name
+# Version: 3.0
+# =============================================================================
+
+# --- Global Variables ---
+SCRIPT_NAME="$(basename "$0")"
+VERBOSE=false
+QUIET=false
+DRY_RUN=false
+EXTENSION=""
+NAS_MOUNT="$HOME/mnt/Games"
+NAS_USER_RO="lolguest"
+NAS_USER_RW="gamer"
+NAS_IP="192.168.1.77"
+NAS_SHARE="gamer"
+GAMELISTS_DIR="$HOME/ES-DE/gamelists"
+OVERRIDES_FILE="$HOME/bin/.ESDE-genre-overrides.tsv"
+
+# Canonical genre vocabulary (26 genres)
+VALID_GENRES=(
+    "ACTION"
+    "ACTION RPG"
+    "ADVENTURE"
+    "ARCADE"
+    "BEAT 'EM UP"
+    "BOARD GAME"
+    "CARD GAME"
+    "CASINO"
+    "EDUCATIONAL"
+    "FIGHTING"
+    "HORROR"
+    "METROIDVANIA"
+    "PARTY"
+    "PINBALL"
+    "PLATFORMER"
+    "PUZZLE"
+    "RACING"
+    "RHYTHM"
+    "RPG"
+    "SHOOTER"
+    "SIMULATION"
+    "SPORTS"
+    "STRATEGY"
+    "SURVIVAL HORROR"
+    "TACTICAL RPG"
+    "VISUAL NOVEL"
+)
+
+# --- Help Function ---
+show_help() {
+    cat << EOF
+ES-DE ROM Management Script v3.0
+
+DESCRIPTION:
+    Manages ROM files for ES-DE by syncing from NAS storage, scraping metadata
+    using Skyscraper, and organizing media files. Also provides genre
+    normalization to fix scraper output.
+
+    ROM modes:
+    • initialize: Full sync of all ROMs from NAS (replaces local content)
+    • additions:  Processes new ROMs from '0merge' folder (requires 0merge directory)
+
+    Genre modes:
+    • normalize-genres: Automatic genre cleanup (uppercase, vocab, overrides)
+    • review-genres:    Interactive genre review (keyword mismatch detection)
+
+USAGE:
+    $SCRIPT_NAME [OPTIONS] <CONSOLE>
+
+OPERATION MODES (choose one):
+    -i, --initialize   Full ROM synchronization from NAS
+                       - Mounts NAS read-only
+                       - Syncs entire ROM collection (with --delete)
+                       - Scrapes metadata for all ROMs
+                       - Organizes media files
+                       - Cleans up temporary files
+
+    -a, --additions    Process new ROM additions from 0merge folder
+                       - Requires '0merge' directory on NAS
+                       - Syncs only new ROMs from 0merge
+                       - Scrapes metadata for new ROMs only
+                       - Merges gamelists (preserves existing entries)
+                       - Moves ROMs from 0merge to main directory
+                       - Syncs back to NAS (removes processed 0merge)
+
+    -g, --normalize-genres <CONSOLE|all>
+                       Tier 1: Automatic genre normalization
+                       - Uppercases all genres
+                       - Normalizes vocabulary (PLATFORM->PLATFORMER, etc.)
+                       - Applies series + per-game overrides from genre-overrides.tsv
+                       - Strips zero ratings
+                       Also runs automatically after -i and -a modes.
+
+    -r, --review-genres <CONSOLE|all>
+                       Tier 2: Interactive genre review
+                       - Scans descriptions for genre-suggestive keywords
+                       - Flags mismatches for human review
+                       - Options: [a]ccept, [s]kip, [d]ismiss, [c]ustom
+                       - Dismiss adds game to overrides file (won't flag again)
+                       - Custom genre is validated against canonical vocabulary
+                       - Never runs automatically
+
+ARGUMENTS:
+    <CONSOLE>          Console name (e.g., psx, n64, snes, genesis)
+                       Must match directory names on both NAS and local storage
+                       For genre modes, use 'all' to process all consoles
+
+OTHER OPTIONS:
+    -v, --verbose      Enable verbose output (detailed progress information)
+    -q, --quiet        Suppress informational messages (errors still shown)
+    -n, --dry-run      Show what would be done without making changes
+    -e, --extension    Add file extension filter to Skyscraper commands
+                       Example: -e "*.wua" for Wii U archives
+    --overrides-file   Path to genre overrides TSV file
+                       Default: ~/bin/.ESDE-genre-overrides.tsv
+    -h, --help         Show this help message and exit
+
+DIRECTORY STRUCTURE:
+    NAS (Remote):      ~/mnt/Games/Roms/<CONSOLE>/
+                       ~/mnt/Games/Roms/<CONSOLE>/0merge/    (for additions mode)
+                       ~/mnt/Games/Roms/<CONSOLE>/hacks/     (optional)
+    
+    Local:             ~/ROMs/<CONSOLE>/
+    ES-DE Gamelists:   ~/ES-DE/gamelists/<CONSOLE>/
+    ES-DE Media:       ~/ES-DE/downloaded_media/<CONSOLE>/
+
+REQUIREMENTS:
+    • NAS accessible at $NAS_IP (share: $NAS_SHARE)
+    • Skyscraper installed and configured
+    • CIFS utilities for NAS mounting
+    • rsync for file synchronization
+    • sudo access for NAS mounting
+
+EXAMPLES:
+    # Initialize PlayStation ROMs (full sync)
+    $SCRIPT_NAME --initialize psx
+    $SCRIPT_NAME -i psx
+
+    # Add new Nintendo 64 ROMs from 0merge folder
+    $SCRIPT_NAME --additions n64
+    $SCRIPT_NAME -a n64
+
+    # Initialize with verbose output and custom extension
+    $SCRIPT_NAME -v -e "*.wua" --initialize wiiu
+
+    # Process additions for SNES with verbose logging
+    $SCRIPT_NAME --verbose --additions snes
+
+    # Preview what would happen without making changes (dry-run)
+    $SCRIPT_NAME --dry-run --initialize psx
+
+    # Run quietly (only errors shown)
+    $SCRIPT_NAME --quiet --additions n64
+
+    # Normalize genres for a specific console
+    $SCRIPT_NAME --normalize-genres nds
+    $SCRIPT_NAME -g nds
+
+    # Normalize genres for all consoles
+    $SCRIPT_NAME -g all
+
+    # Interactive genre review
+    $SCRIPT_NAME --review-genres nds
+    $SCRIPT_NAME -r nds
+
+GENRE OVERRIDES FILE:
+    Tab-separated file with series and game-specific genre overrides.
+    Lines starting with # are comments. Format:
+
+        S<TAB>series prefix<TAB>GENRE     Series prefix match (name starts with)
+        G<TAB>exact name<TAB>GENRE        Game-specific (exact name match)
+        I<TAB>exact name<TAB>GENRE        Dismiss (suppress review flag for this game)
+
+    Game-specific (G) rules take priority over series (S) rules.
+    Dismiss (I) rules are used by --review-genres to skip previously reviewed games.
+    Example:
+        S	Mario Party	PARTY
+        G	Castlevania : Lament of Innocence	ACTION
+
+NOTES:
+    • '--additions' mode requires a '0merge' directory on the NAS
+    • The script will create necessary local directories if they don't exist
+    • Always creates backups of existing gamelists before modifications
+    • Media files are organized according to ES-DE naming conventions
+    • NAS is mounted read-only for safety, then remounted read-write when needed
+
+EOF
+}
+
+# --- Logging Functions ---
+
+# Log message with timestamp (shown unless quiet mode)
+log_info() {
+    [[ "$QUIET" == true ]] && return
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+}
+
+# Log error message and exit (always shown)
+log_error() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" >&2
+    exit 1
+}
+
+# Log verbose message (only shown in verbose mode)
+log_verbose() {
+    [[ "$VERBOSE" != true ]] && return
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] VERBOSE: $*"
+}
+
+# Log dry-run action (shown when dry-run mode is active)
+log_dryrun() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] DRY-RUN: Would $*"
+}
+
+# --- Dry-Run Wrapper Functions ---
+
+# Run rsync with dry-run support
+run_rsync() {
+    if [[ "$DRY_RUN" == true ]]; then
+        log_dryrun "rsync $*"
+        rsync --dry-run "$@" 2>/dev/null || true
+    else
+        rsync "$@"
+    fi
+}
+
+# Run rm with dry-run support
+run_rm() {
+    if [[ "$DRY_RUN" == true ]]; then
+        log_dryrun "rm $*"
+    else
+        rm "$@"
+    fi
+}
+
+# Run mv with dry-run support
+run_mv() {
+    if [[ "$DRY_RUN" == true ]]; then
+        log_dryrun "mv $*"
+    else
+        mv "$@"
+    fi
+}
+
+# Run cp with dry-run support
+run_cp() {
+    if [[ "$DRY_RUN" == true ]]; then
+        log_dryrun "cp $*"
+    else
+        cp "$@"
+    fi
+}
+
+# Run sudo rm with dry-run support
+run_sudo_rm() {
+    if [[ "$DRY_RUN" == true ]]; then
+        log_dryrun "sudo rm $*"
+    else
+        sudo rm "$@"
+    fi
+}
+
+# Run sudo mv with dry-run support
+run_sudo_mv() {
+    if [[ "$DRY_RUN" == true ]]; then
+        log_dryrun "sudo mv $*"
+    else
+        sudo mv "$@"
+    fi
+}
+
+# --- Validation Functions ---
+
+# Validate command line arguments
+validate_arguments() {
+    local mode="$1"
+    local console="$2"
+
+    if [[ -z "$mode" ]]; then
+        echo "ERROR: No operation mode specified" >&2
+        echo "Use '--initialize', '--additions', '--normalize-genres', or '--review-genres'" >&2
+        echo "Use '$SCRIPT_NAME --help' for usage information" >&2
+        exit 1
+    fi
+
+    if [[ -z "$console" ]]; then
+        echo "ERROR: Missing console name argument" >&2
+        echo "Use '$SCRIPT_NAME --help' for usage information" >&2
+        exit 1
+    fi
+
+    if [[ ! "$mode" =~ ^(initialize|additions|normalize-genres|review-genres)$ ]]; then
+        log_error "Invalid mode '$mode'. Must be 'initialize', 'additions', 'normalize-genres', or 'review-genres'"
+    fi
+
+    # 'all' is valid for genre modes
+    if [[ "$console" != "all" ]] && [[ ! "$console" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        log_error "Invalid console name '$console'. Use alphanumeric characters, hyphens, and underscores only"
+    fi
+
+    # Validate console name isn't too generic or dangerous
+    case "$console" in
+        ""|"home"|"root"|"tmp"|"var"|"usr"|"etc")
+            log_error "Invalid console name '$console' - name is too generic or potentially dangerous"
+            ;;
+    esac
+}
+
+# --- NAS Management Functions ---
+
+# Mount NAS with specified user and permissions
+mount_nas() {
+    local nas_user="$1"
+    local mount_options="$2"
+    
+    if ! grep -qs "$NAS_MOUNT" /proc/mounts; then
+        log_info "🔌 Mounting NAS as user '$nas_user'..."
+        log_verbose "Mount command: mount -t cifs '//$NAS_IP/$NAS_SHARE' '$NAS_MOUNT' -o $mount_options"
+        
+        if ! sudo mount -t cifs "//$NAS_IP/$NAS_SHARE" "$NAS_MOUNT" -o "$mount_options"; then
+            log_error "Failed to mount NAS at $NAS_MOUNT"
+        fi
+        
+        log_info "✅ NAS mounted successfully"
+    else
+        log_info "✅ NAS already mounted"
+        log_verbose "Mount point: $NAS_MOUNT"
+    fi
+}
+
+# Unmount NAS safely
+unmount_nas() {
+    if grep -qs "$NAS_MOUNT" /proc/mounts; then
+        log_info "🔌 Unmounting NAS..."
+        if sudo umount "$NAS_MOUNT"; then
+            log_info "✅ NAS unmounted"
+        else
+            log_error "Failed to unmount NAS"
+        fi
+    else
+        log_verbose "NAS not mounted, nothing to unmount"
+    fi
+}
+
+# --- Path Validation Functions ---
+
+# Validate that required directories exist
+validate_paths() {
+    local console="$1"
+    local mode="$2"
+    
+    local nas_rom_dir="$NAS_MOUNT/Roms/$console"
+    local local_rom_dir="$HOME/ROMs/$console"
+    
+    log_verbose "Validating directory paths for console: $console"
+    
+    # Check NAS ROM directory
+    if [[ ! -d "$nas_rom_dir" ]]; then
+        log_error "NAS ROM directory not found: $nas_rom_dir"
+    fi
+    log_verbose "✓ NAS ROM directory exists: $nas_rom_dir"
+    
+    # For initialize mode, local directory will be created/synced
+    # For additions mode, local directory must exist
+    if [[ "$mode" == "additions" ]] && [[ ! -d "$local_rom_dir" ]]; then
+        log_error "Local ROM directory not found: $local_rom_dir (required for additions mode)"
+    elif [[ "$mode" == "initialize" ]]; then
+        # Create local ROM directory if it doesn't exist
+        mkdir -p "$local_rom_dir"
+        log_verbose "✓ Local ROM directory ready: $local_rom_dir"
+    else
+        log_verbose "✓ Local ROM directory exists: $local_rom_dir"
+    fi
+    
+    # For additions mode, check for 0merge directory
+    if [[ "$mode" == "additions" ]]; then
+        local merge_dir="$nas_rom_dir/0merge"
+        if [[ ! -d "$merge_dir" ]]; then
+            log_error "0merge directory not found: $merge_dir (required for additions mode)"
+        fi
+        log_verbose "✓ 0merge directory exists: $merge_dir"
+    fi
+    
+    log_info "📁 All required directories validated"
+}
+
+# --- Skyscraper Functions ---
+
+# Run Skyscraper metadata scraping with optional extension
+scrape_metadata() {
+    local console="$1"
+    local input_dir="$2"
+    shift 2
+    local extension_args=("$@")  # Use array for extension arguments
+    
+    log_info "🎮 Running Skyscraper metadata scrapes for $console..."
+    log_verbose "Input directory: $input_dir"
+    log_verbose "Extension args: ${extension_args[*]:-none}"
+    
+    # ES gamelist scrape (existing metadata)
+    log_verbose "Scraping ES gamelist metadata..."
+    Skyscraper -p "$console" -s esgamelist -i "$input_dir" \
+        --flags videos,relative,nosubdirs,unattend --refresh ${extension_args[@]+"${extension_args[@]}"}
+    
+    # ScreenScraper database scrape
+    log_verbose "Scraping ScreenScraper database..."
+    Skyscraper -p "$console" -s screenscraper -i "$input_dir" \
+        --flags noscreenshots,nocovers,nowheels,nomarquees,nosubdirs,unattend ${extension_args[@]+"${extension_args[@]}"}
+    
+    # TheGamesDB scrape
+    log_verbose "Scraping TheGamesDB database..."
+    Skyscraper -p "$console" -s thegamesdb -i "$input_dir" \
+        --flags nosubdirs,unattend ${extension_args[@]+"${extension_args[@]}"}
+    
+    # Generate final gamelist
+    log_verbose "Generating final gamelist..."
+    Skyscraper -p "$console" -i "$input_dir" \
+        --flags unattend,relative ${extension_args[@]+"${extension_args[@]}"}
+    
+    log_info "✅ Metadata scraping completed"
+}
+
+# --- Gamelist Management Functions ---
+
+# Sync gamelist for initialize mode (replace)
+sync_gamelist_replace() {
+    local console="$1"
+    local source_dir="$2"
+    
+    local es_gamelist="$HOME/ES-DE/gamelists/$console"
+    local source_gamelist="$source_dir/gamelist.xml"
+    local target_gamelist="$es_gamelist/gamelist.xml"
+    
+    log_info "📁 Syncing gamelist (replace mode)..."
+    
+    mkdir -p "$es_gamelist"
+    
+    # Backup existing gamelist if it exists
+    if [[ -f "$target_gamelist" ]]; then
+        cp "$target_gamelist" "$es_gamelist/gamelist-backup.xml"
+        log_verbose "✓ Created gamelist backup"
+    fi
+    
+    # Copy new gamelist
+    if [[ -f "$source_gamelist" ]]; then
+        run_rsync "$source_gamelist" "$target_gamelist"
+        log_info "✅ Gamelist synced"
+    else
+        log_error "Source gamelist not found: $source_gamelist"
+    fi
+}
+
+# Merge gamelist for additions mode (append)
+sync_gamelist_merge() {
+    local console="$1"
+    local source_dir="$2"
+    
+    local es_gamelist="$HOME/ES-DE/gamelists/$console"
+    local source_gamelist="$source_dir/gamelist.xml"
+    local target_gamelist="$es_gamelist/gamelist.xml"
+    local merge_gamelist="$es_gamelist/gamelist-merge.xml"
+    
+    log_info "📁 Merging gamelist (additions mode)..."
+    
+    mkdir -p "$es_gamelist"
+    
+    if [[ ! -f "$source_gamelist" ]]; then
+        log_error "Source gamelist not found: $source_gamelist"
+    fi
+    
+    # Prepare source gamelist for merging (remove XML headers and root tags)
+    sed -i '/gameList/d;/xml version/d' "$source_gamelist"
+    
+    # Backup existing gamelist
+    if [[ -f "$target_gamelist" ]]; then
+        cp "$target_gamelist" "$es_gamelist/gamelist-backup.xml"
+        log_verbose "✓ Created gamelist backup"
+    else
+        # Create empty gamelist if none exists
+        cat > "$target_gamelist" << EOF
+<?xml version="1.0"?>
+<gameList>
+</gameList>
+EOF
+        log_verbose "✓ Created new empty gamelist"
+    fi
+    
+    # Merge gamelists
+    cat "$target_gamelist" "$source_gamelist" > "$merge_gamelist"
+    
+    # Clean up merged gamelist (remove closing tags, fix paths)
+    sed -i '/\/gameList/d;s/\/0merge//' "$merge_gamelist"
+    echo "</gameList>" >> "$merge_gamelist"
+    
+    # Replace original with merged version
+    mv "$merge_gamelist" "$target_gamelist"
+    
+    log_info "✅ Gamelist merged"
+}
+
+# --- Media Management Functions ---
+
+# Sync media files using the media mapping
+sync_media_files() {
+    local console="$1"
+    local source_dir="$2"
+    local mode="$3"  # "copy" for additions, "rsync" for initialize
+    
+    log_info "📁 Syncing media files ($mode mode)..."
+    
+    local es_media="$HOME/ES-DE/downloaded_media/$console"
+    mkdir -p "$es_media"
+    
+    # Define media type mapping (Skyscraper -> ES-DE)
+    declare -A media_map=(
+        [box2dback]=backcovers
+        [box2dfront]=covers
+        [box3d]=3dboxes
+        [fanart]=fanart
+        [images]=miximages
+        [manual]=manuals
+        [screenshot]=screenshots
+        [screenshottitle]=titlescreens
+        [support]=physicalmedia
+        [videos]=videos
+        [wheel]=marquees
+    )
+    
+    for src_type in "${!media_map[@]}"; do
+        local src_path="$source_dir/media/$src_type"
+        local dest_type="${media_map[$src_type]}"
+        local dest_path="$es_media/$dest_type"
+        
+        if [[ -d "$src_path" ]]; then
+            mkdir -p "$dest_path"
+            
+            if [[ "$mode" == "copy" ]]; then
+                # For additions mode, copy files
+                if run_cp -r "$src_path"/* "$dest_path" 2>/dev/null; then
+                    log_verbose "✓ Copied $src_type -> $dest_type"
+                else
+                    log_verbose "• No files to copy for $src_type"
+                fi
+            elif [[ "$mode" == "rsync" ]]; then
+                # For initialize mode, sync with rsync
+                if [[ "$VERBOSE" == true ]]; then
+                    run_rsync -avz --info=progress2 "$src_path/" "$dest_path"
+                else
+                    run_rsync -az "$src_path/" "$dest_path"
+                fi
+                log_verbose "✓ Synced $src_type -> $dest_type"
+            fi
+        else
+            log_verbose "• Skipping missing media type: $src_type"
+        fi
+    done
+    
+    log_info "✅ Media files synced"
+}
+
+# --- Cleanup Functions ---
+
+# Clean up temporary files and directories
+cleanup_temp_files() {
+    local cleanup_dir="$1"
+    local description="$2"
+    
+    log_info "🧹 Cleaning up $description..."
+    
+    # Remove media directory
+    if [[ -d "${cleanup_dir:?}/media" ]]; then
+        run_rm -rf "${cleanup_dir:?}/media"
+        log_verbose "✓ Removed media directory"
+    else
+        log_verbose "• No media directory to remove"
+    fi
+
+    # Remove gamelist files
+    shopt -s nullglob
+    local gamelist_files=("${cleanup_dir:?}"/gamelist.*)
+    if (( ${#gamelist_files[@]} )); then
+        run_rm -f "${gamelist_files[@]}"
+        log_verbose "✓ Removed ${#gamelist_files[@]} gamelist file(s)"
+    else
+        log_verbose "• No gamelist files to remove"
+    fi
+    shopt -u nullglob
+    
+    log_info "✅ Cleanup completed"
+}
+
+# Move all files including dotfiles
+move_all_contents() {
+    local src="$1"
+    local dst="$2"
+    
+    log_verbose "Moving contents from $src to $dst"
+    
+    if [[ ! -d "$src" ]]; then
+        log_error "Source directory not found: $src"
+    fi
+    
+    mkdir -p "$dst"
+    
+    shopt -s dotglob nullglob
+    local files=("$src"/*)
+    if (( ${#files[@]} )); then
+        run_mv "$src"/* "$dst"/
+        log_verbose "✓ Moved ${#files[@]} items"
+    else
+        log_verbose "• No files to move"
+    fi
+    shopt -u dotglob nullglob
+}
+
+# --- Genre Normalization Functions (Tier 1: automatic) ---
+
+# Step 1: Uppercase all genres
+step_uppercase_genres() {
+    local file="$1"
+    sed -i 's|<genre>\([^<]*\)</genre>|<genre>\U\1\E</genre>|g' "$file"
+}
+
+# Step 2: Vocabulary normalization
+step_vocab_normalize() {
+    local file="$1"
+
+    # Multi-word patterns first
+    sed -i 's|<genre>ROLE PLAYING</genre>|<genre>RPG</genre>|g' "$file"
+    sed -i 's|<genre>ROLE-PLAYING</genre>|<genre>RPG</genre>|g' "$file"
+    sed -i "s|<genre>SHOOT'EM UP</genre>|<genre>SHOOTER</genre>|g" "$file"
+    sed -i "s|<genre>SHOOT 'EM UP</genre>|<genre>SHOOTER</genre>|g" "$file"
+    sed -i 's|<genre>BOARD GAMES</genre>|<genre>BOARD GAME</genre>|g' "$file"
+    sed -i 's|<genre>CARD GAMES</genre>|<genre>CARD GAME</genre>|g' "$file"
+    sed -i "s|<genre>BEAT'EM UP</genre>|<genre>BEAT 'EM UP</genre>|g" "$file"
+
+    # Single-word substitutions
+    sed -i 's|<genre>PLATFORM</genre>|<genre>PLATFORMER</genre>|g' "$file"
+    sed -i 's|<genre>SPORT</genre>|<genre>SPORTS</genre>|g' "$file"
+    sed -i 's|<genre>FIGHT</genre>|<genre>FIGHTING</genre>|g' "$file"
+    sed -i 's|<genre>RACE</genre>|<genre>RACING</genre>|g' "$file"
+    sed -i 's|<genre>SIMULATOR</genre>|<genre>SIMULATION</genre>|g' "$file"
+    sed -i 's|<genre>EDUCATION</genre>|<genre>EDUCATIONAL</genre>|g' "$file"
+    sed -i 's|<genre>MUSIC</genre>|<genre>RHYTHM</genre>|g' "$file"
+
+    # Extended vocab: scraper-specific compound/variant genre names
+    sed -i 's|<genre>ROLE PLAYING GAMES</genre>|<genre>RPG</genre>|g' "$file"
+    sed -i 's|<genre>ROLE PLAYING GAME</genre>|<genre>RPG</genre>|g' "$file"
+    sed -i 's|<genre>ROLE-PLAYING (RPG)</genre>|<genre>RPG</genre>|g' "$file"
+    sed -i 's|<genre>LIGHTGUN SHOOTER</genre>|<genre>SHOOTER</genre>|g' "$file"
+    sed -i 's|<genre>MUSIC AND DANCE</genre>|<genre>RHYTHM</genre>|g' "$file"
+    sed -i 's|<genre>MUSIC AND DANCING</genre>|<genre>RHYTHM</genre>|g' "$file"
+    sed -i 's|<genre>PLAYING CARDS</genre>|<genre>CARD GAME</genre>|g' "$file"
+    sed -i 's|<genre>LIFE SIMULATION</genre>|<genre>SIMULATION</genre>|g' "$file"
+    sed -i 's|<genre>FLIGHT SIMULATOR</genre>|<genre>SIMULATION</genre>|g' "$file"
+}
+
+# Step 2.4: Map known compound genres to specific single genres
+# Must run BEFORE generic strip so RPG+Strategy → TACTICAL RPG, not just RPG
+step_map_compound_genres() {
+    local file="$1"
+    awk '
+    /<genre>/ {
+        genre = $0
+        gsub(/.*<genre>/, "", genre)
+        gsub(/<\/genre>.*/, "", genre)
+
+        # RPG + Strategy/Tactical → TACTICAL RPG
+        if ((genre ~ /ROLE.PLAYING/ || genre ~ /RPG/) && (genre ~ /STRATEG/ || genre ~ /TACTICAL/)) {
+            sub(/<genre>[^<]*<\/genre>/, "<genre>TACTICAL RPG</genre>")
+        }
+        # RPG + Action (without Strategy) → ACTION RPG
+        else if ((genre ~ /ROLE.PLAYING/ || genre ~ /ACTION RPG/) && genre ~ /ACTION/ && genre !~ /STRATEG/) {
+            sub(/<genre>[^<]*<\/genre>/, "<genre>ACTION RPG</genre>")
+        }
+        # Contains "ACTION RPG" as compound element → ACTION RPG
+        else if (genre ~ /ACTION RPG/) {
+            sub(/<genre>[^<]*<\/genre>/, "<genre>ACTION RPG</genre>")
+        }
+    }
+    { print }
+    ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+}
+
+# Step 2.5: Strip remaining compound genre separators (take first/primary genre)
+step_strip_compound_genres() {
+    local file="$1"
+    # Comma separator: "ACTION, ADVENTURE" → "ACTION"
+    sed -i 's|<genre>\([^,<]*\),.*</genre>|<genre>\1</genre>|g' "$file"
+    # Slash separator: "SHOOTER / FPV" → "SHOOTER"
+    sed -i 's|<genre>\([^/<]*\)/.*</genre>|<genre>\1</genre>|g' "$file"
+    # Hyphen separator: "PLATFORM-ACTION" → "PLATFORM"
+    # Runs after vocab normalize, so ROLE-PLAYING is already RPG
+    sed -i 's|<genre>\([^-<]*\)-.*</genre>|<genre>\1</genre>|g' "$file"
+    # Trim trailing whitespace left by separator stripping
+    sed -i 's|<genre>\(.*[^ ]\) *</genre>|<genre>\1</genre>|g' "$file"
+}
+
+# Step 3: Apply overrides from genre-overrides.tsv
+step_apply_overrides() {
+    local file="$1"
+    local overrides_file="$2"
+
+    if [[ ! -f "$overrides_file" ]]; then
+        log_verbose "Overrides file not found: $overrides_file — skipping overrides"
+        return
+    fi
+
+    local -a g_names=() g_genres=() s_prefixes=() s_genres=()
+
+    while IFS=$'\t' read -r type pattern genre; do
+        [[ -z "$type" || "$type" == \#* ]] && continue
+        case "$type" in
+            G) g_names+=("$pattern"); g_genres+=("$genre") ;;
+            S) s_prefixes+=("$pattern"); s_genres+=("$genre") ;;
+        esac
+    done < "$overrides_file"
+
+    local -a names_in_file
+    mapfile -t names_in_file < <(sed -n 's/.*<name>\([^<]*\)<\/name>.*/\1/p' "$file")
+
+    local name new_genre matched
+    for name in "${names_in_file[@]}"; do
+        matched=false
+        new_genre=""
+
+        # Game-specific overrides (highest priority)
+        for i in "${!g_names[@]}"; do
+            if [[ "$name" == "${g_names[$i]}" ]]; then
+                new_genre="${g_genres[$i]}"
+                matched=true
+                log_verbose "G-match: '$name' -> $new_genre"
+                break
+            fi
+        done
+
+        # Series prefix match
+        if [[ "$matched" == false ]]; then
+            for i in "${!s_prefixes[@]}"; do
+                if [[ "$name" == "${s_prefixes[$i]}"* ]]; then
+                    new_genre="${s_genres[$i]}"
+                    matched=true
+                    log_verbose "S-match: '$name' (prefix '${s_prefixes[$i]}') -> $new_genre"
+                    break
+                fi
+            done
+        fi
+
+        if [[ "$matched" == true && -n "$new_genre" ]]; then
+            awk -v name="$name" -v genre="$new_genre" '
+            BEGIN { in_game=0; found_name=0; name_tag="<name>" name "</name>" }
+            /<game>/ { in_game=1; found_name=0; block="" }
+            in_game {
+                if (index($0, name_tag) > 0) found_name=1
+                if (found_name && match($0, /<genre>[^<]*<\/genre>/)) {
+                    sub(/<genre>[^<]*<\/genre>/, "<genre>" genre "</genre>")
+                }
+                print
+                if (/<\/game>/) { in_game=0; found_name=0 }
+                next
+            }
+            { print }
+            ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+        fi
+    done
+}
+
+# Step 5: Strip zero ratings
+step_strip_zero_ratings() {
+    local file="$1"
+    sed -i '/<rating>0<\/rating>/d' "$file"
+}
+
+# Step 6: Validate all genres against canonical vocabulary
+step_validate_genres() {
+    local file="$1"
+    local -a names_in_file genres_in_file
+    mapfile -t names_in_file < <(sed -n 's/.*<name>\([^<]*\)<\/name>.*/\1/p' "$file")
+    mapfile -t genres_in_file < <(sed -n 's/.*<genre>\([^<]*\)<\/genre>.*/\1/p' "$file")
+
+    local i genre name valid
+    for i in "${!genres_in_file[@]}"; do
+        genre="${genres_in_file[$i]}"
+        name="${names_in_file[$i]:-unknown}"
+        valid=false
+        for v in "${VALID_GENRES[@]}"; do
+            if [[ "$genre" == "$v" ]]; then
+                valid=true
+                break
+            fi
+        done
+        if [[ "$valid" == false ]]; then
+            log_info "⚠️  Invalid genre '$genre' on: $name"
+        fi
+    done
+}
+
+# Tier 1: Normalize genres in a gamelist file
+normalize_genres() {
+    local file="$1"
+
+    if [[ ! -f "$file" ]]; then
+        log_info "Gamelist not found (skipping): $file"
+        return
+    fi
+
+    log_info "Normalizing genres in: $file"
+
+    # Extract name->genre pairs from a gamelist file
+    local _extract_genres
+    _extract_genres() {
+        awk '
+        /<name>/ { gsub(/.*<name>|<\/name>.*/, ""); name=$0 }
+        /<genre>/ { gsub(/.*<genre>|<\/genre>.*/, ""); print name "\t" $0 }
+        ' "$1"
+    }
+
+    if [[ "$DRY_RUN" == true ]]; then
+        local tmp_file
+        tmp_file=$(mktemp)
+        cp "$file" "$tmp_file"
+
+        step_uppercase_genres "$tmp_file"
+        step_vocab_normalize "$tmp_file"
+        step_map_compound_genres "$tmp_file"
+        step_strip_compound_genres "$tmp_file"
+        step_vocab_normalize "$tmp_file"
+        step_apply_overrides "$tmp_file" "$OVERRIDES_FILE"
+        step_strip_zero_ratings "$tmp_file"
+
+        # Compare before/after genre pairs and show human-readable changes
+        local before_file after_file
+        before_file=$(mktemp)
+        after_file=$(mktemp)
+        _extract_genres "$file" > "$before_file"
+        _extract_genres "$tmp_file" > "$after_file"
+
+        local changes
+        changes=$(diff "$before_file" "$after_file" || true)
+        if [[ -n "$changes" ]]; then
+            local -A old_genres new_genres
+            while IFS=$'\t' read -r name genre; do
+                old_genres["$name"]="$genre"
+            done < "$before_file"
+            while IFS=$'\t' read -r name genre; do
+                new_genres["$name"]="$genre"
+            done < "$after_file"
+
+            local count=0
+            for name in "${!old_genres[@]}"; do
+                if [[ "${new_genres[$name]:-}" != "${old_genres[$name]}" ]]; then
+                    log_info "  $name: ${old_genres[$name]} -> ${new_genres[$name]:-REMOVED}"
+                    count=$((count + 1))
+                fi
+            done
+            log_info "$count genre change(s) pending"
+        else
+            log_info "No genre changes needed"
+        fi
+
+        step_validate_genres "$tmp_file"
+        rm -f "$tmp_file" "$before_file" "$after_file"
+    else
+        # Extract before state for comparison
+        local before_file
+        before_file=$(mktemp)
+        _extract_genres "$file" > "$before_file"
+
+        step_uppercase_genres "$file"
+        step_vocab_normalize "$file"
+        step_map_compound_genres "$file"
+        step_strip_compound_genres "$file"
+        step_vocab_normalize "$file"
+        step_apply_overrides "$file" "$OVERRIDES_FILE"
+        step_strip_zero_ratings "$file"
+
+        # Show what changed
+        local after_file
+        after_file=$(mktemp)
+        _extract_genres "$file" > "$after_file"
+
+        local changes
+        changes=$(diff "$before_file" "$after_file" || true)
+        if [[ -n "$changes" ]]; then
+            local -A old_genres new_genres
+            while IFS=$'\t' read -r name genre; do
+                old_genres["$name"]="$genre"
+            done < "$before_file"
+            while IFS=$'\t' read -r name genre; do
+                new_genres["$name"]="$genre"
+            done < "$after_file"
+
+            local count=0
+            for name in "${!old_genres[@]}"; do
+                if [[ "${new_genres[$name]:-}" != "${old_genres[$name]}" ]]; then
+                    log_info "  $name: ${old_genres[$name]} -> ${new_genres[$name]:-REMOVED}"
+                    count=$((count + 1))
+                fi
+            done
+            log_info "$count genre change(s) applied"
+        else
+            log_info "No genre changes needed"
+        fi
+
+        step_validate_genres "$file"
+        rm -f "$before_file" "$after_file"
+        log_info "✅ Genre normalization complete"
+    fi
+}
+
+# --- Genre Review Functions (Tier 2: interactive) ---
+
+# Apply a genre change for a specific game name
+apply_genre_change() {
+    local file="$1" name="$2" new_genre="$3"
+
+    awk -v name="$name" -v genre="$new_genre" '
+    BEGIN { in_game=0; found_name=0; name_tag="<name>" name "</name>" }
+    /<game>/ { in_game=1; found_name=0 }
+    in_game && index($0, name_tag) > 0 { found_name=1 }
+    in_game && found_name && /<genre>[^<]*<\/genre>/ {
+        sub(/<genre>[^<]*<\/genre>/, "<genre>" genre "</genre>")
+        found_name=0
+    }
+    /<\/game>/ { in_game=0; found_name=0 }
+    { print }
+    ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+}
+
+# Check a single game for genre mismatches
+check_genre_mismatch() {
+    local file="$1" name="$2" desc="$3" genre="$4" console="$5"
+    local desc_lower
+    desc_lower=$(echo "$desc" | tr '[:upper:]' '[:lower:]')
+    local suggested="" reason=""
+
+    # Rule 0: Flag genres not in canonical vocabulary
+    local valid=false
+    for v in "${VALID_GENRES[@]}"; do
+        if [[ "$genre" == "$v" ]]; then
+            valid=true
+            break
+        fi
+    done
+    if [[ "$valid" == false ]]; then
+        echo ""
+        echo "[INVALID GENRE] $name ($console) — Genre: $genre"
+        echo "  Not in canonical 26-genre vocabulary"
+
+        if [[ "$DRY_RUN" == true ]]; then
+            echo "  (dry-run: no changes made)"
+            return
+        fi
+
+        local answer
+        read -rp "  [s]kip / [d]ismiss / [c]ustom genre? " answer < /dev/tty
+        case "$answer" in
+            d|D)
+                printf 'I\t%s\t%s\n' "$name" "$genre" >> "$OVERRIDES_FILE"
+                echo "  -> Dismissed (won't flag again)"
+                ;;
+            c|C)
+                local custom valid_choice=false
+                while [[ "$valid_choice" == false ]]; do
+                    read -rp "  Enter genre: " custom < /dev/tty
+                    custom=$(echo "$custom" | tr '[:lower:]' '[:upper:]')
+                    for v in "${VALID_GENRES[@]}"; do
+                        if [[ "$custom" == "$v" ]]; then
+                            valid_choice=true
+                            break
+                        fi
+                    done
+                    if [[ "$valid_choice" == false ]]; then
+                        echo "  Invalid genre. Valid: ${VALID_GENRES[*]}"
+                    fi
+                done
+                apply_genre_change "$file" "$name" "$custom"
+                echo "  -> Changed to $custom"
+                ;;
+            *)
+                echo "  -> Skipped"
+                ;;
+        esac
+        return
+    fi
+
+    # Rule 1: "metroidvania" literal
+    if [[ "$desc_lower" == *"metroidvania"* ]] && [[ "$genre" != "METROIDVANIA" ]]; then
+        suggested="METROIDVANIA"
+        reason="Desc mentions: \"metroidvania\""
+    fi
+
+    # Rule 2: interconnected + world/map + ability/unlock
+    if [[ -z "$suggested" ]]; then
+        if [[ "$desc_lower" == *"interconnected"* ]] && \
+           { [[ "$desc_lower" == *"world"* ]] || [[ "$desc_lower" == *"map"* ]]; } && \
+           { [[ "$desc_lower" == *"ability"* ]] || [[ "$desc_lower" == *"abilities"* ]] || [[ "$desc_lower" == *"unlock"* ]]; }; then
+            if [[ "$genre" == "PLATFORMER" || "$genre" == "ACTION" ]]; then
+                suggested="METROIDVANIA"
+                reason="Desc mentions: interconnected world + abilities/unlock"
+            fi
+        fi
+    fi
+
+    # Rule 3: backtracking + abilities/upgrades
+    if [[ -z "$suggested" ]]; then
+        if [[ "$desc_lower" == *"backtracking"* ]] && \
+           { [[ "$desc_lower" == *"abilities"* ]] || [[ "$desc_lower" == *"upgrades"* ]]; }; then
+            if [[ "$genre" == "PLATFORMER" || "$genre" == "ACTION" ]]; then
+                suggested="METROIDVANIA"
+                reason="Desc mentions: backtracking + abilities/upgrades"
+            fi
+        fi
+    fi
+
+    # Rule 4: "party game" or "similar to Mario Party"
+    if [[ -z "$suggested" ]]; then
+        if [[ "$desc_lower" == *"party game"* ]] || [[ "$desc_lower" == *"similar to mario party"* ]]; then
+            if [[ "$genre" == "BOARD GAME" || "$genre" == "PUZZLE" || "$genre" == "ACTION" ]]; then
+                suggested="PARTY"
+                reason="Desc mentions: party game"
+            fi
+        fi
+    fi
+
+    # Rule 5: "no weapons" / "cannot fight" / "run and hide"
+    if [[ -z "$suggested" ]]; then
+        if [[ "$desc_lower" == *"no weapons"* ]] || [[ "$desc_lower" == *"cannot fight"* ]] || \
+           [[ "$desc_lower" == *"no way to fight"* ]] || [[ "$desc_lower" == *"run and hide"* ]]; then
+            if [[ "$genre" == "SURVIVAL HORROR" ]]; then
+                suggested="HORROR"
+                reason="Desc mentions: no weapons / cannot fight / run and hide"
+            fi
+        fi
+    fi
+
+    # Rule 6: "rhythm" + "music"
+    if [[ -z "$suggested" ]]; then
+        if [[ "$desc_lower" == *"rhythm"* ]] && [[ "$desc_lower" == *"music"* ]]; then
+            if [[ "$genre" == "ACTION" || "$genre" == "PUZZLE" || "$genre" == "ARCADE" ]]; then
+                suggested="RHYTHM"
+                reason="Desc mentions: rhythm + music"
+            fi
+        fi
+    fi
+
+    # Rule 7: "hack and slash" / "hack-and-slash" / "stylish combat"
+    if [[ -z "$suggested" ]]; then
+        if [[ "$desc_lower" == *"hack and slash"* ]] || [[ "$desc_lower" == *"hack-and-slash"* ]] || \
+           [[ "$desc_lower" == *"stylish combat"* ]]; then
+            if [[ "$genre" == "PLATFORMER" || "$genre" == "ADVENTURE" ]]; then
+                suggested="ACTION"
+                reason="Desc mentions: hack and slash / stylish combat"
+            fi
+        fi
+    fi
+
+    # Rule 8: "board game" as gameplay
+    if [[ -z "$suggested" ]]; then
+        if [[ "$desc_lower" == *"board game"* ]]; then
+            if [[ "$genre" != "BOARD GAME" && "$genre" != "PARTY" ]]; then
+                suggested="BOARD GAME"
+                reason="Desc mentions: board game gameplay"
+            fi
+        fi
+    fi
+
+    # Rule 9: "tactical RPG" / "strategy RPG" / "SRPG"
+    if [[ -z "$suggested" ]]; then
+        if [[ "$desc_lower" == *"tactical rpg"* ]] || [[ "$desc_lower" == *"strategy rpg"* ]] || \
+           [[ "$desc_lower" == *"srpg"* ]] || [[ "$desc_lower" == *"tactical role"* ]]; then
+            if [[ "$genre" == "RPG" ]]; then
+                suggested="TACTICAL RPG"
+                reason="Desc mentions: tactical/strategy RPG"
+            fi
+        fi
+    fi
+
+    # Rule 10: "action RPG" / "action role-playing"
+    if [[ -z "$suggested" ]]; then
+        if [[ "$desc_lower" == *"action rpg"* ]] || [[ "$desc_lower" == *"action role-playing"* ]] || \
+           [[ "$desc_lower" == *"action role playing"* ]]; then
+            if [[ "$genre" == "RPG" || "$genre" == "ACTION" ]]; then
+                suggested="ACTION RPG"
+                reason="Desc mentions: action RPG/role-playing"
+            fi
+        fi
+    fi
+
+    # Rule 11: "visual novel"
+    if [[ -z "$suggested" ]]; then
+        if [[ "$desc_lower" == *"visual novel"* ]]; then
+            if [[ "$genre" == "ADVENTURE" || "$genre" == "RPG" ]]; then
+                suggested="VISUAL NOVEL"
+                reason="Desc mentions: visual novel"
+            fi
+        fi
+    fi
+
+    if [[ -n "$suggested" ]]; then
+        echo ""
+        echo "[MISMATCH] $name ($console) — Genre: $genre"
+        echo "  $reason"
+        echo "  Suggested: $suggested"
+
+        if [[ "$DRY_RUN" == true ]]; then
+            echo "  (dry-run: no changes made)"
+            return
+        fi
+
+        local answer
+        read -rp "  [a]ccept / [s]kip / [d]ismiss / [c]ustom genre? " answer < /dev/tty
+        case "$answer" in
+            a|A)
+                apply_genre_change "$file" "$name" "$suggested"
+                echo "  -> Changed to $suggested"
+                ;;
+            d|D)
+                printf 'I\t%s\t%s\n' "$name" "$genre" >> "$OVERRIDES_FILE"
+                echo "  -> Dismissed (won't flag again)"
+                ;;
+            c|C)
+                local custom valid_choice=false
+                while [[ "$valid_choice" == false ]]; do
+                    read -rp "  Enter custom genre: " custom < /dev/tty
+                    custom=$(echo "$custom" | tr '[:lower:]' '[:upper:]')
+                    for v in "${VALID_GENRES[@]}"; do
+                        if [[ "$custom" == "$v" ]]; then
+                            valid_choice=true
+                            break
+                        fi
+                    done
+                    if [[ "$valid_choice" == false ]]; then
+                        echo "  Invalid genre. Valid: ${VALID_GENRES[*]}"
+                    fi
+                done
+                apply_genre_change "$file" "$name" "$custom"
+                echo "  -> Changed to $custom"
+                ;;
+            *)
+                echo "  -> Skipped"
+                ;;
+        esac
+    fi
+}
+
+# Tier 2: Interactive genre review
+review_genres() {
+    local file="$1"
+
+    if [[ ! -f "$file" ]]; then
+        log_info "Gamelist not found (skipping): $file"
+        return
+    fi
+
+    log_info "Reviewing genres in: $file"
+
+    local console_name
+    console_name=$(basename "$(dirname "$file")")
+
+    # Load ignore (I) rules from overrides file
+    local -A ignore_rules
+    if [[ -f "$OVERRIDES_FILE" ]]; then
+        while IFS=$'\t' read -r type pattern genre; do
+            [[ -z "$type" || "$type" == \#* ]] && continue
+            if [[ "$type" == "I" ]]; then
+                ignore_rules["$pattern"]="$genre"
+            fi
+        done < "$OVERRIDES_FILE"
+    fi
+
+    # Read file into array to avoid read/write conflict
+    local -a lines
+    mapfile -t lines < "$file"
+
+    local name="" desc="" genre="" in_game=false
+
+    for line in "${lines[@]}"; do
+        if [[ "$line" =~ \<game\> ]]; then
+            in_game=true
+            name="" desc="" genre=""
+            continue
+        fi
+
+        if [[ "$in_game" == true ]]; then
+            if [[ "$line" =~ \<name\>([^\<]*)\</name\> ]]; then
+                name="${BASH_REMATCH[1]}"
+            elif [[ "$line" =~ \<desc\>([^\<]*)\</desc\> ]]; then
+                desc="${BASH_REMATCH[1]}"
+            elif [[ "$line" =~ \<genre\>([^\<]*)\</genre\> ]]; then
+                genre="${BASH_REMATCH[1]}"
+            fi
+
+            if [[ "$line" =~ \</game\> ]]; then
+                in_game=false
+                if [[ -n "$name" && -n "$desc" && -n "$genre" ]]; then
+                    if [[ "${ignore_rules[$name]:-}" == "$genre" ]]; then
+                        log_verbose "Dismissed: $name ($genre)"
+                    else
+                        check_genre_mismatch "$file" "$name" "$desc" "$genre" "$console_name"
+                    fi
+                fi
+            fi
+        fi
+    done
+
+    log_info "✅ Genre review complete for: $file"
+}
+
+# --- Console Resolution for Genre Modes ---
+
+# Get list of console directories with gamelists
+get_console_list() {
+    local dir="$1"
+    for d in "$dir"/*/; do
+        [[ -d "$d" ]] || continue
+        if [[ -f "$d/gamelist.xml" ]]; then
+            basename "$d"
+        fi
+    done
+}
+
+# Resolve console argument to list of gamelist files
+resolve_gamelists() {
+    local console="$1"
+
+    if [[ "$console" == "all" ]]; then
+        local c
+        while IFS= read -r c; do
+            echo "$GAMELISTS_DIR/$c/gamelist.xml"
+        done < <(get_console_list "$GAMELISTS_DIR")
+    else
+        local f="$GAMELISTS_DIR/$console/gamelist.xml"
+        if [[ ! -f "$f" ]]; then
+            log_error "Gamelist not found for console '$console': $f"
+        fi
+        echo "$f"
+    fi
+}
+
+# --- Genre Mode Entry Points ---
+
+# Run normalize_genres on one or all consoles
+mode_normalize_genres() {
+    local console="$1"
+
+    log_info "🎯 === NORMALIZE GENRES: $console ==="
+
+    while IFS= read -r f; do
+        normalize_genres "$f"
+    done < <(resolve_gamelists "$console")
+
+    log_info "✅ Genre normalization complete"
+}
+
+# Run review_genres on one or all consoles
+mode_review_genres() {
+    local console="$1"
+
+    log_info "🎯 === REVIEW GENRES: $console ==="
+
+    while IFS= read -r f; do
+        review_genres "$f"
+    done < <(resolve_gamelists "$console")
+
+    log_info "✅ Genre review complete"
+}
+
+# --- Main Mode Functions ---
+
+# Initialize mode: Full ROM synchronization
+mode_initialize() {
+    local console="$1"
+    shift
+    local extension_args=("$@")
+    
+    log_info "🔄 === INITIALIZE MODE: $console ==="
+    
+    local nas_rom_dir="$NAS_MOUNT/Roms/$console"
+    local local_rom_dir="$HOME/ROMs/$console"
+    
+    # Mount NAS read-only
+    mount_nas "$NAS_USER_RO" "user=$NAS_USER_RO,vers=2.0,ro"
+    
+    # Validate paths
+    validate_paths "$console" "initialize"
+    
+    # Sync all ROMs from NAS (with delete to match exactly)
+    log_info "🔄 Syncing ROMs from NAS (with --delete)..."
+    if [[ "$VERBOSE" == true ]]; then
+        run_rsync -avz --info=progress2 "$nas_rom_dir/" "$local_rom_dir" --delete
+    else
+        run_rsync -az "$nas_rom_dir/" "$local_rom_dir" --delete
+    fi
+    log_info "✅ ROM sync completed"
+    
+    # Scrape metadata
+    scrape_metadata "$console" "$local_rom_dir" ${extension_args[@]+"${extension_args[@]}"}
+    
+    # Sync gamelist (replace)
+    sync_gamelist_replace "$console" "$local_rom_dir"
+    
+    # Sync media files
+    sync_media_files "$console" "$local_rom_dir" "rsync"
+    
+    # Cleanup
+    cleanup_temp_files "$local_rom_dir" "local ROM directory"
+
+    # Auto-normalize genres after sync
+    normalize_genres "$HOME/ES-DE/gamelists/$console/gamelist.xml"
+
+    log_info "✅ ROM initialization complete for console: $console"
+}
+
+# Additions mode: Process new ROMs from 0merge
+mode_additions() {
+    local console="$1"
+    shift
+    local extension_args=("$@")
+    
+    log_info "🔄 === ADDITIONS MODE: $console ==="
+    
+    local nas_rom_dir="$NAS_MOUNT/Roms/$console"
+    local nas_merge_dir="$nas_rom_dir/0merge"
+    local local_rom_dir="$HOME/ROMs/$console"
+    local local_merge_dir="$local_rom_dir/0merge"
+    
+    # Mount NAS read-only initially
+    mount_nas "$NAS_USER_RO" "user=$NAS_USER_RO,vers=2.0,ro"
+    
+    # Validate paths
+    validate_paths "$console" "additions"
+    
+    # Process 0merge directory
+    log_info "📁 Processing 0merge directory..."
+    if [[ "$VERBOSE" == true ]]; then
+        run_rsync -avz --info=progress2 "$nas_merge_dir/" "$local_merge_dir"
+    else
+        run_rsync -az "$nas_merge_dir/" "$local_merge_dir"
+    fi
+    log_info "✅ 0merge synced"
+    
+    # Scrape metadata for new ROMs
+    scrape_metadata "$console" "$local_merge_dir" ${extension_args[@]+"${extension_args[@]}"}
+    
+    # Merge gamelist
+    sync_gamelist_merge "$console" "$local_merge_dir"
+    
+    # Sync media files (copy mode)
+    sync_media_files "$console" "$local_merge_dir" "copy"
+    
+    # Clean up 0merge temporary files
+    cleanup_temp_files "$local_merge_dir" "0merge directory"
+    
+    # Move ROMs to main directory
+    log_info "🔄 Moving ROMs to main directory..."
+    move_all_contents "$local_merge_dir" "$local_rom_dir"
+    
+    # Remove 0merge if empty
+    if [[ -z "$(ls -A "$local_merge_dir" 2>/dev/null || true)" ]]; then
+        run_rm -rf "${local_merge_dir:?}"
+        log_info "🧹 Removed empty 0merge directory"
+    else
+        log_info "⚠️ 0merge not empty - inspect manually: $local_merge_dir"
+    fi
+    
+    # Handle hacks folder if present
+    if [[ -d "$nas_rom_dir/hacks" ]]; then
+        log_info "🎯 Syncing hacks directory..."
+        local hacks_dir="$local_rom_dir/hacks"
+        if [[ "$VERBOSE" == true ]]; then
+            run_rsync -avz --info=progress2 "$nas_rom_dir/hacks/" "$hacks_dir/" --delete
+        else
+            run_rsync -az "$nas_rom_dir/hacks/" "$hacks_dir/" --delete
+        fi
+        # Remove any gamelist from hacks directory
+        run_rm -f "$hacks_dir/gamelist.xml"
+        log_info "✅ Hacks synced"
+    else
+        log_verbose "• No hacks directory found"
+    fi
+    
+    # Remount NAS as read-write for cleanup
+    log_info "🔌 Remounting NAS as read-write for cleanup..."
+    unmount_nas
+    mount_nas "$NAS_USER_RW" "user=$NAS_USER_RW,vers=2.0"
+    
+    # Clean up NAS 0merge directory
+    log_info "🧹 Cleaning up NAS 0merge directory..."
+    run_sudo_rm -f "$nas_merge_dir"/gamelist.*
+
+    # Move any remaining files from 0merge to main directory on NAS
+    shopt -s dotglob nullglob
+    local remaining_files=("$nas_merge_dir"/*)
+    if (( ${#remaining_files[@]} )); then
+        run_sudo_mv "$nas_merge_dir"/* "$nas_rom_dir"/ 2>/dev/null || true
+        log_verbose "• Moved ${#remaining_files[@]} remaining files"
+    fi
+    shopt -u dotglob nullglob
+
+    # Remove 0merge from NAS if empty
+    if [[ -z "$(ls -A "$nas_merge_dir" 2>/dev/null || true)" ]]; then
+        run_sudo_rm -rf "$nas_merge_dir"
+        log_info "🧹 Removed 0merge from NAS"
+    else
+        log_info "⚠️ NAS 0merge not empty - inspect manually: $nas_merge_dir"
+    fi
+    
+    # Unmount NAS
+    unmount_nas
+
+    # Auto-normalize genres after merge
+    normalize_genres "$HOME/ES-DE/gamelists/$console/gamelist.xml"
+
+    log_info "✅ ROM additions complete for console: $console"
+}
+
+# --- Main Script ---
+
+main() {
+    # Parse command line arguments
+    local mode=""
+    local console=""
+    
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_help
+                exit 0
+                ;;
+            -i|--initialize)
+                if [[ -n "$mode" ]]; then
+                    log_error "Cannot specify multiple operation modes"
+                fi
+                mode="initialize"
+                log_verbose "Initialize mode selected"
+                shift
+                ;;
+            -a|--additions)
+                if [[ -n "$mode" ]]; then
+                    log_error "Cannot specify multiple operation modes"
+                fi
+                mode="additions"
+                log_verbose "Additions mode selected"
+                shift
+                ;;
+            -g|--normalize-genres)
+                if [[ -n "$mode" ]]; then
+                    log_error "Cannot specify multiple operation modes"
+                fi
+                mode="normalize-genres"
+                log_verbose "Normalize-genres mode selected"
+                shift
+                ;;
+            -r|--review-genres)
+                if [[ -n "$mode" ]]; then
+                    log_error "Cannot specify multiple operation modes"
+                fi
+                mode="review-genres"
+                log_verbose "Review-genres mode selected"
+                shift
+                ;;
+            -v|--verbose)
+                VERBOSE=true
+                shift
+                ;;
+            -q|--quiet)
+                QUIET=true
+                shift
+                ;;
+            -n|--dry-run)
+                DRY_RUN=true
+                shift
+                ;;
+            -e|--extension)
+                if [[ -n "${2:-}" ]]; then
+                    EXTENSION="$2"
+                    log_verbose "Extension filter set: $EXTENSION"
+                    shift 2
+                else
+                    log_error "Extension option requires an argument"
+                fi
+                ;;
+            --overrides-file)
+                if [[ -n "${2:-}" ]]; then
+                    OVERRIDES_FILE="$2"
+                    log_verbose "Overrides file set: $OVERRIDES_FILE"
+                    shift 2
+                else
+                    log_error "Overrides file option requires a path argument"
+                fi
+                ;;
+            -*)
+                log_error "Unknown option: $1"
+                ;;
+            *)
+                if [[ -z "$console" ]]; then
+                    console="$1"
+                else
+                    log_error "Too many arguments"
+                fi
+                shift
+                ;;
+        esac
+    done
+    
+    # Show help if no arguments provided
+    if [[ -z "$mode" ]] && [[ -z "$console" ]]; then
+        show_help
+        exit 0
+    fi
+    
+    # Validate arguments
+    validate_arguments "$mode" "$console"
+
+    # Genre modes don't need NAS/Skyscraper/rsync
+    if [[ "$mode" == "normalize-genres" ]]; then
+        mode_normalize_genres "$console"
+        return
+    fi
+    if [[ "$mode" == "review-genres" ]]; then
+        mode_review_genres "$console"
+        return
+    fi
+
+    # Validate required commands for ROM modes
+    if ! command -v Skyscraper &>/dev/null; then
+        log_error "Skyscraper not found. Please install it first."
+    fi
+    if ! command -v rsync &>/dev/null; then
+        log_error "rsync not found. Please install it first."
+    fi
+
+    # Prepare extension arguments for Skyscraper
+    local extension_args=()
+    if [[ -n "$EXTENSION" ]]; then
+        extension_args=("--addext" "$EXTENSION")
+        log_info "Using extension filter: $EXTENSION"
+    fi
+
+    # Create mount point if it doesn't exist
+    mkdir -p "$NAS_MOUNT"
+
+    # Execute appropriate mode
+    case "$mode" in
+        initialize)
+            mode_initialize "$console" "${extension_args[@]}"
+            ;;
+        additions)
+            mode_additions "$console" "${extension_args[@]}"
+            ;;
+        *)
+            log_error "Invalid mode: $mode"
+            ;;
+    esac
+}
+
+# --- Script Entry Point ---
+
+# Trap to ensure NAS is unmounted on script exit
+trap 'unmount_nas 2>/dev/null || true' EXIT
+
+# Run main function with all arguments
+main "$@"

@@ -1,0 +1,72 @@
+# Genre Overrides for ES-DE gamelist normalization
+# Format: type<TAB>pattern_or_name<TAB>genre
+# S = series prefix match (name starts with pattern)
+# G = game-specific (exact name match)
+# I = dismiss (suppress review flag — added by --review-genres dismiss action)
+# Game-specific (G) overrides take priority over series (S) matches.
+# Dismiss (I) rules are only used by --review-genres to skip flagged games.
+# Lines starting with # are comments.
+
+# --- Series rules (all titles in series share same genre) ---
+S	Mario Party	PARTY
+S	Wario Ware	PARTY
+S	WarioWare	PARTY
+S	Grand Theft Auto	ACTION
+S	Mega Man ZX	METROIDVANIA
+S	MegaMan ZX	METROIDVANIA
+S	Legend of Zelda	ADVENTURE
+S	Harvest Moon	SIMULATION
+S	Fire Emblem	TACTICAL RPG
+
+# --- Game-specific overrides (mixed-genre series, edge cases) ---
+
+# Castlevania (PLATFORMER / METROIDVANIA / ACTION by title)
+G	Castlevania : Symphony of the Night	METROIDVANIA
+G	Castlevania : Dawn of Sorrow	METROIDVANIA
+G	Castlevania : Portrait of Ruin	METROIDVANIA
+G	Castlevania - Order of Ecclesia	METROIDVANIA
+G	Castlevania : Lament of Innocence	ACTION
+G	Ore Ga Omae O Mamoru	METROIDVANIA
+
+# Resident Evil (SURVIVAL HORROR / ACTION / SHOOTER by title)
+G	Resident Evil 4	ACTION
+G	Resident Evil 4: Wii Edition	ACTION
+G	Resident Evil : Survivor	SHOOTER
+G	Resident Evil : Dead Aim	SHOOTER
+G	Resident Evil: Survivor 2 - Code: Veronica	SHOOTER
+G	Resident Evil : The Umbrella Chronicles	SHOOTER
+G	Resident Evil : The Darkside Chronicles	SHOOTER
+
+# Silent Hill (SURVIVAL HORROR / HORROR by title)
+G	Silent Hill : Shattered Memories	HORROR
+G	Silent Hill: Shattered Memories	HORROR
+
+# Metal Gear Solid (mixed genres)
+G	Metal Gear Solid	ACTION
+G	Metal Gear Solid 2 : Substance	ACTION
+
+# Sonic (mixed genres — some PLATFORMER, some RACING)
+G	Sonic Unleashed	PLATFORMER
+G	Sonic Adventure DX : Director's Cut	PLATFORMER
+
+# Castlevania additional
+G	Castlevania : Curse of Darkness	ACTION
+
+# Mega Man (non-ZX titles with different genres)
+G	Mega Man Legends 2	ACTION RPG
+
+# Other mixed-series / one-offs
+G	Metroid: Other M	ACTION
+G	Wii Party	PARTY
+G	Dino Crisis 2	ACTION
+G	Clock Tower 3	HORROR
+G	...Iru!	HORROR
+G	Hungry Ghosts	ACTION
+G	Mario & Luigi : Bowser's Inside Story	RPG
+G	Final Fantasy Crystal Chronicles : Ring of Fates	RPG
+G	Starfox Zero	SHOOTER
+G	Star Fox Zero	SHOOTER
+G	Pokemon Rumble	ACTION
+I	Disney / Pixar : A Bug's Life - Activity Center	EDUCATIONAL
+I	Carrion	ACTION
+I	Dead Cells	ACTION

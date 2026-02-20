@@ -6,9 +6,10 @@
 # Parses Steam appmanifest_*.acf files to discover installed games,
 # then creates XDG .desktop entries that launch via steam:// protocol.
 #
-# Usage: generate-esde-steam.sh [--dry-run] [--clean] [--steam-dir PATH] [--output-dir PATH]
+# Usage: generate-esde-steam.sh [--dry-run] [--clean|--no-sync] [--steam-dir PATH] [--output-dir PATH]
 #   --dry-run       Show what would be created without writing files
-#   --clean         Remove existing .desktop files before generating
+#   --clean         Remove existing .desktop files before generating (implies --no-sync)
+#   --no-sync       Overwrite all .desktop files without pruning uninstalled games
 #   --steam-dir     Override Steam library path (default: auto-detect)
 #   --output-dir    Override output directory (default: ~/ROMs/steam)
 #   --exclude FILE  Path to file with app IDs to exclude (one per line)
@@ -22,6 +23,7 @@ STEAM_DIRS=()
 OUTPUT_DIR="$HOME/ROMs/steam"
 DRY_RUN=false
 CLEAN=false
+SYNC=true
 VERBOSE=false
 EXCLUDE_FILE=""
 
@@ -38,7 +40,7 @@ log_info() {
 }
 
 log_verbose() {
-    [[ "$VERBOSE" == true ]] && echo "    $*"
+    [[ "$VERBOSE" == true ]] && echo "    $*" || true
 }
 
 log_warn() {
@@ -271,7 +273,8 @@ EOF
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run)    DRY_RUN=true; shift ;;
-        --clean)      CLEAN=true; shift ;;
+        --clean)      CLEAN=true; SYNC=false; shift ;;
+        --no-sync)    SYNC=false; shift ;;
         --steam-dir)  STEAM_DIRS+=("$2/steamapps"); shift 2 ;;
         --output-dir) OUTPUT_DIR="$2"; shift 2 ;;
         --exclude)    EXCLUDE_FILE="$2"; shift 2 ;;
@@ -305,6 +308,9 @@ if [[ "$CLEAN" == true ]]; then
         log_info "Cleaned existing .desktop files"
     fi
 fi
+
+# Collect installed app IDs for --sync removal pass
+declare -A installed_appids
 
 # Process all appmanifest files
 created=0
@@ -358,6 +364,16 @@ for steamapps_dir in "${STEAM_DIRS[@]}"; do
         display_name=$(normalize_display_name "$name")
         desktop_file="$OUTPUT_DIR/${safe_name}.desktop"
 
+        # Track for sync removal pass
+        installed_appids["$appid"]=1
+
+        # In sync mode, skip games that already have a .desktop file
+        if [[ "$SYNC" == true ]] && [[ -f "$desktop_file" ]]; then
+            log_verbose "Already exists: $safe_name.desktop ($appid)"
+            skipped=$((skipped + 1))
+            continue
+        fi
+
         if [[ "$DRY_RUN" == true ]]; then
             echo "  [DRY RUN] $safe_name.desktop (appid: $appid)"
         else
@@ -370,7 +386,33 @@ for steamapps_dir in "${STEAM_DIRS[@]}"; do
     done
 done
 
-log_info "Done! Created: $created | Skipped: $skipped | Excluded: $excluded"
+# Sync mode: remove .desktop files for games no longer installed
+removed=0
+if [[ "$SYNC" == true ]]; then
+    for desktop_file in "$OUTPUT_DIR"/*.desktop; do
+        [[ -f "$desktop_file" ]] || continue
+
+        # Extract app ID from the Comment field
+        file_appid=$(grep -oP '^Comment=Steam App ID: \K[0-9]+' "$desktop_file" 2>/dev/null || true)
+
+        if [[ -z "$file_appid" ]]; then
+            log_verbose "No app ID found in $(basename "$desktop_file"), skipping removal"
+            continue
+        fi
+
+        if [[ -z "${installed_appids[$file_appid]+x}" ]]; then
+            if [[ "$DRY_RUN" == true ]]; then
+                echo "  [DRY RUN] Would remove: $(basename "$desktop_file") (appid: $file_appid)"
+            else
+                rm "$desktop_file"
+                log_verbose "Removed: $(basename "$desktop_file") ($file_appid)"
+            fi
+            removed=$((removed + 1))
+        fi
+    done
+fi
+
+log_info "Done! Created: $created | Skipped: $skipped | Excluded: $excluded | Removed: $removed"
 
 if [[ "$DRY_RUN" == true ]]; then
     log_info "(Dry run - no files were written)"
