@@ -14,7 +14,8 @@ done
 exec evsieve \
   --input "$DEVICE" persist=reopen \
   --hook btn:select btn:tl                    period=200 exec-shell="emucloser" \
-  --hook btn:select btn:thumbl                period=200 exec-shell="playerctl play-pause" \
+  --hook btn:select btn:dpad_up               period=200 exec-shell="xdotool key alt+Tab" \
+  --hook btn:select btn:dpad_down             period=200 exec-shell="playerctl play-pause" \
   --hook btn:select btn:dpad_left             period=200 exec-shell="playerctl previous" \
   --hook btn:select btn:dpad_right            period=200 exec-shell="playerctl next" \
   --hook btn:start  btn:tr      btn:dpad_down period=200 exec-shell="esdepull" \
