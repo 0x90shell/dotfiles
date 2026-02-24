@@ -781,17 +781,17 @@ step_strip_zero_ratings() {
     sed -i '/<rating>0<\/rating>/d' "$file"
 }
 
+# Step 5.5: Normalize player counts (ranges like "1-4" → max value "4")
+step_normalize_players() {
+    local file="$1"
+    sed -i 's|<players>[0-9]*-\([0-9]*\)</players>|<players>\1</players>|g' "$file"
+}
+
 # Step 6: Validate all genres against canonical vocabulary
 step_validate_genres() {
     local file="$1"
-    local -a names_in_file genres_in_file
-    mapfile -t names_in_file < <(sed -n 's/.*<name>\([^<]*\)<\/name>.*/\1/p' "$file")
-    mapfile -t genres_in_file < <(sed -n 's/.*<genre>\([^<]*\)<\/genre>.*/\1/p' "$file")
-
-    local i genre name valid
-    for i in "${!genres_in_file[@]}"; do
-        genre="${genres_in_file[$i]}"
-        name="${names_in_file[$i]:-unknown}"
+    local name genre valid
+    while IFS=$'\t' read -r name genre; do
         valid=false
         for v in "${VALID_GENRES[@]}"; do
             if [[ "$genre" == "$v" ]]; then
@@ -802,7 +802,10 @@ step_validate_genres() {
         if [[ "$valid" == false ]]; then
             log_info "⚠️  Invalid genre '$genre' on: $name"
         fi
-    done
+    done < <(awk '
+        /<name>/ { gsub(/.*<name>|<\/name>.*/, ""); name=$0 }
+        /<genre>/ { gsub(/.*<genre>|<\/genre>.*/, ""); print name "\t" $0 }
+    ' "$file")
 }
 
 # Tier 1: Normalize genres in a gamelist file
@@ -816,19 +819,56 @@ normalize_genres() {
 
     log_info "Normalizing genres in: $file"
 
-    # Extract name->genre pairs from a gamelist file
-    local _extract_genres
+    # Extract name->field pairs from a gamelist file
+    local _extract_genres _extract_players
     _extract_genres() {
         awk '
         /<name>/ { gsub(/.*<name>|<\/name>.*/, ""); name=$0 }
         /<genre>/ { gsub(/.*<genre>|<\/genre>.*/, ""); print name "\t" $0 }
         ' "$1"
     }
+    _extract_players() {
+        awk '
+        /<name>/ { gsub(/.*<name>|<\/name>.*/, ""); name=$0 }
+        /<players>/ { gsub(/.*<players>|<\/players>.*/, ""); print name "\t" $0 }
+        ' "$1"
+    }
+
+    # Compare before/after and report changes
+    # Args: before_file after_file label action count_var(nameref)
+    _report_changes() {
+        local bf="$1" af="$2" label="$3" action="$4"
+        local -n _rc_count="$5"
+        local -A old_vals new_vals
+        while IFS=$'\t' read -r name val; do
+            old_vals["$name"]="$val"
+        done < "$bf"
+        while IFS=$'\t' read -r name val; do
+            new_vals["$name"]="$val"
+        done < "$af"
+
+        _rc_count=0
+        for name in "${!old_vals[@]}"; do
+            if [[ "${new_vals[$name]:-}" != "${old_vals[$name]}" ]]; then
+                log_verbose "  $name: $label ${old_vals[$name]} -> ${new_vals[$name]:-REMOVED}"
+                _rc_count=$((_rc_count + 1))
+            fi
+        done
+        if (( _rc_count > 0 )); then
+            log_info "$_rc_count $label change(s) $action"
+        fi
+    }
 
     if [[ "$DRY_RUN" == true ]]; then
         local tmp_file
         tmp_file=$(mktemp)
         cp "$file" "$tmp_file"
+
+        # Capture before state
+        local bg bf bp fp
+        bg=$(mktemp); bp=$(mktemp); bf=$(mktemp); fp=$(mktemp)
+        _extract_genres "$file" > "$bg"
+        _extract_players "$file" > "$bp"
 
         step_uppercase_genres "$tmp_file"
         step_vocab_normalize "$tmp_file"
@@ -837,44 +877,27 @@ normalize_genres() {
         step_vocab_normalize "$tmp_file"
         step_apply_overrides "$tmp_file" "$OVERRIDES_FILE"
         step_strip_zero_ratings "$tmp_file"
+        step_normalize_players "$tmp_file"
 
-        # Compare before/after genre pairs and show human-readable changes
-        local before_file after_file
-        before_file=$(mktemp)
-        after_file=$(mktemp)
-        _extract_genres "$file" > "$before_file"
-        _extract_genres "$tmp_file" > "$after_file"
+        # Capture after state and report
+        _extract_genres "$tmp_file" > "$bf"
+        _extract_players "$tmp_file" > "$fp"
 
-        local changes
-        changes=$(diff "$before_file" "$after_file" || true)
-        if [[ -n "$changes" ]]; then
-            local -A old_genres new_genres
-            while IFS=$'\t' read -r name genre; do
-                old_genres["$name"]="$genre"
-            done < "$before_file"
-            while IFS=$'\t' read -r name genre; do
-                new_genres["$name"]="$genre"
-            done < "$after_file"
-
-            local count=0
-            for name in "${!old_genres[@]}"; do
-                if [[ "${new_genres[$name]:-}" != "${old_genres[$name]}" ]]; then
-                    log_info "  $name: ${old_genres[$name]} -> ${new_genres[$name]:-REMOVED}"
-                    count=$((count + 1))
-                fi
-            done
-            log_info "$count genre change(s) pending"
-        else
-            log_info "No genre changes needed"
+        local gc=0 pc=0
+        _report_changes "$bg" "$bf" "genre" "pending" gc
+        _report_changes "$bp" "$fp" "players" "pending" pc
+        if (( gc == 0 && pc == 0 )); then
+            log_info "No changes needed"
         fi
 
         step_validate_genres "$tmp_file"
-        rm -f "$tmp_file" "$before_file" "$after_file"
+        rm -f "$tmp_file" "$bg" "$bf" "$bp" "$fp"
     else
-        # Extract before state for comparison
-        local before_file
-        before_file=$(mktemp)
-        _extract_genres "$file" > "$before_file"
+        # Capture before state
+        local bg bp bf fp
+        bg=$(mktemp); bp=$(mktemp); bf=$(mktemp); fp=$(mktemp)
+        _extract_genres "$file" > "$bg"
+        _extract_players "$file" > "$bp"
 
         step_uppercase_genres "$file"
         step_vocab_normalize "$file"
@@ -883,37 +906,21 @@ normalize_genres() {
         step_vocab_normalize "$file"
         step_apply_overrides "$file" "$OVERRIDES_FILE"
         step_strip_zero_ratings "$file"
+        step_normalize_players "$file"
 
-        # Show what changed
-        local after_file
-        after_file=$(mktemp)
-        _extract_genres "$file" > "$after_file"
+        # Capture after state and report
+        _extract_genres "$file" > "$bf"
+        _extract_players "$file" > "$fp"
 
-        local changes
-        changes=$(diff "$before_file" "$after_file" || true)
-        if [[ -n "$changes" ]]; then
-            local -A old_genres new_genres
-            while IFS=$'\t' read -r name genre; do
-                old_genres["$name"]="$genre"
-            done < "$before_file"
-            while IFS=$'\t' read -r name genre; do
-                new_genres["$name"]="$genre"
-            done < "$after_file"
-
-            local count=0
-            for name in "${!old_genres[@]}"; do
-                if [[ "${new_genres[$name]:-}" != "${old_genres[$name]}" ]]; then
-                    log_info "  $name: ${old_genres[$name]} -> ${new_genres[$name]:-REMOVED}"
-                    count=$((count + 1))
-                fi
-            done
-            log_info "$count genre change(s) applied"
-        else
-            log_info "No genre changes needed"
+        local gc=0 pc=0
+        _report_changes "$bg" "$bf" "genre" "applied" gc
+        _report_changes "$bp" "$fp" "players" "applied" pc
+        if (( gc == 0 && pc == 0 )); then
+            log_info "No changes needed"
         fi
 
         step_validate_genres "$file"
-        rm -f "$before_file" "$after_file"
+        rm -f "$bg" "$bf" "$bp" "$fp"
         log_info "✅ Genre normalization complete"
     fi
 }
@@ -1183,20 +1190,34 @@ review_genres() {
     local -a lines
     mapfile -t lines < "$file"
 
-    local name="" desc="" genre="" in_game=false
+    local name="" desc="" genre="" in_game=false in_desc=false
 
     for line in "${lines[@]}"; do
         if [[ "$line" =~ \<game\> ]]; then
             in_game=true
-            name="" desc="" genre=""
+            name="" desc="" genre="" in_desc=false
             continue
         fi
 
         if [[ "$in_game" == true ]]; then
+            # Accumulate multi-line descriptions
+            if [[ "$in_desc" == true ]]; then
+                if [[ "$line" == *"</desc>"* ]]; then
+                    desc="$desc ${line%%</desc>*}"
+                    in_desc=false
+                else
+                    desc="$desc $line"
+                fi
+                continue
+            fi
+
             if [[ "$line" =~ \<name\>([^\<]*)\</name\> ]]; then
                 name="${BASH_REMATCH[1]}"
             elif [[ "$line" =~ \<desc\>([^\<]*)\</desc\> ]]; then
                 desc="${BASH_REMATCH[1]}"
+            elif [[ "$line" == *"<desc>"* ]]; then
+                desc="${line#*<desc>}"
+                in_desc=true
             elif [[ "$line" =~ \<genre\>([^\<]*)\</genre\> ]]; then
                 genre="${BASH_REMATCH[1]}"
             fi
