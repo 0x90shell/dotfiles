@@ -26,11 +26,12 @@ NAS_SHARE="gamer"
 GAMELISTS_DIR="$HOME/ES-DE/gamelists"
 OVERRIDES_FILE="$HOME/bin/.ESDE-genre-overrides.tsv"
 
-# Canonical genre vocabulary (26 genres)
+# Canonical genre vocabulary (27 genres)
 VALID_GENRES=(
     "ACTION"
     "ACTION RPG"
     "ADVENTURE"
+    "APP"
     "ARCADE"
     "BEAT 'EM UP"
     "BOARD GAME"
@@ -663,6 +664,11 @@ step_vocab_normalize() {
     sed -i 's|<genre>PLAYING CARDS</genre>|<genre>CARD GAME</genre>|g' "$file"
     sed -i 's|<genre>LIFE SIMULATION</genre>|<genre>SIMULATION</genre>|g' "$file"
     sed -i 's|<genre>FLIGHT SIMULATOR</genre>|<genre>SIMULATION</genre>|g' "$file"
+
+    # App/utility vocab
+    sed -i 's|<genre>APPLICATION</genre>|<genre>APP</genre>|g' "$file"
+    sed -i 's|<genre>MEDIA</genre>|<genre>APP</genre>|g' "$file"
+    sed -i 's|<genre>UTILITY</genre>|<genre>APP</genre>|g' "$file"
 }
 
 # Step 2.4: Map known compound genres to specific single genres
@@ -962,7 +968,7 @@ check_genre_mismatch() {
     if [[ "$valid" == false ]]; then
         echo ""
         echo "[INVALID GENRE] $name ($console) — Genre: $genre"
-        echo "  Not in canonical 26-genre vocabulary"
+        echo "  Not in canonical 27-genre vocabulary"
 
         if [[ "$DRY_RUN" == true ]]; then
             echo "  (dry-run: no changes made)"
