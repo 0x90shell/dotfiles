@@ -59,5 +59,6 @@ bin/yaycache
 .config/autostart/dropbox.desktop
 .config/autostart/org.keepassxc.KeePassXC.desktop
 .config/makepkg.conf
+.config/VacuumTube/config.json  
 .local/share/perfectdark
 {{ end }}
