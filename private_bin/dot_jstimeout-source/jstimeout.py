@@ -1,4 +1,5 @@
 #!/usr/bin/env -S python3 -u
+# Original POC — CPU bug on line 120 (select timeout=0 causes busy-wait spin loop), other bugs may exist. See jstimeout.go for prod.
 
 '''
 Script to automatically disable the bluetooth gamepad when
@@ -52,27 +53,21 @@ import time
 from threading import Thread, Event
 import argparse
 
-# List of known devices to query from /proc/bus/input/devices
 specific_names = ["Sony PLAYSTATION(R)3 Controller", "Sony Computer Entertainment Wireless Controller"]
-
-# Dictionary to keep track of running threads by their uniq identifier and dev path
 running_threads = {}
 
 
-# Argument parser to accept maxidletime from command line
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Bluetooth gamepad idle disconnect script.")
     parser.add_argument('-m', '--maxidletime', type=int, default=3600,
                         help='Maximum idle time in seconds before disconnecting. Must be between 1 and 10800 seconds.')
     args = parser.parse_args()
-    # Validate maxidletime
     if not (1 <= args.maxidletime <= 10800):
         print("Error: maxidletime must be a number between 1 and 10800 seconds.")
         sys.exit(1)
     return args.maxidletime
 
 
-# Function to parse /proc/bus/input/devices and return matching devices with "js" handler and uniq field
 def parse_input_devices(specific_names):
     devices = []
     current_device = {}
@@ -80,20 +75,16 @@ def parse_input_devices(specific_names):
         with open("/proc/bus/input/devices", "r") as f:
             for line in f:
                 line = line.strip()
-                # Identify the device name
                 if line.startswith("N: Name="):
                     device_name = line.split('=')[1].strip('"')
                     current_device['name'] = device_name
-                # Identify the uniq field
                 elif line.startswith("U: Uniq="):
                     uniq = line.split('=')[1].strip()
                     current_device['uniq'] = uniq
-                # Identify the handler
                 elif line.startswith("H: Handlers="):
                     handlers = line.split('=')[1].strip().split()
                     current_device['handlers'] = handlers
-                # End of a device block, add to list if it matches specific names and has "js" in handlers
-                elif line == "":
+                elif line == "":  # blank lines separate device blocks in procfs
                     if ('name' in current_device and 
                         current_device['name'] in specific_names and
                         'uniq' in current_device and
@@ -107,13 +98,13 @@ def parse_input_devices(specific_names):
         return []
 
 
-# Input checker function that listens for device events
 def input_checker(dev, uniq_and_dev, device_event):
     try:
         while os.path.exists(dev):
+            # retry opening the device after a brief delay
             while True:
                 time.sleep(1)
-                EVENT_SIZE = struct.calcsize("llHHI")
+                EVENT_SIZE = struct.calcsize("llHHI")  # Linux input_event: timeval + type + code + value
                 file = open(dev, "rb")
                 break
             while True:
@@ -130,12 +121,10 @@ def input_checker(dev, uniq_and_dev, device_event):
                 else:
                     pass
     finally:
-        # Clean up and remove from running_threads when done
         if uniq_and_dev in running_threads:
             del running_threads[uniq_and_dev]
 
 
-# Timer function to disconnect device if idle for too long
 def timer(devid, maxidletime, dev, uniq_and_dev, device_event):
     currtime = dt.now()
     prevtime = currtime
@@ -152,44 +141,37 @@ def timer(devid, maxidletime, dev, uniq_and_dev, device_event):
 
                 if (currtime - prevtime).total_seconds() >= maxidletime:
                     print(f"Device {uniq_and_dev} has been idle for {maxidletime} seconds, disconnecting...")
+                    # devid is the BT MAC from the procfs "uniq" field
                     os.system(f"echo disconnect {devid} | bluetoothctl")
                     time.sleep(1)
                     os.system("echo exit | bluetoothctl")
-                    sys.exit()
+                    sys.exit()  # intentionally kills the whole process
             else:
                 sys.exit()
     finally:
-        # Clean up and remove from running_threads when done
         if uniq_and_dev in running_threads:
             del running_threads[uniq_and_dev]
 
-# Main function to initiate threads for matching devices
+
 def start_threads_for_devices(devices, maxidletime):
     global running_threads
 
     for device in devices:
         for handler in device['handlers']:
-            if handler.startswith('js'):  # Ensure the handler is a joystick
+            if handler.startswith('js'):
                 dev_path = f"/dev/input/{handler}"
                 uniq_and_dev = (device['uniq'], dev_path)
 
-                # Check if a thread is already running for this device's uniq and dev_path
                 if uniq_and_dev not in running_threads:
                     print(f"Starting threads for device: {device['name']} (Handler: {dev_path}, Uniq: {device['uniq']})")
-                    # Create a per-device event
                     device_event = Event()
-                    # Start input checker thread
                     t1 = Thread(target=input_checker, args=(dev_path, uniq_and_dev, device_event))
                     t1.start()
-                    # Start timer thread
                     t2 = Thread(target=timer, args=(device['uniq'], maxidletime, dev_path, uniq_and_dev, device_event))
                     t2.start()
-
-                    # Track the running threads by (uniq, dev_path)
                     running_threads[uniq_and_dev] = {'input_checker': t1, 'timer': t2}
 
 
-# Periodically query for new devices and start threads if needed
 def query_devices_periodically(maxidletime):
     global running_threads
     while True:
@@ -201,15 +183,10 @@ def query_devices_periodically(maxidletime):
             # print(f"No devices found matching names: {specific_names}")
             pass  # nop cause not printing
 
-        # Check for new devices every 5 seconds
         time.sleep(5)
 
 
 if __name__ == "__main__":
-    # Get maxidletime from command-line arguments
     maxidletime = parse_arguments()
-
     print(f"Starting Joystick Idle Monitoring w/ Idle Cutoff of {maxidletime / 60} minutes")
-
-    # Start querying devices in a loop
     query_devices_periodically(maxidletime)
