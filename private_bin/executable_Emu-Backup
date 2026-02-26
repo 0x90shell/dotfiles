@@ -591,9 +591,9 @@ find_latest_archive() {
     local source_name="$2"
 
     # Find archives matching pattern: source_name-YYYY-MM-DD_HHMMSS.tar.xz
-    local latest
-    latest=$(find "$base_dir" -maxdepth 1 -name "${source_name}-*.tar.xz" -type f 2>/dev/null | sort -r | head -1)
-    echo "$latest"
+    local archives
+    mapfile -t archives < <(find "$base_dir" -maxdepth 1 -name "${source_name}-*.tar.xz" -type f 2>/dev/null | sort -r)
+    echo "${archives[0]:-}"
 }
 
 # Prune old archives, keeping only the most recent N
