@@ -562,7 +562,7 @@ detect_changes() {
             [[ -n "$pattern" ]] && find_excludes+=(-not -path "*/$pattern/*" -not -name "$pattern")
         done
         # Find files matching any include pattern, excluding specified, newer than backup
-        if find -L "$source_dir" -type f \( "${find_includes[@]}" \) "${find_excludes[@]}" -newer "$backup_ref" 2>/dev/null | head -1 | grep -q .; then
+        if [[ -n "$(find -L "$source_dir" -type f \( "${find_includes[@]}" \) "${find_excludes[@]}" -newer "$backup_ref" -print -quit 2>/dev/null)" ]]; then
             log_verbose "Found included files newer than backup"
             return 0
         fi
@@ -576,7 +576,7 @@ detect_changes() {
     done
 
     # Check for any file newer than the backup (recursive), excluding patterns
-    if find "$source_dir" -type f "${find_excludes[@]}" -newer "$backup_ref" 2>/dev/null | head -1 | grep -q .; then
+    if [[ -n "$(find "$source_dir" -type f "${find_excludes[@]}" -newer "$backup_ref" -print -quit 2>/dev/null)" ]]; then
         log_verbose "Found files newer than backup"
         return 0
     fi
