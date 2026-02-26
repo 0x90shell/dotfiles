@@ -20,9 +20,9 @@ exec evsieve \
   --map abs:hat0y:1    btn:dpad_down:1 \
   --map abs:hat0y:-1   btn:dpad_up:1 \
   --map abs:hat0y:0    btn:dpad_down:0  btn:dpad_up:0 \
-  --hook btn:select btn:thumbr            period=200 exec-shell="xdotool key super+q" \
+  --hook btn:select btn:thumbr            period=200 exec-shell="DISPLAY=:0 xdotool key super+q" \
   --hook btn:select btn:tl                    period=200 exec-shell="emucloser" \
-  --hook btn:select btn:dpad_up               period=200 exec-shell="xdotool key alt+Tab" \
+  --hook btn:select btn:dpad_up               period=200 exec-shell="DISPLAY=:0 xdotool key alt+Tab" \
   --hook btn:select btn:dpad_down             period=200 exec-shell="playerctl play-pause" \
   --hook btn:select btn:dpad_left             period=200 exec-shell="playerctl previous" \
   --hook btn:select btn:dpad_right            period=200 exec-shell="playerctl next" \
