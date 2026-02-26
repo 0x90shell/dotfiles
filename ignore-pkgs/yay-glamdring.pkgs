@@ -305,6 +305,7 @@ gnutls
 go
 gobject-introspection
 gobject-introspection-runtime
+golangci-lint
 google-glog
 gopher64-bin
 gparted
