@@ -361,6 +361,7 @@ gnutls
 go
 gobject-introspection
 gobject-introspection-runtime
+golangci-lint
 google-glog
 gparted
 gperf
