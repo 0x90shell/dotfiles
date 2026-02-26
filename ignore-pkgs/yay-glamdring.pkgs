@@ -60,6 +60,7 @@ bison
 blas
 bleachbit
 blueman
+blueprint-compiler
 bluez
 bluez-hid2hci
 bluez-libs
@@ -68,6 +69,7 @@ bluez-utils
 boost
 boost-libs
 botan
+bottles
 breeze-icons
 brother-mfc-l2740dw
 brotli
@@ -144,6 +146,7 @@ dnsmasq
 dnssec-anchors
 docbook-xml
 docbook-xsl
+docbook2x
 docker
 dolphin-emu
 dos2unix
@@ -159,6 +162,7 @@ downgrade
 dracut
 dropbox
 dropbox-cli
+dualsensectl
 duckstation-qt-bin
 duf
 duktape
@@ -200,6 +204,7 @@ eos-update-notifier
 ethtool
 evsieve
 evtest
+evtest-qt-git
 ex-vi-compat
 exfatprogs
 exiv2
@@ -342,6 +347,7 @@ gtkmm-4.0
 gtkmm3
 gtksourceview3
 gtksourceview4
+gtksourceview5
 gts
 guile
 gupnp
@@ -606,6 +612,7 @@ hyphen
 i2c-tools
 iana-etc
 ibus
+icoextract
 icoutils
 icu
 iftop
@@ -1381,6 +1388,7 @@ opencore-amr
 opencv
 openexr
 openh264
+openjade
 openjpeg2
 openmpi
 openmsx-git
@@ -1388,6 +1396,7 @@ openpmix
 openra
 openrct2
 openresolv
+opensp
 openssh
 openssl
 openssl-1.1
@@ -1424,6 +1433,7 @@ parted
 pass
 patch
 patchelf
+patool
 pavucontrol
 pcem
 pciutils
@@ -1451,11 +1461,16 @@ perl-lwp-mediatypes
 perl-mailtools
 perl-net-http
 perl-rename
+perl-sgmls
 perl-timedate
 perl-try-tiny
 perl-uri
 perl-www-robotrules
+perl-xml-namespacesupport
 perl-xml-parser
+perl-xml-sax
+perl-xml-sax-base
+perl-xml-sax-expat
 perl-xml-writer
 phodav
 physfs
@@ -1506,6 +1521,7 @@ python-argcomplete
 python-attrs
 python-autocommand
 python-beautifulsoup4
+python-build
 python-cairo
 python-capng
 python-certifi
@@ -1529,12 +1545,14 @@ python-filelock
 python-firewall
 python-flake8
 python-fonttools
+python-fvs
 python-gobject
 python-html5lib
 python-hypothesis
 python-idna
 python-inflect
 python-iniconfig
+python-installer
 python-jaraco.collections
 python-jaraco.context
 python-jaraco.functools
@@ -1555,6 +1573,8 @@ python-numpy
 python-orjson
 python-packaging
 python-pandas
+python-pathvalidate
+python-pefile
 python-pexpect
 python-pillow
 python-pip
@@ -1569,12 +1589,14 @@ python-pyaml
 python-pycodestyle
 python-pycparser
 python-pycryptodomex
+python-pycurl
 python-pydantic
 python-pydantic-core
 python-pyelftools
 python-pyflakes
 python-pygments
 python-pyparsing
+python-pyproject-hooks
 python-pyqt5
 python-pyqt5-sip
 python-pytest
@@ -1583,11 +1605,14 @@ python-pyxdg
 python-requests
 python-setproctitle
 python-setuptools
+python-setuptools-reproducible
+python-setuptools-scm
 python-shtab
 python-simplejson
 python-six
 python-sortedcontainers
 python-soupsieve
+python-steamgriddb
 python-termcolor
 python-toml
 python-tqdm
@@ -1603,6 +1628,7 @@ python-webencodings
 python-wheel
 python-wxpython
 python-yaml
+python-yara
 python-zstandard
 qca-qt6
 qdirstat
@@ -1739,6 +1765,7 @@ scrcpy
 sd
 sdl12-compat
 sdl2-compat
+sdl2-jstest
 sdl2_gfx
 sdl2_image
 sdl2_mixer
@@ -1758,6 +1785,7 @@ semver
 serd
 sfml
 sg3_utils
+sgml-common
 shaderc
 shadow
 shared-mime-info
@@ -1842,6 +1870,7 @@ thunar-media-tags-plugin
 thunar-volman
 tigervnc
 timidity++
+tinycmmc-git
 tinysparql
 tinyxml
 tinyxml2
@@ -1891,6 +1920,7 @@ vim-nerdtree
 vim-runtime
 vinagre
 vita3k-git
+vkbasalt-cli
 vkquake2
 vlc
 vlc-cli
@@ -2101,6 +2131,7 @@ yamagi-quake2
 yamagi-quake2-rogue
 yamagi-quake2-xatrix
 yaml-cpp
+yara
 yasm
 yay
 yelp-tools
