@@ -81,6 +81,7 @@ bison
 blas
 bleachbit
 blueman
+blueprint-compiler
 bluez
 bluez-hid2hci
 bluez-libs
@@ -209,7 +210,7 @@ doxygen
 dracut
 dropbox
 dropbox-cli
-duckstation-git
+duckstation-qt-bin
 duf
 duktape
 dupeguru
@@ -341,6 +342,8 @@ glew
 glfw
 glib-networking
 glib2
+glib2-devel
+glib2-docs
 glibc
 glibmm
 glibmm-2.68
@@ -363,6 +366,7 @@ gobject-introspection
 gobject-introspection-runtime
 golangci-lint
 google-glog
+gore-bin
 gparted
 gperf
 gperftools
@@ -395,6 +399,7 @@ gst-plugins-good
 gst-plugins-ugly
 gstreamer
 gtest
+gtk-doc
 gtk-layer-shell
 gtk-update-icon-cache
 gtk-vnc
@@ -533,6 +538,7 @@ inxi
 iproute2
 iptables-nft
 iputils
+ipython
 iso-codes
 it87-dkms-git
 itstool
@@ -556,6 +562,7 @@ jslisten-git
 json-c
 json-glib
 jsoncpp
+jupyter-console
 jxrlib
 kaccounts-integration
 karchive
@@ -1538,6 +1545,7 @@ python-anyio
 python-aotriton
 python-apsw
 python-argcomplete
+python-asttokens
 python-attrs
 python-autocommand
 python-beautifulsoup4
@@ -1552,6 +1560,7 @@ python-chardet
 python-charset-normalizer
 python-click
 python-colorama
+python-comm
 python-configobj
 python-configparser
 python-contourpy
@@ -1565,6 +1574,7 @@ python-darkdetect
 python-datasets
 python-dateutil
 python-dbus
+python-decorator
 python-defusedxml
 python-deprecated
 python-dill
@@ -1573,6 +1583,7 @@ python-dnspython
 python-entrypoints
 python-evdev
 python-ewmh
+python-executing
 python-fastjsonschema
 python-faust-cchardet
 python-feedparser
@@ -1602,13 +1613,18 @@ python-inflate64
 python-inflect
 python-iniconfig
 python-installer
+python-ipykernel
+python-ipython-pygments-lexers
 python-jaconv
 python-jaraco.collections
 python-jaraco.context
 python-jaraco.functools
 python-jaraco.text
+python-jedi
 python-jeepney
 python-jinja
+python-jupyter-client
+python-jupyter-core
 python-kiwisolver
 python-llvmlite
 python-lxml
@@ -1618,6 +1634,7 @@ python-markdown
 python-markdown-it-py
 python-markupsafe
 python-matplotlib
+python-matplotlib-inline
 python-mccabe
 python-mdurl
 python-mechanize
@@ -1632,6 +1649,7 @@ python-multivolumefile
 python-mutagen
 python-mygpoclient
 python-mysqlclient
+python-nest-asyncio
 python-netifaces
 python-networkx
 python-nltk
@@ -1643,6 +1661,7 @@ python-ordered-set
 python-orjson
 python-packaging
 python-pandas
+python-parso
 python-pathvalidate
 python-pdftotext
 python-pefile
@@ -1657,10 +1676,12 @@ python-podcastparser
 python-polib
 python-pooch
 python-prettytable
+python-prompt_toolkit
 python-propcache
 python-psutil
 python-ptyprocess
 python-pulsectl
+python-pure-eval
 python-puremagic
 python-py7zr
 python-pyaml
@@ -1692,6 +1713,7 @@ python-pytest
 python-pytorch-rocm
 python-pytz
 python-pyxdg
+python-pyzmq
 python-regex
 python-reportlab
 python-requests
@@ -1712,6 +1734,7 @@ python-six
 python-sniffio
 python-sortedcontainers
 python-soupsieve
+python-stack-data
 python-steamgriddb
 python-strictyaml
 python-sympy
@@ -1721,7 +1744,9 @@ python-tiktoken
 python-tomli
 python-tomlkit
 python-torchaudio-rocm
+python-tornado
 python-tqdm
+python-traitlets
 python-triton
 python-trove-classifiers
 python-typeguard

@@ -219,7 +219,6 @@ alias t3h='tmux new-session \; send-keys clear C-m \; split-pane -v \; send-keys
 alias t3v='tmux new-session \; send-keys clear C-m \; split-pane -h \; send-keys clear C-m \;  split-pane -v \; send-keys clear C-m'
 alias t4='tmux new-session \; send-keys clear C-m \; split-pane -v \; send-keys clear C-m \;  split-pane -h \; send-keys clear C-m \; select-pane -t 0 \; split-pane -h \; send-keys clear C-m'
 {{- if eq .chezmoi.osRelease.id "endeavouros" }}
-alias terminator="terminator --profile=endeavouros"
 alias stm='DISPLAY=:0 bgrun steam'
 alias kstm='pgrep steam | xargs kill -9'
 alias spt='DISPLAY=:0 bgrun spotify'
