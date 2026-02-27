@@ -29,6 +29,7 @@ import csv
 import hashlib
 import json
 import os
+import random
 import re
 import shutil
 import subprocess
@@ -84,6 +85,21 @@ DATASETS_DIR = SCRIPT_DIR / ".ratool_datasets"
 
 # Cache expiry in days (6 months)
 CACHE_EXPIRY_DAYS = 180
+
+# Browser User-Agent strings to rotate through
+_USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.7; rv:133.0) Gecko/20100101 Firefox/133.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0",
+]
+
+
+def get_user_agent() -> str:
+    """Return a random browser User-Agent string."""
+    return random.choice(_USER_AGENTS)
+
 
 # Global config cache
 _config_cache: Optional[dict] = None
@@ -1988,28 +2004,54 @@ def get_api_key() -> str:
     return key
 
 
-def api_request(endpoint: str, params: dict) -> dict:
-    """Make an API request to RetroAchievements."""
+def api_request(endpoint: str, params: dict, max_retries: int = 5) -> dict:
+    """Make an API request to RetroAchievements with retry on rate limit."""
     api_key = get_api_key()
     params["y"] = api_key
 
     query = "&".join(f"{k}={v}" for k, v in params.items())
     url = f"https://retroachievements.org/API/{endpoint}?{query}"
 
-    try:
-        with urllib.request.urlopen(url, timeout=60) as response:
-            return json.loads(response.read().decode())
-    except urllib.error.HTTPError as e:
-        if e.code == 401:
-            print("Error: API authentication failed (401 Unauthorized)", file=sys.stderr)
-            print("Your RA_API_KEY may be invalid or expired.", file=sys.stderr)
-            print("Get a new key from: https://retroachievements.org/settings", file=sys.stderr)
-        else:
+    for attempt in range(max_retries):
+        try:
+            req = urllib.request.Request(
+                url, headers={'User-Agent': get_user_agent()}
+            )
+            with urllib.request.urlopen(req, timeout=60) as response:
+                return json.loads(response.read().decode())
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                print("Error: API authentication failed (401)", file=sys.stderr)
+                print("Your RA_API_KEY may be invalid or expired.", file=sys.stderr)
+                print("Get a new key from: https://retroachievements.org/settings",
+                      file=sys.stderr)
+                sys.exit(1)
+            if e.code in (429, 503) and attempt < max_retries - 1:
+                retry_after = e.headers.get('Retry-After')
+                if retry_after and retry_after.isdigit():
+                    delay = int(retry_after)
+                else:
+                    delay = 2 ** (attempt + 1)  # 2, 4, 8, 16 …
+                print(f"  Rate limited ({e.code}), retrying in {delay}s "
+                      f"(attempt {attempt + 1}/{max_retries})…",
+                      file=sys.stderr)
+                time.sleep(delay)
+                continue
             print(f"API Error: {e.code} {e.reason}", file=sys.stderr)
-        sys.exit(1)
-    except urllib.error.URLError as e:
-        print(f"Network Error: {e.reason}", file=sys.stderr)
-        sys.exit(1)
+            sys.exit(1)
+        except urllib.error.URLError as e:
+            if attempt < max_retries - 1:
+                delay = 2 ** (attempt + 1)
+                print(f"  Network error, retrying in {delay}s "
+                      f"(attempt {attempt + 1}/{max_retries})…",
+                      file=sys.stderr)
+                time.sleep(delay)
+                continue
+            print(f"Network Error: {e.reason}", file=sys.stderr)
+            sys.exit(1)
+    # Should not reach here, but just in case
+    print("Error: max retries exceeded", file=sys.stderr)
+    sys.exit(1)
 
 
 def fetch_systems() -> list:
@@ -2044,7 +2086,8 @@ def fetch_game_hashes_page(game_id: int) -> dict:
     url = f"https://retroachievements.org/API/API_GetGameHashes.php?i={game_id}&y={api_key}"
 
     try:
-        with urllib.request.urlopen(url, timeout=60) as response:
+        req = urllib.request.Request(url, headers={'User-Agent': get_user_agent()})
+        with urllib.request.urlopen(req, timeout=60) as response:
             data = json.loads(response.read().decode())
     except urllib.error.HTTPError as e:
         if e.code == 401:
@@ -2178,7 +2221,7 @@ def download_patch(patch_url: str, output_dir: Path, system_name: str = '',
         return True, f"Already exists: {filename}"
 
     try:
-        req = urllib.request.Request(patch_url, headers={'User-Agent': 'ra_tool/1.0'})
+        req = urllib.request.Request(patch_url, headers={'User-Agent': get_user_agent()})
         with urllib.request.urlopen(req, timeout=120) as response:
             with open(output_path, 'wb') as f:
                 f.write(response.read())
@@ -2655,7 +2698,7 @@ def get_latest_rahasher_version() -> Optional[tuple]:
     """
     try:
         url = "https://api.github.com/repos/RetroAchievements/RALibretro/releases/latest"
-        req = urllib.request.Request(url, headers={'User-Agent': 'ra_tool'})
+        req = urllib.request.Request(url, headers={'User-Agent': get_user_agent()})
         with urllib.request.urlopen(req, timeout=15) as response:
             data = json.loads(response.read().decode())
             tag = data.get('tag_name', '')
@@ -3326,28 +3369,33 @@ def cmd_pull(args):
     else:
         system_ids = [resolve_system_id(args.system)]
 
-    for sys_id in system_ids:
+    multi = len(system_ids) > 1
+    for idx, sys_id in enumerate(system_ids):
         print(f"\nFetching system {sys_id}...", file=sys.stderr)
         games = fetch_game_list(sys_id)
 
         if not games:
             print(f"  No games found for system {sys_id}", file=sys.stderr)
-            continue
+        else:
+            # Build lookup and save
+            lookup = build_hash_lookup(games)
 
-        # Build lookup and save
-        lookup = build_hash_lookup(games)
+            data = {
+                'system_id': sys_id,
+                'cached_at': datetime.now().isoformat(),
+                'game_count': len(games),
+                'hash_count': len(lookup),
+                'games': games,
+                'lookup': lookup,
+            }
 
-        data = {
-            'system_id': sys_id,
-            'cached_at': datetime.now().isoformat(),
-            'game_count': len(games),
-            'hash_count': len(lookup),
-            'games': games,
-            'lookup': lookup,
-        }
+            save_cached_hashes(sys_id, data)
+            print(f"  ✓ {len(games)} games, {len(lookup)} hashes",
+                  file=sys.stderr)
 
-        save_cached_hashes(sys_id, data)
-        print(f"  ✓ {len(games)} games, {len(lookup)} hashes", file=sys.stderr)
+        # Rate-limit between systems to avoid 429s
+        if multi and idx < len(system_ids) - 1:
+            time.sleep(2)
 
 
 def cmd_check(args):
@@ -4353,7 +4401,7 @@ def cmd_setup(args):
     print("Fetching latest RAHasher release...")
     try:
         url = "https://api.github.com/repos/RetroAchievements/RALibretro/releases/latest"
-        req = urllib.request.Request(url, headers={'User-Agent': 'ra_tool'})
+        req = urllib.request.Request(url, headers={'User-Agent': get_user_agent()})
         with urllib.request.urlopen(req, timeout=30) as response:
             release = json.loads(response.read().decode())
     except Exception as e:
@@ -4385,7 +4433,7 @@ def cmd_setup(args):
     with tempfile.TemporaryDirectory() as tmpdir:
         zip_path = Path(tmpdir) / asset_name
         try:
-            req = urllib.request.Request(download_url, headers={'User-Agent': 'ra_tool'})
+            req = urllib.request.Request(download_url, headers={'User-Agent': get_user_agent()})
             with urllib.request.urlopen(req, timeout=120) as response:
                 with open(zip_path, 'wb') as f:
                     f.write(response.read())
