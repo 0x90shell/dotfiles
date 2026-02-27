@@ -20,6 +20,7 @@ VERBOSE=false
 DRY_RUN=false
 QUIET=false
 SOURCES_FILTER=()
+CHANGED_SOURCES=()
 
 # Defaults (can be overridden by config) - empty means not configured
 CONFIGS_DIR=""
@@ -32,6 +33,9 @@ GLOBAL_EXCLUDES=""
 # Resolved primary directories (set after config parsing)
 PRIMARY_CONFIGS_DIR=""
 PRIMARY_SAVES_DIR=""
+
+# NAS pending sync file (set after config parsing)
+NAS_PENDING_FILE=""
 
 # Hardcoded shader exclusions (always applied - these are large and regenerated)
 SHADER_EXCLUDES="shaders Shaders shader_cache ShaderCache StaticShaders GraphicPacks"
@@ -385,6 +389,13 @@ resolve_directories() {
         log_error "No backup directories configured. Set configs_dir/saves_dir or nas_configs_dir/nas_saves_dir in config."
     fi
 
+    # Set pending file location for NAS sync retry
+    if [[ -n "$PRIMARY_CONFIGS_DIR" ]]; then
+        NAS_PENDING_FILE="$PRIMARY_CONFIGS_DIR/.emu-backup-nas-pending"
+    elif [[ -n "$PRIMARY_SAVES_DIR" ]]; then
+        NAS_PENDING_FILE="$PRIMARY_SAVES_DIR/.emu-backup-nas-pending"
+    fi
+
     log_verbose "Primary configs dir: ${PRIMARY_CONFIGS_DIR:-<not set>}"
     log_verbose "Primary saves dir: ${PRIMARY_SAVES_DIR:-<not set>}"
 }
@@ -592,7 +603,7 @@ find_latest_archive() {
 
     # Find archives matching pattern: source_name-YYYY-MM-DD_HHMMSS.tar.xz
     local archives
-    mapfile -t archives < <(find "$base_dir" -maxdepth 1 -name "${source_name}-*.tar.xz" -type f 2>/dev/null | sort -r)
+    mapfile -t archives < <(find "$base_dir" -maxdepth 1 -name "${source_name}-[0-9]*.tar.xz" -type f 2>/dev/null | sort -r)
     echo "${archives[0]:-}"
 }
 
@@ -606,7 +617,7 @@ prune_archives() {
 
     # Get list of archives sorted by name (newest first due to timestamp format)
     local archives
-    mapfile -t archives < <(find "$base_dir" -maxdepth 1 -name "${source_name}-*.tar.xz" -type f 2>/dev/null | sort -r)
+    mapfile -t archives < <(find "$base_dir" -maxdepth 1 -name "${source_name}-[0-9]*.tar.xz" -type f 2>/dev/null | sort -r)
 
     local count=${#archives[@]}
     if [[ $count -le $retention ]]; then
@@ -835,76 +846,218 @@ process_source() {
     fi
 
     # Perform backup based on mode
+    local rc=0
     case "$mode" in
         archive)
-            backup_archive "$source_name" "$source_dir" "$excludes" "$base_dir" "$retention" "$includes"
+            backup_archive "$source_name" "$source_dir" "$excludes" "$base_dir" "$retention" "$includes" || rc=$?
             ;;
         mirror)
-            backup_mirror "$source_name" "$source_dir" "$excludes" "$base_dir" "$includes"
+            backup_mirror "$source_name" "$source_dir" "$excludes" "$base_dir" "$includes" || rc=$?
             ;;
         *)
             log_warn "[$source_name] Unknown mode '$mode' - skipping"
             return 0
             ;;
     esac
+
+    # Track successful backups for targeted NAS sync
+    [[ $rc -eq 0 ]] && CHANGED_SOURCES+=("$source_name")
+    return $rc
 }
 
-# Sync local backup to NAS (only when both local AND NAS are configured)
-sync_to_nas() {
-    local sync_needed=false
-    local sync_failed=0
+# --- NAS Sync (targeted per-source) ---
 
-    # Check if any sync is needed
-    if should_sync_to_nas "config" || should_sync_to_nas "save"; then
-        sync_needed=true
+# Load source names from pending retry file
+load_nas_pending() {
+    local -n _pending=$1
+    _pending=()
+    if [[ -n "$NAS_PENDING_FILE" && -f "$NAS_PENDING_FILE" ]]; then
+        mapfile -t _pending < "$NAS_PENDING_FILE"
+        log_verbose "Loaded ${#_pending[@]} pending NAS sync(s) from previous run"
     fi
+}
 
-    if [[ "$sync_needed" == false ]]; then
-        log_verbose "NAS sync not configured (need both local and NAS dirs) - skipping"
-        return 0
+# Save failed source names to pending file (or delete if empty)
+save_nas_pending() {
+    local -n _remaining=$1
+    [[ -z "$NAS_PENDING_FILE" ]] && return
+    if [[ ${#_remaining[@]} -gt 0 ]]; then
+        printf '%s\n' "${_remaining[@]}" > "$NAS_PENDING_FILE"
+        log_verbose "Saved ${#_remaining[@]} pending NAS sync(s) for next run"
+    else
+        rm -f "$NAS_PENDING_FILE"
     fi
+}
+
+# Lightweight NAS validation: check each source's destination exists on NAS
+# Returns sources needing sync via nameref array (fast: ~1 stat per source)
+check_nas_state() {
+    local -n _needs_sync=$1
+    shift
+    local sources_to_check=("$@")
+    _needs_sync=()
+
+    for source_name in "${sources_to_check[@]}"; do
+        local type="${SOURCE_TYPES[$source_name]:-config}"
+        local mode="${SOURCE_MODES[$source_name]:-archive}"
+        local local_dir nas_dir
+
+        # Resolve directories for this source's type
+        case "$type" in
+            save)
+                [[ -z "$SAVES_DIR" || -z "$NAS_SAVES_DIR" ]] && continue
+                local_dir="$SAVES_DIR"; nas_dir="$NAS_SAVES_DIR"
+                ;;
+            *)
+                [[ -z "$CONFIGS_DIR" || -z "$NAS_CONFIGS_DIR" ]] && continue
+                local_dir="$CONFIGS_DIR"; nas_dir="$NAS_CONFIGS_DIR"
+                ;;
+        esac
+
+        case "$mode" in
+            archive)
+                # Check if latest local archive exists on NAS
+                local latest_local
+                latest_local=$(find_latest_archive "$local_dir" "$source_name")
+                if [[ -n "$latest_local" ]]; then
+                    local archive_name
+                    archive_name=$(basename "$latest_local")
+                    if [[ ! -f "$nas_dir/$archive_name" ]]; then
+                        log_verbose "[$source_name] NAS missing archive: $archive_name"
+                        _needs_sync+=("$source_name")
+                    fi
+                fi
+                ;;
+            mirror)
+                # Check if NAS mirror directory exists and is non-empty
+                if [[ ! -d "$nas_dir/$source_name" ]] || \
+                   [[ -z "$(ls -A "$nas_dir/$source_name" 2>/dev/null)" ]]; then
+                    log_verbose "[$source_name] NAS mirror missing or empty"
+                    _needs_sync+=("$source_name")
+                fi
+                ;;
+        esac
+    done
+}
+
+# Sync a single source to NAS
+sync_source_to_nas() {
+    local source_name="$1"
+    local type="${SOURCE_TYPES[$source_name]:-config}"
+    local mode="${SOURCE_MODES[$source_name]:-archive}"
+    local local_dir nas_dir
+
+    case "$type" in
+        save) local_dir="$SAVES_DIR"; nas_dir="$NAS_SAVES_DIR" ;;
+        *)    local_dir="$CONFIGS_DIR"; nas_dir="$NAS_CONFIGS_DIR" ;;
+    esac
 
     local rsync_opts=(-a --copy-links --delete)
     [[ "$VERBOSE" == true ]] && rsync_opts=(-av --copy-links --delete --info=progress2)
 
-    # Sync configs to NAS (only if both local and NAS are configured)
-    if should_sync_to_nas "config"; then
-        if [[ ! -d "$(dirname "$NAS_CONFIGS_DIR")" ]]; then
-            log_warn "NAS configs path not accessible: $NAS_CONFIGS_DIR (skipping)"
-            sync_failed=1
-        else
-            log_info "Syncing configs to NAS..."
-            if [[ "$DRY_RUN" == true ]]; then
-                log_info "DRY RUN: Would sync $CONFIGS_DIR to $NAS_CONFIGS_DIR"
-            else
-                mkdir -p "$NAS_CONFIGS_DIR"
-                if ! systemd-inhibit --what="idle:sleep" --why="Emu-Backup: syncing configs to NAS" \
-                    rsync "${rsync_opts[@]}" "$CONFIGS_DIR/" "$NAS_CONFIGS_DIR/"; then
-                    log_warn "NAS configs sync failed"
-                    sync_failed=1
-                fi
-            fi
-        fi
+    if [[ "$DRY_RUN" == true ]]; then
+        case "$mode" in
+            archive) log_info "DRY RUN: Would sync $source_name archives to $nas_dir" ;;
+            mirror)  log_info "DRY RUN: Would sync $source_name mirror to $nas_dir/$source_name" ;;
+        esac
+        return 0
     fi
 
-    # Sync saves to NAS (only if both local and NAS are configured)
-    if should_sync_to_nas "save"; then
-        if [[ ! -d "$(dirname "$NAS_SAVES_DIR")" ]]; then
-            log_warn "NAS saves path not accessible: $NAS_SAVES_DIR (skipping)"
-            sync_failed=1
-        else
-            log_info "Syncing saves to NAS..."
-            if [[ "$DRY_RUN" == true ]]; then
-                log_info "DRY RUN: Would sync $SAVES_DIR to $NAS_SAVES_DIR"
-            else
-                mkdir -p "$NAS_SAVES_DIR"
-                if ! systemd-inhibit --what="idle:sleep" --why="Emu-Backup: syncing saves to NAS" \
-                    rsync "${rsync_opts[@]}" "$SAVES_DIR/" "$NAS_SAVES_DIR/"; then
-                    log_warn "NAS saves sync failed"
-                    sync_failed=1
-                fi
+    mkdir -p "$nas_dir"
+    log_info "Syncing $source_name to NAS..."
+
+    case "$mode" in
+        archive)
+            # Sync only this source's archives (digit anchor prevents prefix collision)
+            if ! systemd-inhibit --what="idle:sleep" --why="Emu-Backup: syncing $source_name to NAS" \
+                rsync "${rsync_opts[@]}" \
+                --include="${source_name}-[0-9]*.tar.xz" --exclude="*" \
+                "$local_dir/" "$nas_dir/"; then
+                log_warn "[$source_name] NAS sync failed"
+                return 1
             fi
+            ;;
+        mirror)
+            # Sync only this source's mirror directory
+            mkdir -p "$nas_dir/$source_name"
+            if ! systemd-inhibit --what="idle:sleep" --why="Emu-Backup: syncing $source_name to NAS" \
+                rsync "${rsync_opts[@]}" \
+                "$local_dir/$source_name/" "$nas_dir/$source_name/"; then
+                log_warn "[$source_name] NAS sync failed"
+                return 1
+            fi
+            ;;
+    esac
+    return 0
+}
+
+# Sync changed/missing sources to NAS (targeted, not bulk)
+sync_to_nas() {
+    # Check if NAS sync is configured at all
+    if ! should_sync_to_nas "config" && ! should_sync_to_nas "save"; then
+        log_verbose "NAS sync not configured (need both local and NAS dirs) - skipping"
+        return 0
+    fi
+
+    local sync_failed=0
+
+    # Layer 3: Load pending sources from previous failed syncs
+    local pending_sources
+    load_nas_pending pending_sources
+
+    # Check NAS accessibility (test parent dirs)
+    local nas_accessible=true
+    if should_sync_to_nas "config" && [[ ! -d "$(dirname "$NAS_CONFIGS_DIR")" ]]; then
+        log_warn "NAS configs path not accessible: $NAS_CONFIGS_DIR"
+        nas_accessible=false
+    fi
+    if should_sync_to_nas "save" && [[ ! -d "$(dirname "$NAS_SAVES_DIR")" ]]; then
+        log_warn "NAS saves path not accessible: $NAS_SAVES_DIR"
+        nas_accessible=false
+    fi
+
+    # If NAS is inaccessible, save all processed sources as pending for next run
+    if [[ "$nas_accessible" == false ]]; then
+        local all_pending=("${pending_sources[@]}" "${CHANGED_SOURCES[@]}")
+        if [[ ${#all_pending[@]} -gt 0 ]]; then
+            save_nas_pending all_pending
         fi
+        sync_failed=1
+    else
+        # Layer 1: Lightweight NAS validation (all processed sources)
+        local nas_missing
+        check_nas_state nas_missing "${sources_to_process[@]}"
+
+        # Merge all three layers: changed + pending + NAS-missing (deduplicated)
+        local -A sync_set=()
+        local source
+        for source in "${CHANGED_SOURCES[@]}" "${pending_sources[@]}" "${nas_missing[@]}"; do
+            [[ -n "$source" ]] && sync_set["$source"]=1
+        done
+
+        if [[ ${#sync_set[@]} -eq 0 ]]; then
+            log_verbose "NAS up to date - nothing to sync"
+            # Clean up pending file if it exists
+            [[ -n "$NAS_PENDING_FILE" ]] && rm -f "$NAS_PENDING_FILE"
+            return 0
+        fi
+
+        # Sync each source, track failures
+        local failed_sources=()
+        for source in "${!sync_set[@]}"; do
+            # Verify source exists in config (could be stale pending entry)
+            if [[ -z "${SOURCE_PATHS[$source]:-}" ]]; then
+                log_verbose "Skipping unknown pending source: $source"
+                continue
+            fi
+            if ! sync_source_to_nas "$source"; then
+                failed_sources+=("$source")
+                sync_failed=1
+            fi
+        done
+
+        # Save any failures for next run
+        save_nas_pending failed_sources
     fi
 
     if [[ $sync_failed -eq 0 ]]; then
