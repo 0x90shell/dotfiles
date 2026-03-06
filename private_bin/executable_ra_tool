@@ -2296,7 +2296,8 @@ def get_rom_info_for_missing(missing_games: list, rate_limit: float = 0.5) -> di
         for h in hashes:
             rom_name = h.get('name', '')
             patch_url = h.get('patchUrl', '')
-            labels = [lbl.get('label', '') for lbl in h.get('labels', [])]
+            labels_raw = h.get('labels', [])
+            labels = [lbl.get('label', '') for lbl in labels_raw] if isinstance(labels_raw, list) else []
             md5 = h.get('md5', '')
 
             rom_names.append(rom_name)
@@ -3430,7 +3431,8 @@ def get_variant_patches_for_owned(owned_games: dict, found_hashes: set,
             rom_name = h.get('name', '')
             if not is_english_patch(patch_url, game['title'], rom_name):
                 continue
-            labels = [lbl.get('label', '') for lbl in h.get('labels', [])]
+            labels_raw = h.get('labels', [])
+            labels = [lbl.get('label', '') for lbl in labels_raw] if isinstance(labels_raw, list) else []
             variants.append({
                 'title': game['title'],
                 'achievements': game['achievements'],
