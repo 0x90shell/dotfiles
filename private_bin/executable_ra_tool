@@ -2468,7 +2468,8 @@ def write_missing_list_basic(output_path: str, sorted_missing: list):
                     f"https://retroachievements.org/game/{gid}\t{hashes}\n")
 
 
-def write_missing_list_expanded(output_path: str, sorted_missing: list, rom_info: dict):
+def write_missing_list_expanded(output_path: str, sorted_missing: list, rom_info: dict,
+                                owned_variants: list = None):
     """Write expanded missing list TSV with ROM info columns."""
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write("# Title\tAchievements\tPoints\tURL\tHashes\t"
@@ -2493,19 +2494,44 @@ def write_missing_list_expanded(output_path: str, sorted_missing: list, rom_info
             # Get ROM info if available
             if title in rom_lookup:
                 category, g = rom_lookup[title]
-                rom_name = g.get('rom_names', [''])[0] if g.get('rom_names') else ''
                 labels = ','.join(g.get('labels', []))
-                patch_url = ''
-                if g.get('patches'):
-                    patch_url = g['patches'][0].get('patch_url', '')
-            else:
-                rom_name = ''
-                category = ''
-                labels = ''
-                patch_url = ''
+                patches = g.get('patches', [])
 
-            f.write(f"{title}\t{info['achievements']}\t{info['points']}\t{url}\t"
-                    f"{hashes}\t{rom_name}\t{category}\t{labels}\t{patch_url}\n")
+                if not patches:
+                    # No patches — single row with all hashes, first rom_name
+                    rom_name = g.get('rom_names', [''])[0] if g.get('rom_names') else ''
+                    f.write(f"{title}\t{info['achievements']}\t{info['points']}\t"
+                            f"{url}\t{hashes}\t{rom_name}\t{category}\t{labels}\t\n")
+                else:
+                    # Group patches by URL — same URL = 1 row
+                    url_groups: dict = {}
+                    for p in patches:
+                        pu = p.get('patch_url', '')
+                        if pu not in url_groups:
+                            url_groups[pu] = {'hashes': [], 'rom_names': [],
+                                              'labels': set()}
+                        url_groups[pu]['hashes'].append(p['md5'])
+                        url_groups[pu]['rom_names'].append(p['rom_name'])
+                        url_groups[pu]['labels'].update(p.get('labels', []))
+
+                    for patch_url, grp in url_groups.items():
+                        grp_hashes = ','.join(grp['hashes'])
+                        grp_labels = ','.join(sorted(grp['labels']))
+                        rom_name = grp['rom_names'][0]
+                        f.write(f"{title}\t{info['achievements']}\t{info['points']}\t"
+                                f"{url}\t{grp_hashes}\t{rom_name}\t{category}\t"
+                                f"{grp_labels}\t{patch_url}\n")
+            else:
+                f.write(f"{title}\t{info['achievements']}\t{info['points']}\t{url}\t"
+                        f"{hashes}\t\t\t\t\n")
+
+        # Append owned variant entries
+        if owned_variants:
+            for v in owned_variants:
+                labels_str = ','.join(v.get('labels', []))
+                f.write(f"{v['title']}\t{v['achievements']}\t{v['points']}\t"
+                        f"{v['url']}\t{v['md5']}\t{v['rom_name']}\t"
+                        f"owned_variant\t{labels_str}\t{v['patch_url']}\n")
 
 
 def enrich_missing_with_scores(sorted_missing: list, platform: str, use_api: bool = True) -> dict:
@@ -2528,7 +2554,8 @@ def enrich_missing_with_scores(sorted_missing: list, platform: str, use_api: boo
 
 
 def write_missing_list_with_scores(output_path: str, sorted_missing: list, scores_map: dict,
-                                   rom_info: Optional[dict] = None):
+                                   rom_info: Optional[dict] = None,
+                                   owned_variants: list = None):
     """Write missing list TSV with score columns."""
     with open(output_path, 'w', encoding='utf-8') as f:
         if rom_info:
@@ -2571,21 +2598,62 @@ def write_missing_list_with_scores(output_path: str, sorted_missing: list, score
                 # Get ROM info if available
                 if title in rom_lookup:
                     category, g = rom_lookup[title]
-                    rom_name = g.get('rom_names', [''])[0] if g.get('rom_names') else ''
                     labels = ','.join(g.get('labels', []))
-                    patch_url = ''
-                    if g.get('patches'):
-                        patch_url = g['patches'][0].get('patch_url', '')
-                else:
-                    rom_name = category = labels = patch_url = ''
+                    patches = g.get('patches', [])
 
-                f.write(f"{title}\t{info['achievements']}\t{info['points']}\t"
-                        f"{critic}\t{user}\t{combined}\t{length}\t{diff}\t{sources}\t"
-                        f"{url}\t{hashes}\t{rom_name}\t{category}\t{labels}\t{patch_url}\n")
+                    if not patches:
+                        rom_name = g.get('rom_names', [''])[0] if g.get('rom_names') else ''
+                        f.write(f"{title}\t{info['achievements']}\t{info['points']}\t"
+                                f"{critic}\t{user}\t{combined}\t{length}\t{diff}\t"
+                                f"{sources}\t{url}\t{hashes}\t{rom_name}\t{category}\t"
+                                f"{labels}\t\n")
+                    else:
+                        # Group patches by URL — same URL = 1 row
+                        url_groups: dict = {}
+                        for p in patches:
+                            pu = p.get('patch_url', '')
+                            if pu not in url_groups:
+                                url_groups[pu] = {'hashes': [], 'rom_names': [],
+                                                  'labels': set()}
+                            url_groups[pu]['hashes'].append(p['md5'])
+                            url_groups[pu]['rom_names'].append(p['rom_name'])
+                            url_groups[pu]['labels'].update(p.get('labels', []))
+
+                        for patch_url, grp in url_groups.items():
+                            grp_hashes = ','.join(grp['hashes'])
+                            grp_labels = ','.join(sorted(grp['labels']))
+                            rom_name = grp['rom_names'][0]
+                            f.write(f"{title}\t{info['achievements']}\t{info['points']}\t"
+                                    f"{critic}\t{user}\t{combined}\t{length}\t{diff}\t"
+                                    f"{sources}\t{url}\t{grp_hashes}\t{rom_name}\t"
+                                    f"{category}\t{grp_labels}\t{patch_url}\n")
+                else:
+                    f.write(f"{title}\t{info['achievements']}\t{info['points']}\t"
+                            f"{critic}\t{user}\t{combined}\t{length}\t{diff}\t{sources}\t"
+                            f"{url}\t{hashes}\t\t\t\t\n")
             else:
                 f.write(f"{title}\t{info['achievements']}\t{info['points']}\t"
                         f"{critic}\t{user}\t{combined}\t{length}\t{diff}\t{sources}\t"
                         f"{url}\t{hashes}\n")
+
+        # Append owned variant entries (with score columns if rom_info mode)
+        if owned_variants and rom_info:
+            for v in owned_variants:
+                labels_str = ','.join(v.get('labels', []))
+                s = scores_map.get(v['title'])
+                if s:
+                    vc = f"{s.critic_score:.0f}" if s.critic_score else ""
+                    vu = f"{s.user_score:.0f}" if s.user_score else ""
+                    vcomb = f"{s.combined_score:.0f}" if s.combined_score else ""
+                    vlen = f"{s.length_hours:.0f}" if s.length_hours else ""
+                    vdiff = f"{s.difficulty:.1f}" if s.difficulty else ""
+                    vsrc = ",".join(r.source for r in s.sources)
+                else:
+                    vc = vu = vcomb = vlen = vdiff = vsrc = ""
+                f.write(f"{v['title']}\t{v['achievements']}\t{v['points']}\t"
+                        f"{vc}\t{vu}\t{vcomb}\t{vlen}\t{vdiff}\t{vsrc}\t"
+                        f"{v['url']}\t{v['md5']}\t{v['rom_name']}\t"
+                        f"owned_variant\t{labels_str}\t{v['patch_url']}\n")
 
 
 def sort_missing_by_score(sorted_missing: list, scores_map: dict, sort_by: str) -> list:
@@ -3334,6 +3402,52 @@ def ensure_cache(system_id: int, force: bool = False) -> dict:
     print(f"  Cached {len(games)} games, {len(lookup)} hashes", file=sys.stderr)
     return data
 
+
+def get_variant_patches_for_owned(owned_games: dict, found_hashes: set,
+                                  rate_limit: float = 0.5) -> list:
+    """Fetch patches for owned games producing ROMs user doesn't have.
+
+    Args:
+        owned_games: Dict of game_id -> info for owned games with unmatched hashes
+        found_hashes: Set of MD5 hashes already in user's collection
+        rate_limit: Delay between requests in seconds
+
+    Returns list of variant patch dicts with per-patch labels.
+    """
+    variants = []
+    total = len(owned_games)
+    pbar = make_progress_bar(list(owned_games.items()), total=total,
+                             desc="Fetching owned-game variants")
+
+    for idx, (gid, game) in enumerate(pbar, 1):
+        hash_data = fetch_game_hashes_page(gid)
+
+        for h in hash_data.get('hashes', []):
+            md5 = h.get('md5', '').lower()
+            patch_url = h.get('patchUrl', '')
+            if md5 in found_hashes or not patch_url:
+                continue
+            rom_name = h.get('name', '')
+            if not is_english_patch(patch_url, game['title'], rom_name):
+                continue
+            labels = [lbl.get('label', '') for lbl in h.get('labels', [])]
+            variants.append({
+                'title': game['title'],
+                'achievements': game['achievements'],
+                'points': game['points'],
+                'url': f"https://retroachievements.org/game/{gid}",
+                'md5': md5,
+                'rom_name': rom_name,
+                'patch_url': patch_url,
+                'labels': labels,
+            })
+
+        if idx < total:
+            time.sleep(rate_limit)
+
+    return variants
+
+
 # ============================================================================
 # COMMANDS
 # ============================================================================
@@ -3618,10 +3732,11 @@ def cmd_check(args):
     missing_list_file = getattr(args, 'missing_list', None)
     rom_info_flag = getattr(args, 'rom_info', False)
     download_patches_flag = getattr(args, 'download_patches', False)
+    include_owned_patches = getattr(args, 'owned_patches', False)
     compare_flag = getattr(args, 'compare', None)
 
     # Validate API key early if --rom-info or --download-patches will be used
-    if rom_info_flag or download_patches_flag:
+    if rom_info_flag or download_patches_flag or include_owned_patches:
         get_api_key()  # Exits with helpful message if not set
 
     # --compare implies --missing-list (need the file to compare against)
@@ -3635,7 +3750,8 @@ def cmd_check(args):
         missing_list_file = f"{system_name}{suffix}"
 
     needs_missing_info = (show_missing or missing_list_file or missing_base_only or
-                          rom_info_flag or download_patches_flag)
+                          rom_info_flag or download_patches_flag or
+                          include_owned_patches)
     if needs_missing_info:
         games = cached.get('games', [])
 
@@ -3649,12 +3765,15 @@ def cmd_check(args):
                 'hashes': g.get('Hashes', []),
             }
 
-        # Get game IDs that were found in the check
+        # Get game IDs and hashes that were found in the check
         found_game_ids = set()
-        for _, info, _ in supported:
+        found_hashes = set()
+        for _, info, matched_hash in supported:
             found_game_ids.add(info['id'])
-        for _, info, _ in supported_no_ach:
+            found_hashes.add(matched_hash.lower())
+        for _, info, matched_hash in supported_no_ach:
             found_game_ids.add(info['id'])
+            found_hashes.add(matched_hash.lower())
 
         # Find all games with achievements that user doesn't have
         all_achievable = {
@@ -3681,6 +3800,16 @@ def cmd_check(args):
                     continue
 
             missing_games[gid] = info
+
+        # Identify owned games with unmatched variant hashes
+        owned_variant_games = {}
+        if include_owned_patches:
+            for gid, info in all_achievable.items():
+                if gid not in found_game_ids:
+                    continue  # Already in missing_games
+                game_hashes = set(h.lower() for h in info.get('hashes', []))
+                if game_hashes - found_hashes:  # Has unmatched hashes
+                    owned_variant_games[gid] = info
 
         # Calculate totals
         missing_ach = sum(g['achievements'] for g in missing_games.values())
@@ -3712,8 +3841,9 @@ def cmd_check(args):
 
         # ROM info and patch download for missing games
         patch_dir = getattr(args, 'patch_dir', Path('./patches'))
+        owned_variants = []
 
-        if rom_info_flag or download_patches_flag:
+        if rom_info_flag or download_patches_flag or include_owned_patches:
             # Convert missing_games to list format for get_rom_info_for_missing()
             missing_list = []
             for gid, info in sorted_missing:
@@ -3728,6 +3858,15 @@ def cmd_check(args):
             print(f"\nQuerying ROM info for {len(missing_list)} missing games...", file=sys.stderr)
             rom_info = get_rom_info_for_missing(missing_list, rate_limit=0.5)
 
+            # Fetch variant patches for owned games
+            if include_owned_patches and owned_variant_games:
+                print(f"\nFetching variant patches for {len(owned_variant_games)} owned games...",
+                      file=sys.stderr)
+                owned_variants = get_variant_patches_for_owned(
+                    owned_variant_games, found_hashes, rate_limit=0.5)
+                print(f"Found {len(owned_variants)} variant patches for owned games",
+                      file=sys.stderr)
+
             # Print report
             if rom_info_flag:
                 local_hashes = {h for _, hs in unsupported for h in hs}
@@ -3741,6 +3880,11 @@ def cmd_check(args):
                     all_patches.extend(g.get('patches', []))
                 for g in rom_info['hacks_with_patches']:
                     all_patches.extend(g.get('patches', []))
+                # Owned variants: download if both flags set
+                if include_owned_patches and owned_variants:
+                    for v in owned_variants:
+                        all_patches.append({
+                            'patch_url': v['patch_url'], 'md5': v['md5']})
 
                 if all_patches:
                     sys_name = get_system_name(system_id)
@@ -3772,10 +3916,12 @@ def cmd_check(args):
                     if sort_by != 'achievements':
                         sorted_missing = sort_missing_by_score(sorted_missing, scores_map, sort_by)
                     write_missing_list_with_scores(
-                        missing_list_file, sorted_missing, scores_map, rom_info)
+                        missing_list_file, sorted_missing, scores_map,
+                        rom_info, owned_variants)
                 else:
                     write_missing_list_expanded(
-                        missing_list_file, sorted_missing, rom_info)
+                        missing_list_file, sorted_missing, rom_info,
+                        owned_variants)
                 print(f"MISSING list saved to: {missing_list_file}", file=sys.stderr)
 
         elif missing_list_file:
@@ -5057,8 +5203,15 @@ Examples:
   %(prog)s pull snes                    # Pull SNES hashes (by name)
   %(prog)s pull 3                       # Pull SNES hashes (by ID)
   %(prog)s check snes ~/roms/snes/      # Check SNES ROMs
-  %(prog)s check snes ~/roms/ -s        # Check with summary only
-  %(prog)s check psx ~/roms/psx/ -v     # Check PS1 ROMs with progress
+  %(prog)s check snes ~/roms/ --full    # Full per-ROM report
+  %(prog)s check psx ~/roms/psx/ -v     # Check PS1 ROMs with verbose output
+  %(prog)s check snes ~/roms/ --missing # Show missing RA titles
+  %(prog)s check snes ~/roms/ --missing-list  # Export missing to TSV
+  %(prog)s check snes ~/roms/ --rom-info      # Query ROM names & patch URLs
+  %(prog)s check snes ~/roms/ --download-patches --patch-dir ./patches/  # Download patches
+  %(prog)s check snes ~/roms/ --owned-patches --download-patches  # + owned-game variants
+  %(prog)s check snes ~/roms/ --owned-patches --missing-list  # List variant patches
+  %(prog)s check snes ~/roms/ --scores --sort-by combined  # With game scores
   %(prog)s dedup snes ~/roms/snes/      # Find duplicates (human-readable)
   %(prog)s dedup snes ~/roms/ -s        # Quick summary only
   %(prog)s dedup snes ~/roms/ --missing # Show RA titles you're missing
@@ -5147,11 +5300,19 @@ Cache:
     sub_check.add_argument('--missing-base-only', action='store_true',
                            help='Only show missing base games (no hacks/homebrews)')
     sub_check.add_argument('--missing-list', nargs='?', const=True, default=None,
-                           help='Output missing list (default: {system}-missing.txt)')
+                           help='Export missing list as TSV '
+                                '(default filename: {system}-missing.txt)')
     sub_check.add_argument('--rom-info', action='store_true',
                            help='Query hash pages for missing games to get ROM names & patch URLs')
     sub_check.add_argument('--download-patches', action='store_true',
-                           help='Download patches for missing games (excludes non-English translations)')
+                           help='Download patches for missing games to --patch-dir '
+                                '(implies --rom-info; excludes non-English translations)')
+    sub_check.add_argument('--owned-patches', action='store_true',
+                           help='Include variant patches for games you already own '
+                                '(MSU-1, improvements, etc.). Fetches hash pages for '
+                                'owned games with unmatched hashes. Combine with '
+                                '--download-patches to download them, or use with '
+                                '--missing-list to list them as owned_variant entries.')
     sub_check.add_argument('--patch-dir', type=Path, default=Path('./ra_patches'),
                            help='Output directory for downloaded patches (default: ./ra_patches)')
     sub_check.add_argument('--compare', nargs='?', const=True, default=None, metavar='ROM_DIR',
