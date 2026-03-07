@@ -36,6 +36,7 @@ bin/ESDE*
 bin/.ESDE-genre-overrides.tsv
 bin/kernel-purge
 bin/steampull
+bin/sunshine*
 bin/ds3-search
 bin/rom-bulkconvert
 bin/ra_tool
