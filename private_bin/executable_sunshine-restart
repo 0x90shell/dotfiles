@@ -1,4 +1,5 @@
 #!/bin/bash
 # ~/bin/restart-sunshine.sh
 sleep 1  # let Moonlight get the launch acknowledgment
+systemctl --user reset-failed sunshine
 systemctl --user restart sunshine
