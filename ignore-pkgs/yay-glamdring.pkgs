@@ -1,3 +1,5 @@
+0ad
+0ad-data
 7zip
 a52dec
 aalib
@@ -37,6 +39,7 @@ aribb25
 asio
 at-spi2-core
 atkmm
+attica
 attr
 audit
 autoconf
@@ -93,6 +96,7 @@ cblas
 ccache
 cdparanoia
 cemu-bin
+cfitsio
 cheat
 chezmoi
 chromaprint
@@ -113,7 +117,9 @@ cpio
 cppdap
 cpu-checker-bzr
 cpupower
+crack-attack
 cryptsetup
+csfml
 csvquote-git
 cups
 cups-filters
@@ -211,6 +217,7 @@ exiv2
 exo
 expac
 expat
+extremetuxracer
 f2fs-tools
 faac
 faad2
@@ -291,6 +298,7 @@ glibmm
 glibmm-2.68
 glm
 glmark2
+gloox
 glslang
 glu
 glycin
@@ -650,12 +658,15 @@ jslisten-git
 json-c
 json-glib
 jsoncpp
+jumpnbump-git
+jumpnbump-levels
 jxrlib
 karchive
 kasts
 kazam
 kbd
 kbookmarks
+kcmutils
 kcodecs
 kcolorscheme
 kcompletion
@@ -687,7 +698,10 @@ kitemviews5
 kjobwidgets
 kmag
 kmod
+knewstuff
 knotifications
+knotifyconfig
+knyttstories
 kodi
 kodi-addon-peripheral-joystick
 kodi-addon-pvr-hdhomerun
@@ -697,6 +711,8 @@ kodi-addon-visualization-spectrum
 kodi-addon-visualization-waveform
 kodi-platform
 kolourpaint
+kpackage
+kplotting
 krb5
 krita
 krita-ai-tools
@@ -704,6 +720,7 @@ krita-plugin-gmic
 ksanecore
 kseexpr
 kservice
+kstars
 ksvg
 ktextwidgets
 kwallet
@@ -937,6 +954,7 @@ libelf
 libepoxy
 libepubgen
 libetonyek
+libev
 libevdev
 libevent
 libexif
@@ -978,6 +996,7 @@ libieee1284
 libimagequant
 libimobiledevice
 libimobiledevice-glue
+libindi
 libinih
 libinput
 libisl
@@ -1043,6 +1062,7 @@ libnma
 libnma-common
 libnma-gtk4
 libnotify
+libnova
 libnsl
 libnumbertext
 libnvme
@@ -1101,12 +1121,14 @@ libretro-flycast
 libretro-fmsx-git
 libretro-gambatte
 libretro-genesis-plus-gx
+libretro-jumpnbump-git
 libretro-kronos
 libretro-mame
 libretro-mame2016
 libretro-melonds
 libretro-mesen
 libretro-mesen-s
+libretro-meta
 libretro-mgba
 libretro-mupen64plus-next
 libretro-neocd-git
@@ -1216,6 +1238,7 @@ libxfont2
 libxft
 libxi
 libxinerama
+libxisf
 libxkbcommon
 libxkbcommon-x11
 libxkbfile
@@ -1316,12 +1339,14 @@ meson
 miniupnpc
 minizip
 minizip-ng
+minuet
 mjpegtools
 mlt
 mobile-broadband-provider-info
 modemmanager
 mono
 moonlight-qt
+moreutils
 mpdecimal
 mpfr
 mpg123
@@ -1391,6 +1416,7 @@ openexr
 openh264
 openjade
 openjpeg2
+openjph
 openmpi
 openmsx-git
 openpmix
@@ -1441,6 +1467,7 @@ pciutils
 pcre
 pcre2
 pcsclite
+pcsx2-latest-bin
 perfect-dark-git
 perl
 perl-clone
@@ -1456,6 +1483,8 @@ perl-http-date
 perl-http-message
 perl-http-negotiate
 perl-io-html
+perl-io-tty
+perl-ipc-run
 perl-json
 perl-libwww
 perl-lwp-mediatypes
@@ -1463,6 +1492,7 @@ perl-mailtools
 perl-net-http
 perl-rename
 perl-sgmls
+perl-time-duration
 perl-timedate
 perl-try-tiny
 perl-uri
@@ -1476,6 +1506,7 @@ perl-xml-writer
 phodav
 physfs
 pinentry
+pingus
 pinta
 pipewire
 pipewire-alsa
@@ -1655,6 +1686,7 @@ qt5ct
 qt6-5compat
 qt6-base
 qt6-charts
+qt6-datavis3d
 qt6-declarative
 qt6-imageformats
 qt6-multimedia
@@ -1704,6 +1736,7 @@ rpcs3-bin
 rsync
 rtaudio
 rtkit
+rtl-sdr
 rtmidi
 rtmpdump
 rubberband
@@ -1756,12 +1789,14 @@ run-parts
 runc
 rust
 rustdesk
+rvgl-bin
 ryujinx-bin
 s-nail
 s-tui
 sameboy
 sane
 sbc
+scratch
 scrcpy
 sd
 sdl12-compat
@@ -1819,6 +1854,7 @@ spice-protocol
 spirv-tools
 spotify
 sqlite
+squeak-vm
 sratom
 srb2-bin
 srb2-data
@@ -1830,6 +1866,7 @@ steam
 steam-devices
 steamtinkerlaunch
 stella
+stellarsolver
 stoken
 strace
 stratagus
@@ -2020,10 +2057,12 @@ vulkan-validation-layers
 war1gus
 wargus
 warzone2100
+warzone2100-sequences
 wavpack
 wayland
 wayland-protocols
 waylandpp
+wcslib
 webkit2gtk
 webkit2gtk-4.1
 webp-pixbuf-loader
@@ -2032,6 +2071,7 @@ welcome
 wget
 which
 whois
+widelands
 wildmidi
 wine-staging
 winetricks
