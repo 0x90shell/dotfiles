@@ -37,9 +37,9 @@ argon2
 aribb24
 aribb25
 asio
+astromenace
 at-spi2-core
 atkmm
-attica
 attr
 audit
 autoconf
@@ -96,10 +96,10 @@ cblas
 ccache
 cdparanoia
 cemu-bin
-cfitsio
 cheat
 chezmoi
 chromaprint
+chromium-bsu
 chrono-date
 cifs-utils
 citra-canary-bin
@@ -109,6 +109,7 @@ clucene
 cmake
 colord
 colord-sane
+commander-genius-git
 compiler-rt
 confuse
 containerd
@@ -250,6 +251,7 @@ fluidsynth
 flycast
 fmt
 fontconfig
+freealut
 freeglut
 freeimage
 freerdp2
@@ -441,6 +443,7 @@ haskell-doclayout
 haskell-doctemplates
 haskell-easy-file
 haskell-emojis
+haskell-entropy
 haskell-erf
 haskell-fast-logger
 haskell-fgl
@@ -454,6 +457,7 @@ haskell-haddock-library
 haskell-half
 haskell-hashable
 haskell-hourglass
+haskell-hslogger
 haskell-hslua
 haskell-hslua-aeson
 haskell-hslua-classes
@@ -527,12 +531,14 @@ haskell-regex-tdfa
 haskell-resourcet
 haskell-safe
 haskell-safe-exceptions
+haskell-sandi
 haskell-scientific
 haskell-semialign
 haskell-semigroupoids
 haskell-serialise
 haskell-servant
 haskell-servant-server
+haskell-sha
 haskell-simple-sendfile
 haskell-singleton-bool
 haskell-skylighting
@@ -605,6 +611,7 @@ haveged
 hddtemp
 hdhomerun_config_gui
 hdparm
+hedgewars
 hicolor-icon-theme
 hidapi
 highway
@@ -613,6 +620,7 @@ hsa-rocr
 hslua-cli
 htop
 hunspell
+hurrican-git
 hwdata
 hwdetect
 hwinfo
@@ -666,7 +674,6 @@ kasts
 kazam
 kbd
 kbookmarks
-kcmutils
 kcodecs
 kcolorscheme
 kcompletion
@@ -698,9 +705,7 @@ kitemviews5
 kjobwidgets
 kmag
 kmod
-knewstuff
 knotifications
-knotifyconfig
 knyttstories
 kodi
 kodi-addon-peripheral-joystick
@@ -711,8 +716,6 @@ kodi-addon-visualization-spectrum
 kodi-addon-visualization-waveform
 kodi-platform
 kolourpaint
-kpackage
-kplotting
 krb5
 krita
 krita-ai-tools
@@ -720,7 +723,6 @@ krita-plugin-gmic
 ksanecore
 kseexpr
 kservice
-kstars
 ksvg
 ktextwidgets
 kwallet
@@ -954,7 +956,6 @@ libelf
 libepoxy
 libepubgen
 libetonyek
-libev
 libevdev
 libevent
 libexif
@@ -996,7 +997,6 @@ libieee1284
 libimagequant
 libimobiledevice
 libimobiledevice-glue
-libindi
 libinih
 libinput
 libisl
@@ -1062,7 +1062,6 @@ libnma
 libnma-common
 libnma-gtk4
 libnotify
-libnova
 libnsl
 libnumbertext
 libnvme
@@ -1130,6 +1129,7 @@ libretro-mesen
 libretro-mesen-s
 libretro-meta
 libretro-mgba
+libretro-mrboom-git
 libretro-mupen64plus-next
 libretro-neocd-git
 libretro-nestopia
@@ -1238,7 +1238,6 @@ libxfont2
 libxft
 libxi
 libxinerama
-libxisf
 libxkbcommon
 libxkbcommon-x11
 libxkbfile
@@ -1339,7 +1338,6 @@ meson
 miniupnpc
 minizip
 minizip-ng
-minuet
 mjpegtools
 mlt
 mobile-broadband-provider-info
@@ -1407,6 +1405,7 @@ oh-my-zsh-powerline-theme-git
 onetbb
 oniguruma
 openal
+openarena
 openbor-bin
 opencolorio
 openconnect
@@ -1529,6 +1528,7 @@ poppler-glib
 popt
 portaudio
 portmidi
+potrace
 power-profiles-daemon
 powershell-bin
 powertop
@@ -1662,6 +1662,7 @@ python-wxpython
 python-yaml
 python-yara
 python-zstandard
+python2
 qca-qt6
 qdirstat
 qhull
@@ -1686,7 +1687,6 @@ qt5ct
 qt6-5compat
 qt6-base
 qt6-charts
-qt6-datavis3d
 qt6-declarative
 qt6-imageformats
 qt6-multimedia
@@ -1736,7 +1736,6 @@ rpcs3-bin
 rsync
 rtaudio
 rtkit
-rtl-sdr
 rtmidi
 rtmpdump
 rubberband
@@ -1796,7 +1795,6 @@ s-tui
 sameboy
 sane
 sbc
-scratch
 scrcpy
 sd
 sdl12-compat
@@ -1854,7 +1852,6 @@ spice-protocol
 spirv-tools
 spotify
 sqlite
-squeak-vm
 sratom
 srb2-bin
 srb2-data
@@ -1866,7 +1863,6 @@ steam
 steam-devices
 steamtinkerlaunch
 stella
-stellarsolver
 stoken
 strace
 stratagus
@@ -1875,6 +1871,7 @@ sudachi
 sudo
 suitesparse
 sunshine
+supermariowar-git
 supertux
 supertuxkart
 suyu-bin
@@ -1893,6 +1890,7 @@ tar
 tcl
 tcpdump
 tdb
+teeworlds
 telepathy-glib
 terminator
 tevent
@@ -1912,6 +1910,7 @@ tinycmmc-git
 tinysparql
 tinyxml
 tinyxml2
+tk
 tldr
 tmux
 tmux-plugin-manager
@@ -2062,7 +2061,6 @@ wavpack
 wayland
 wayland-protocols
 waylandpp
-wcslib
 webkit2gtk
 webkit2gtk-4.1
 webp-pixbuf-loader
@@ -2144,6 +2142,7 @@ xorg-fonts-encodings
 xorg-iceauth
 xorg-server
 xorg-server-common
+xorg-server-xvfb
 xorg-setxkbmap
 xorg-xauth
 xorg-xdpyinfo
