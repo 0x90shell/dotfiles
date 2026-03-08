@@ -15,6 +15,7 @@ bin/test-setup*
 .config/systemd/user/jstimeout.service
 .config/systemd/user/btpowerfix.service
 .config/systemd/user/default.target.wants/weekly@esde-backup.timer
+.config/systemd/user/sunshine.service.d/
 .config/sunshine/
 .kodi/
 .config/autostart/bt-headset-autoconnect.desktop

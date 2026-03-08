@@ -1,6 +1,6 @@
 #!/bin/bash
 export DISPLAY=:0
-export XAUTHORITY=/home/gandalf/.Xauthority
+export XAUTHORITY=$HOME/.Xauthority
 export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus
 
 xfce4-screensaver-command -d
@@ -12,9 +12,16 @@ xdotool mousemove_relative -- -1 0
 # Wait for the display to actually come online (HDMI can take 1-3s to wake).
 # Sunshine's encoder will fail with "Couldn't find monitor [0]" if we return
 # before the display is reporting as connected.
+display_ready=false
 for i in $(seq 1 30); do
     if xrandr | grep -qE 'HDMI.* connected (primary )?[0-9]'; then
+        display_ready=true
         break
     fi
     sleep 0.2
 done
+
+if [ "$display_ready" = false ]; then
+    echo "wake-display: HDMI display did not come online within 6s" >&2
+    exit 1
+fi

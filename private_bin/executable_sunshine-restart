@@ -9,5 +9,9 @@ systemctl --user reset-failed sunshine 2>/dev/null
 systemctl --user stop sunshine-deferred-restart.timer 2>/dev/null
 systemctl --user stop sunshine-deferred-restart.service 2>/dev/null
 systemctl --user reset-failed sunshine-deferred-restart.service 2>/dev/null
+
+# Wake the display now so it's ready by the time sunshine restarts.
+"$HOME/bin/wake-display"
+
 systemd-run --user --on-active=3s --unit=sunshine-deferred-restart \
   systemctl --user restart sunshine
