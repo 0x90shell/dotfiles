@@ -1,5 +1,10 @@
 #!/bin/bash
-# ~/bin/restart-sunshine.sh
-sleep 1  # let Moonlight get the launch acknowledgment
-systemctl --user reset-failed sunshine
-systemctl --user restart sunshine
+# Restart Sunshine from within a Moonlight session.
+#
+# Uses systemd-run to schedule the restart after this script exits,
+# giving Moonlight time to receive the launch acknowledgment before
+# the stream drops. Without this, Android Moonlight shows 503 errors.
+
+systemctl --user reset-failed sunshine 2>/dev/null
+systemd-run --user --on-active=3s --unit=sunshine-deferred-restart \
+  systemctl --user restart sunshine

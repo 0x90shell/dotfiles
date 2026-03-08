@@ -8,3 +8,13 @@ xset dpms force on
 xset s reset
 xdotool mousemove_relative 1 0
 xdotool mousemove_relative -- -1 0
+
+# Wait for the display to actually come online (HDMI can take 1-3s to wake).
+# Sunshine's encoder will fail with "Couldn't find monitor [0]" if we return
+# before the display is reporting as connected.
+for i in $(seq 1 30); do
+    if xrandr | grep -qE 'HDMI.* connected (primary )?[0-9]'; then
+        break
+    fi
+    sleep 0.2
+done
