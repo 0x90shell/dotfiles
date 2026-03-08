@@ -4,7 +4,7 @@
       "auto-detach": true,
       "exclude-global-prep-cmd": false,
       "exit-timeout": 5,
-      "image-path": "/home/gandalf/.config/sunshine/assets/desktop-hires.png",
+      "image-path": "/home/gandalf/.config/sunshine/assets/desktop.png",
       "name": "Desktop",
       "prep-cmd": [
         {
@@ -28,16 +28,6 @@
         }
       ],
       "wait-all": true
-    },
-    {
-      "image-path": "/home/gandalf/.config/sunshine/assets/desktop-lowres.png",
-      "name": "Low Res Desktop",
-      "prep-cmd": [
-        {
-          "do": "xrandr --output HDMI-1 --mode 1920x1080",
-          "undo": "xrandr --output HDMI-1 --mode 1920x1200"
-        }
-      ]
     },
     {
       "auto-detach": true,
