@@ -4,7 +4,7 @@
       "auto-detach": true,
       "exclude-global-prep-cmd": false,
       "exit-timeout": 5,
-      "image-path": "desktop.png",
+      "image-path": "/home/gandalf/.config/sunshine/assets/desktop-hires.png",
       "name": "Desktop",
       "prep-cmd": [
         {
@@ -30,7 +30,7 @@
       "wait-all": true
     },
     {
-      "image-path": "desktop.png",
+      "image-path": "/home/gandalf/.config/sunshine/assets/desktop-lowres.png",
       "name": "Low Res Desktop",
       "prep-cmd": [
         {
@@ -45,7 +45,7 @@
       "elevated": false,
       "exclude-global-prep-cmd": false,
       "exit-timeout": 5,
-      "image-path": "",
+      "image-path": "/home/gandalf/.config/sunshine/assets/perfectdark.png",
       "name": "Perfect Dark",
       "output": "",
       "prep-cmd": [
@@ -75,6 +75,7 @@
     },
     {
       "name": "Restart Sunshine",
+      "image-path": "/home/gandalf/.config/sunshine/assets/restart.png",
       "cmd": "/home/gandalf/bin/sunshine-restart",
       "auto-detach": "true",
       "wait-all": "true"
