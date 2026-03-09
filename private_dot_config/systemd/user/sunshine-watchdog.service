@@ -1,0 +1,12 @@
+[Unit]
+Description=Sunshine encoder health watchdog
+After=sunshine.service
+
+[Service]
+Type=simple
+ExecStart=%h/bin/sunshine-watchdog
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=default.target

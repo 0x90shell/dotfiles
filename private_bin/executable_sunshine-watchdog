@@ -1,0 +1,15 @@
+#!/bin/bash
+# Monitor Sunshine for fatal encoder errors and auto-recover.
+# Runs as a companion service, watching the journal in real-time.
+
+journalctl --user -u sunshine -f --no-pager -o cat | while read -r line; do
+    if [[ "$line" == *"Fatal: Unable to find display or encoder"* ]]; then
+        echo "sunshine-watchdog: fatal encoder error detected, recovering..."
+        sleep 2
+        "$HOME/bin/wake-display" || true
+        systemctl --user reset-failed sunshine 2>/dev/null
+        systemctl --user restart sunshine
+        # Cooldown to avoid rapid-fire restarts if display truly won't wake.
+        sleep 60
+    fi
+done
