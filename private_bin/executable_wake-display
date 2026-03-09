@@ -9,19 +9,25 @@ xset s reset
 xdotool mousemove_relative 1 0
 xdotool mousemove_relative -- -1 0
 
-# Wait for the display to actually come online (HDMI can take 1-3s to wake).
-# Sunshine's encoder will fail with "Couldn't find monitor [0]" if we return
-# before the display is reporting as connected.
+# Find the connected output dynamically.
+connected_output=$(xrandr | grep -oP '^\S+ connected' | head -1 | awk '{print $1}')
+
+# Wait for display to come online with an active mode.
+# Sunshine needs "connected <resolution>" not just "connected".
 display_ready=false
 for i in $(seq 1 30); do
-    if xrandr | grep -qE 'HDMI.* connected (primary )?[0-9]'; then
+    if xrandr | grep -qE "^${connected_output:-HDMI}.* connected (primary )?[0-9]"; then
         display_ready=true
         break
+    fi
+    # If connected but no active mode, force one.
+    if [ -n "$connected_output" ] && xrandr | grep -qP "^${connected_output} connected (\(|$)"; then
+        xrandr --output "$connected_output" --auto
     fi
     sleep 0.2
 done
 
 if [ "$display_ready" = false ]; then
-    echo "wake-display: HDMI display did not come online within 6s" >&2
+    echo "wake-display: display did not come online within 6s" >&2
     exit 1
 fi
