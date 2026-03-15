@@ -2449,7 +2449,10 @@ def format_rom_info_report(rom_info: dict, local_hashes: set = None) -> str:
     total = (len(rom_info['base_games']) + len(rom_info['hacks_with_patches']) +
              len(rom_info['hacks_without_patches']) + len(rom_info['translations_skipped']))
     lines.append(f"Total missing: {total}")
-    lines.append(f"  Base games: {len(rom_info['base_games'])}")
+    base_subsets = [g for g in rom_info['base_games'] if '[Subset' in g['title']]
+    base_actual = len(rom_info['base_games']) - len(base_subsets)
+    lines.append(f"  Base games: {base_actual}")
+    lines.append(f"  Subsets: {len(base_subsets)}")
     lines.append(f"  Hacks/homebrew with patches: {len(rom_info['hacks_with_patches'])}")
     lines.append(f"  Hacks/homebrew without patches: {len(rom_info['hacks_without_patches'])}")
     lines.append(f"  Translations skipped: {len(rom_info['translations_skipped'])}")
