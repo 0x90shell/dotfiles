@@ -3526,8 +3526,11 @@ def cmd_check(args):
     rom_dir = Path(args.rom_dir)
 
     if not rom_dir.exists():
-        print(f"Error: Directory not found: {rom_dir}", file=sys.stderr)
+        print(f"Error: Not found: {rom_dir}", file=sys.stderr)
         sys.exit(1)
+
+    # Single file mode: treat as a one-file scan
+    single_file_mode = rom_dir.is_file()
 
     # Find RAHasher
     rahasher = find_rahasher()
@@ -3555,19 +3558,24 @@ def cmd_check(args):
         sys.exit(1)
 
     # Find ROM files
-    rom_files = []
-    for ext in ALL_ROM_EXTENSIONS:
-        rom_files.extend(rom_dir.rglob(f"*{ext}"))
-        # Also check uppercase
-        rom_files.extend(rom_dir.rglob(f"*{ext.upper()}"))
+    if single_file_mode:
+        rom_files = [rom_dir]
+        rom_dir = rom_dir.parent  # For relative path display
+    else:
+        rom_files = []
+        for ext in ALL_ROM_EXTENSIONS:
+            rom_files.extend(rom_dir.rglob(f"*{ext}"))
+            # Also check uppercase
+            rom_files.extend(rom_dir.rglob(f"*{ext.upper()}"))
 
-    # Deduplicate (rglob can return same file for different case patterns)
-    rom_files = list(set(rom_files))
+        # Deduplicate (rglob can return same file for different case patterns)
+        # Filter out directories (e.g. MSU-1 dirs ending in .sfc)
+        rom_files = [f for f in set(rom_files) if f.is_file()]
 
     log_info(f"Found {len(rom_files)} ROM files to check")
 
     if not rom_files:
-        print("No ROM files found in directory.", file=sys.stderr)
+        print("No ROM files found.", file=sys.stderr)
         return
 
     # Check each ROM
@@ -3744,13 +3752,15 @@ def cmd_check(args):
     if rom_info_flag or download_patches_flag or include_owned_patches:
         get_api_key()  # Exits with helpful message if not set
 
+    # Resolve system name (needed for filenames, scores, and patch downloads)
+    system_name = get_system_name(system_id)
+
     # --compare implies --missing-list (need the file to compare against)
     if compare_flag and not missing_list_file:
         missing_list_file = True  # Will be resolved to default filename below
 
     # Resolve default filename for --missing-list if flag used without value
     if missing_list_file is True:
-        system_name = get_system_name(system_id)
         suffix = '-base-missing.txt' if missing_base_only else '-missing.txt'
         missing_list_file = f"{system_name}{suffix}"
 
@@ -3786,6 +3796,21 @@ def cmd_check(args):
             if info['achievements'] > 0
         }
 
+        # Build set of owned titles (all categories) for subset-skip
+        owned_titles = set()
+        for _, info_item, _ in supported:
+            title_item = info_item.get('title', '')
+            cat, base = categorize_title(title_item)
+            owned_titles.add(title_item)
+            if cat == 'subset':
+                owned_titles.add(base)
+        for _, info_item, _ in supported_no_ach:
+            title_item = info_item.get('title', '')
+            cat, base = categorize_title(title_item)
+            owned_titles.add(title_item)
+            if cat == 'subset':
+                owned_titles.add(base)
+
         missing_games = {}
         for gid, info in all_achievable.items():
             if gid in found_game_ids:
@@ -3793,6 +3818,11 @@ def cmd_check(args):
 
             title = info['title']
             title_lower = title.lower()
+
+            # Skip subsets whose parent game is owned
+            cat, base = categorize_title(title)
+            if cat == 'subset' and base in owned_titles:
+                continue
 
             # Apply base-only filter: exclude hacks, demos, subsets
             # Include: base, homebrew, prototype, unlicensed (standalone titles)
@@ -3892,14 +3922,13 @@ def cmd_check(args):
                             'patch_url': v['patch_url'], 'md5': v['md5']})
 
                 if all_patches:
-                    sys_name = get_system_name(system_id)
                     success_count = 0
                     fail_count = 0
                     pbar = make_progress_bar(
                         all_patches, total=len(all_patches),
-                        desc=f"Downloading to {patch_dir}/{sys_name}")
+                        desc=f"Downloading to {patch_dir}/{system_name}")
                     for patch in pbar:
-                        ok, msg = download_patch(patch['patch_url'], patch_dir, sys_name)
+                        ok, msg = download_patch(patch['patch_url'], patch_dir, system_name)
                         if ok:
                             success_count += 1
                         else:
@@ -4969,13 +4998,15 @@ def cmd_dedup(args):
     if rom_info_flag or download_patches_flag:
         get_api_key()  # Exits with helpful message if not set
 
+    # Resolve system name (needed for filenames, scores, and patch downloads)
+    system_name = get_system_name(system_id)
+
     # --compare implies --missing-list (need the file to compare against)
     if compare_flag and not missing_list_file:
         missing_list_file = True  # Will be resolved to default filename below
 
     # Resolve default filename for --missing-list if flag used without value
     if missing_list_file is True:
-        system_name = get_system_name(system_id)
         suffix = '-base-missing.txt' if missing_base_only else '-missing.txt'
         missing_list_file = f"{system_name}{suffix}"
 
@@ -4988,15 +5019,15 @@ def cmd_dedup(args):
             if info.get('achievements', 0) > 0
         }
 
-        # Build set of base game titles user owns
-        owned_base_titles = set()
+        # Build set of owned titles (all categories) for subset-skip
+        owned_titles = set()
         for gid in games_found.keys():
             info = game_info.get(gid, {})
-            cat, base = categorize_title(info.get('title', ''))
-            if cat == 'base':
-                owned_base_titles.add(info.get('title', ''))
-            elif cat == 'subset':
-                owned_base_titles.add(base)
+            title = info.get('title', '')
+            cat, base = categorize_title(title)
+            owned_titles.add(title)       # Always add the title itself
+            if cat == 'subset':
+                owned_titles.add(base)    # Also track subset's parent
 
         # Find missing games
         missing_games = {}
@@ -5010,7 +5041,7 @@ def cmd_dedup(args):
             cat, base = categorize_title(title)
 
             # Skip subsets if you own the base game (you can already earn those achievements)
-            if cat == 'subset' and base in owned_base_titles:
+            if cat == 'subset' and base in owned_titles:
                 subsets_owned_base.append((gid, info))
                 continue
 
@@ -5116,14 +5147,13 @@ def cmd_dedup(args):
                     all_patches.extend(g.get('patches', []))
 
                 if all_patches:
-                    sys_name = get_system_name(system_id)
                     success_count = 0
                     fail_count = 0
                     pbar = make_progress_bar(
                         all_patches, total=len(all_patches),
-                        desc=f"Downloading to {patch_dir}/{sys_name}")
+                        desc=f"Downloading to {patch_dir}/{system_name}")
                     for patch in pbar:
-                        ok, msg = download_patch(patch['patch_url'], patch_dir, sys_name)
+                        ok, msg = download_patch(patch['patch_url'], patch_dir, system_name)
                         if ok:
                             success_count += 1
                         else:
@@ -5288,7 +5318,7 @@ Cache:
     sub_check = subparsers.add_parser(
         'check', help='Check ROMs against database (auto-pulls if needed)')
     sub_check.add_argument('system', help='System ID or name (e.g., 3, snes, "super nintendo")')
-    sub_check.add_argument('rom_dir', help='ROM directory to scan')
+    sub_check.add_argument('rom_dir', help='ROM file or directory to scan')
     sub_check.add_argument('-v', '--verbose', action='store_true',
                            help='Show detailed output (RAHasher errors, no-achievement games)')
     sub_check.add_argument('--full', action='store_true',
