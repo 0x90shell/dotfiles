@@ -51,6 +51,8 @@ bin/.jstimeout.devices
 bin/.jstimeout-source/
 bin/wake-display
 bin/yaycache
+.claude/
+.config/Claude
 .config/ra_tool
 .config/xfce4/panel/datetime-12.rc
 .config/xfce4/panel/launcher-23
