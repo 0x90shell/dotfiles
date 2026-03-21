@@ -3269,13 +3269,14 @@ def build_hash_lookup(games: list) -> dict:
 
 def print_summary_line(total_roms: int, supported: int, unsupported: int,
                        achievements: int, points: int, duplicates: int = 0,
-                       total_achievable: int = 0, unique_games: int = 0):
+                       total_achievable: int = 0, unique_games: int = 0,
+                       skip_collection: bool = False):
     """Print a compact summary line to stderr."""
     dup_str = f", {duplicates} dupes" if duplicates > 0 else ""
     print(f"\n✓ Scanned {total_roms} ROMs → {supported} supported, "
           f"{unsupported} unsupported{dup_str}", file=sys.stderr)
     print(f"  Achievable: {achievements} achievements ({points} pts)", file=sys.stderr)
-    if total_achievable > 0:
+    if total_achievable > 0 and not skip_collection:
         # Use unique_games for collection percentage if provided, else fall back to supported
         games = unique_games if unique_games else supported
         pct = 100 * games / total_achievable
@@ -3705,14 +3706,25 @@ def cmd_check(args):
     # Print summary to stderr
     total_ach = sum(info['achievements'] for _, info, _ in supported)
     total_pts = sum(info['points'] for _, info, _ in supported)
+    # Defer collection line if --missing will compute accurate totals
+    show_missing = getattr(args, 'missing', False)
+    missing_base_only = getattr(args, 'missing_base_only', False)
+    needs_missing = show_missing or missing_base_only or getattr(args, 'missing_list', None)
+    # Count only games with achievements AND hashes for accurate collection %
+    games_list = cached.get('games', [])
+    achievable_count = sum(
+        1 for g in games_list
+        if g.get('NumAchievements', 0) > 0 and len(g.get('Hashes', [])) > 0
+    )
     print_summary_line(
         total_roms=len(rom_files),
         supported=len(supported) + len(supported_no_ach),
         unsupported=len(unsupported),
         achievements=total_ach,
         points=total_pts,
-        total_achievable=cached.get('game_count', 0),
-        unique_games=len(seen_game_ids)
+        total_achievable=achievable_count if achievable_count else cached.get('game_count', 0),
+        unique_games=len(seen_game_ids),
+        skip_collection=needs_missing
     )
 
     # Copy matched ROMs if --copy-to specified (copies ALL matches)
@@ -3849,6 +3861,15 @@ def cmd_check(args):
         # Calculate totals
         missing_ach = sum(g['achievements'] for g in missing_games.values())
         missing_pts = sum(g['points'] for g in missing_games.values())
+
+        # Print accurate collection line: matched + actually missing = true denominator
+        # This excludes unreachable games (0 hashes) and subset-skipped titles
+        coll_total = len(seen_game_ids) + len(missing_games)
+        coll_matched = len(seen_game_ids)
+        if coll_total > 0:
+            coll_pct = 100 * coll_matched / coll_total
+            print(f"  Collection: {coll_matched}/{coll_total} RA titles ({coll_pct:.1f}%)",
+                  file=sys.stderr)
 
         # Sort by achievements descending
         sorted_missing = sorted(
