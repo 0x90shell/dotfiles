@@ -592,12 +592,15 @@ kconfig
 kconfig5
 kconfigwidgets
 kconfigwidgets5
+kcontacts
 kcoreaddons
 kcoreaddons5
 kcrash
 kcrash5
 kdbusaddons
 kdbusaddons5
+kdeclarative
+kdeconnect
 keepassxc
 kernel-install-for-dracut
 kernel-modules-hook
@@ -630,6 +633,7 @@ kodi-addon-visualization-waveform
 kodi-platform
 kolourpaint
 kparts
+kpeople
 krb5
 krita
 krita-ai-tools
@@ -638,6 +642,7 @@ ksanecore
 kseexpr
 kservice
 kservice5
+kstatusnotifieritem
 ksvg
 ktextwidgets
 kwallet
@@ -917,6 +922,7 @@ libevent
 libexif
 libexttextcat
 libfabric
+libfakekey
 libfdk-aac
 libffi
 libfilezilla
@@ -1329,6 +1335,7 @@ mkvtoolnix-gui
 mlt
 mobile-broadband-provider-info
 modemmanager
+modemmanager-qt
 mono
 moonlight-qt
 mousepad
@@ -1554,6 +1561,7 @@ psensor
 psmisc
 psutils
 pugixml
+pulseaudio-qt
 purpose
 pv
 pybind11
@@ -1875,11 +1883,15 @@ qt5ct
 qt6-5compat
 qt6-base
 qt6-charts
+qt6-connectivity
 qt6-declarative
+qt6-graphs
 qt6-imageformats
 qt6-multimedia
 qt6-multimedia-ffmpeg
 qt6-positioning
+qt6-quick3d
+qt6-quicktimeline
 qt6-sensors
 qt6-shadertools
 qt6-speech

@@ -14,6 +14,9 @@ echo "Deploying firewalld services for ${HOST}..."
 # Ensure base services are enabled
 sudo firewall-cmd --permanent --add-service=ssh 2>/dev/null || true
 sudo firewall-cmd --permanent --add-service=dhcpv6-client 2>/dev/null || true
+{{- if eq .chezmoi.hostname "Excalibur" }}
+sudo firewall-cmd --permanent --add-service=kdeconnect 2>/dev/null || true
+{{- end }}
 
 # Copy custom service files if they exist
 if [[ -d "$SERVICE_DIR" ]]; then
