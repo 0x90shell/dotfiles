@@ -9,7 +9,7 @@ bin/test-setup*
 .config/autostart/redshift-gtk.desktop
 {{ else }}
 .config/systemd/user/esde-backup.service
-.config/systemd/user/screenshot-optimize.service
+.config/systemd/user/optimize-ra*
 .config/systemd/user/emu-backup.service
 .config/systemd/user/evsieve-gamepad.service
 .config/systemd/user/jstimeout.service
@@ -22,6 +22,8 @@ bin/test-setup*
 {{ end }}
 {{ if ne .chezmoi.hostname "Excalibur" }}
 .config/kastsrc  
+.config/systemd/user/dnd*
+{{ else }}
 {{ end }}
 {{- if eq .chezmoi.osRelease.id "arch" "endeavouros" }}
 .vim/plugins/

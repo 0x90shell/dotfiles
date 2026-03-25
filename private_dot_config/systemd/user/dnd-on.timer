@@ -1,0 +1,11 @@
+[Unit]
+Description=Enable XFCE DND at bedtime
+Requires=dnd-on.service
+
+[Timer]
+OnCalendar=*-*-* 22:00:00
+Persistent=true
+Unit=dnd-on.service
+
+[Install]
+WantedBy=timers.target

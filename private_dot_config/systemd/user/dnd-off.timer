@@ -1,0 +1,11 @@
+[Unit]
+Description=Disable XFCE DND at wake time
+Requires=dnd-off.service
+
+[Timer]
+OnCalendar=*-*-* 07:00:00
+Persistent=true
+Unit=dnd-off.service
+
+[Install]
+WantedBy=timers.target

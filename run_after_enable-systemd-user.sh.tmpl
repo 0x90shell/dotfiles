@@ -1,8 +1,10 @@
 #!/bin/bash
-{{ if ne .chezmoi.hostname "Glamdring" }}
+{{ if not (or (eq .chezmoi.hostname "Glamdring") (eq .chezmoi.hostname "Excalibur")) }}
 exit 0
 {{ end }}
 systemctl --user daemon-reload
+
+{{ if eq .chezmoi.hostname "Glamdring" }}
 systemctl --user enable --now btpowerfix.service
 systemctl --user enable --now jslisten.service
 systemctl --user enable --now jstimeout.service
@@ -10,4 +12,9 @@ systemctl --user enable --now daily@emu-backup.timer
 systemctl --user enable --now weekly@optimize-ra-screenshots.timer
 systemctl --user enable --now optimize-ra-input.path
 systemctl --user enable --now sunshine.service
+{{ end }}
 
+{{ if eq .chezmoi.hostname "Excalibur" }}
+systemctl --user enable --now dnd-on.timer
+systemctl --user enable --now dnd-off.timer
+{{ end }}

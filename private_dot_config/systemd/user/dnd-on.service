@@ -1,0 +1,8 @@
+[Unit]
+Description=Enable XFCE Do Not Disturb (bedtime)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/xfconf-query -c xfce4-notifyd -p /do-not-disturb -s true
