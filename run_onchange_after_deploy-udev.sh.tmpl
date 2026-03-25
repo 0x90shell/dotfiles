@@ -22,6 +22,7 @@ fi
 
 sudo udevadm control --reload-rules
 sudo udevadm trigger --subsystem-match=input
+sudo udevadm trigger --subsystem-match=block
 
 echo "Udev rules reloaded."
 {{- end }}

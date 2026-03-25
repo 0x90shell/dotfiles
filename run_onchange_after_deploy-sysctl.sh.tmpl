@@ -1,0 +1,26 @@
+#!/bin/bash
+{{- range (glob (joinPath .chezmoi.sourceDir "ignore-etc" (.chezmoi.hostname | lower) "sysctl.d" "*")) }}
+# {{ . | include | sha256sum }}
+{{- end }}
+{{- if or (eq .chezmoi.hostname "Glamdring") (eq .chezmoi.hostname "Excalibur") }}
+set -euo pipefail
+
+CHEZMOI_SOURCE="{{ .chezmoi.sourceDir }}"
+HOST="{{ .chezmoi.hostname | lower }}"
+SYSCTL_DIR="${CHEZMOI_SOURCE}/ignore-etc/${HOST}/sysctl.d"
+
+echo "Deploying sysctl configs for ${HOST}..."
+
+if [[ -d "$SYSCTL_DIR" ]]; then
+    for conf in "${SYSCTL_DIR}"/*.conf; do
+        [[ -f "$conf" ]] || continue
+        conf_name=$(basename "$conf")
+        sudo cp "$conf" /etc/sysctl.d/
+        echo "  Added: $conf_name"
+    done
+fi
+
+sudo sysctl --system
+
+echo "Sysctl configs reloaded."
+{{- end }}
