@@ -12,9 +12,11 @@ systemctl --user enable --now daily@emu-backup.timer
 systemctl --user enable --now weekly@optimize-ra-screenshots.timer
 systemctl --user enable --now optimize-ra-input.path
 systemctl --user enable --now sunshine.service
+systemctl --user enable --now playerctld
 {{ end }}
 
 {{ if eq .chezmoi.hostname "Excalibur" }}
 systemctl --user enable --now dnd-on.timer
 systemctl --user enable --now dnd-off.timer
+systemctl --user enable --now playerctld
 {{ end }}

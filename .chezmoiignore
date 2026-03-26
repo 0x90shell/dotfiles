@@ -11,10 +11,6 @@ bin/test-setup*
 .config/systemd/user/esde-backup.service
 .config/systemd/user/optimize-ra*
 .config/systemd/user/emu-backup.service
-.config/systemd/user/evsieve-gamepad.service
-.config/systemd/user/jstimeout.service
-.config/systemd/user/sunshine*
-.config/systemd/user/btpowerfix.service
 .config/systemd/user/default.target.wants/weekly@esde-backup.timer
 .config/sunshine/
 .kodi/
@@ -22,7 +18,6 @@ bin/test-setup*
 {{ end }}
 {{ if ne .chezmoi.hostname "Excalibur" }}
 .config/kastsrc  
-.config/systemd/user/dnd*
 {{ else }}
 {{ end }}
 {{- if eq .chezmoi.osRelease.id "arch" "endeavouros" }}
