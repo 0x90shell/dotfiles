@@ -6,7 +6,7 @@ MODEL="${WHISPER_MODEL:-$HOME/.local/share/whisper/ggml-small.en.bin}"
 # Uses whatever mic is currently set as default in pavucontrol/pipewire
 PULSE_SOURCE="@DEFAULT_SOURCE@"
 SILENCE_THRESH="3%"    # raise if it hangs, lower if it cuts early
-SILENCE_DURATION="2.0" # seconds of silence before auto-stop
+SILENCE_DURATION="5.0" # seconds of silence before auto-stop
 MAX_DURATION="120"     # hard cap in seconds (safety net)
 PIDFILE="/tmp/whisper-dictate.pid"
 WAVFILE="/tmp/whisper-dictate.wav"
