@@ -59,6 +59,7 @@ bin/yaycache
 .config/autostart/bt-headset-autoconnect.desktop
 .config/autostart/dropbox.desktop
 .config/autostart/org.keepassxc.KeePassXC.desktop
+.config/autostart/xfwm4-safety.desktop
 .config/makepkg.conf
 .config/VacuumTube/config.json  
 .local/share/perfectdark
