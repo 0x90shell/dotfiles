@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=xfwm4 Safety Net
+Comment=Ensures xfwm4 is running at session start
+Exec=sh -c 'sleep 3; pgrep -x xfwm4 || xfwm4 --replace'
+OnlyShowIn=XFCE;
+X-XFCE-Autostart-Override=true
