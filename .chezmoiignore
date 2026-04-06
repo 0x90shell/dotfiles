@@ -63,5 +63,6 @@ bin/yaycache
 .config/gamepad-osk/config.toml
 .config/makepkg.conf
 .config/VacuumTube/config.json  
+.config/yay/config.json
 .local/share/perfectdark
 {{ end }}
