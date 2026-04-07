@@ -1,0 +1,5 @@
+# Shell dialect (bash unless overridden per-file)
+shell=bash
+
+# External sources (allow sourced files)
+external-sources=true

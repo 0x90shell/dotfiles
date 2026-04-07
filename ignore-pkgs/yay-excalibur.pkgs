@@ -10,6 +10,8 @@ adobe-source-code-pro-fonts
 adobe-source-han-sans-cn-fonts
 adobe-source-han-sans-jp-fonts
 adobe-source-han-sans-kr-fonts
+adobe-source-sans-fonts
+adobe-source-serif-fonts
 adwaita-cursors
 adwaita-fonts
 adwaita-icon-theme
@@ -127,6 +129,7 @@ chromaprint
 chromium
 chrono-date
 cifs-utils
+cinnamon-desktop
 clang
 clang21
 claude-code
@@ -214,7 +217,6 @@ doxygen
 dracut
 dropbox
 dropbox-cli
-dsnote
 dtc
 duckstation-qt-bin
 duf
@@ -233,6 +235,7 @@ elementary-icon-theme
 elfutils
 ell
 emoji-keyboard-bin
+emote
 emulationstation-de
 enchant
 endeavouros-branding
@@ -258,6 +261,7 @@ etherwake
 ethtool
 evtest
 ex-vi-compat
+exempi
 exfatprogs
 exiv2
 exo
@@ -274,6 +278,7 @@ fast_float
 fceux
 fcitx5
 fd
+feh
 ffmpeg
 ffmpeg4.4
 ffmpegthumbnailer
@@ -298,6 +303,7 @@ fluidsynth
 fmt
 fmt9
 fontconfig
+fontforge
 foomatic-db
 foomatic-db-engine
 foomatic-db-gutenprint-ppds
@@ -321,6 +327,7 @@ galculator
 gamemode
 gamescope
 garcon
+gavl
 gawk
 gc
 gcc
@@ -343,6 +350,7 @@ gfxstream
 ghc-libs
 ghostscript
 giflib
+gimp
 git
 git-filter-repo
 github-cli
@@ -415,7 +423,7 @@ gtk-vnc
 gtk2
 gtk3
 gtk4
-gtkhash
+gtkhash-nemo
 gtkmm
 gtkmm-4.0
 gtkmm3
@@ -537,6 +545,7 @@ imath
 imlib2
 inetutils
 iniparser
+inkscape
 innoextract
 intel-oneapi-common
 intel-oneapi-mkl
@@ -546,7 +555,7 @@ intel-oneapi-tcm
 intltool
 inxi
 iproute2
-iptables-nft
+iptables
 iputils
 ipython
 iso-codes
@@ -661,6 +670,7 @@ leancrypto
 lensfun
 less
 level-zero-loader
+lib2geom
 lib32-aalib
 lib32-acl
 lib32-alsa-lib
@@ -972,6 +982,7 @@ libjpeg-turbo
 libjpeg6-turbo
 libjxl
 libkate
+libkdcraw
 libkdcraw5
 libkexiv2
 libkeybinder3
@@ -981,6 +992,7 @@ liblangtag
 liblc3
 libldac
 libldap
+libliftoff
 liblqr
 liblrdf
 liblsan
@@ -1165,6 +1177,7 @@ libtracefs
 libtsan
 libubsan
 libunibreak
+libuninameslist
 libunistring
 libunrar
 libunwind
@@ -1269,6 +1282,7 @@ linux-zen
 linux-zen-headers
 lirc
 live-media
+llama.cpp-vulkan
 lld
 llhttp
 llvm
@@ -1286,6 +1300,7 @@ lsscsi
 lttng-ust2.12
 lua
 lua51
+lua54
 luajit
 luit
 lutris
@@ -1359,6 +1374,16 @@ navi
 ncurses
 ncurses5-compat-libs
 ndctl
+nemo
+nemo-audio-tab
+nemo-compare
+nemo-emblems
+nemo-fileroller
+nemo-python
+nemo-repairer
+nemo-share
+nemo-terminal
+nemo-theme-glacier
 neofetch
 neon
 nestopia
@@ -1471,6 +1496,7 @@ pcre
 pcre2
 pcsclite
 pcsx2-latest-bin
+pdfarranger
 perl
 perl-alien-build
 perl-alien-libxml2
@@ -1544,6 +1570,7 @@ popt
 portaudio
 portmidi
 postgresql-libs
+potrace
 power-profiles-daemon
 powershell-bin
 powertop
@@ -1578,6 +1605,7 @@ python-annotated-doc
 python-annotated-types
 python-anyio
 python-aotriton
+python-appdirs
 python-apsw
 python-argcomplete
 python-asttokens
@@ -1587,6 +1615,7 @@ python-beautifulsoup4
 python-brotli
 python-brotlicffi
 python-build
+python-cachecontrol
 python-cairo
 python-capng
 python-certifi
@@ -1613,6 +1642,7 @@ python-decorator
 python-defusedxml
 python-deprecated
 python-dill
+python-distlib
 python-distro
 python-dnspython
 python-entrypoints
@@ -1701,8 +1731,10 @@ python-pathvalidate
 python-pdftotext
 python-pefile
 python-pexpect
+python-pikepdf
 python-pillow
 python-pip
+python-pipenv
 python-pipx
 python-pkg_resources
 python-platformdirs
@@ -1733,6 +1765,7 @@ python-pydantic
 python-pydantic-core
 python-pyelftools
 python-pyflakes
+python-pygame
 python-pygments
 python-pykakasi
 python-pyparsing
@@ -1744,7 +1777,9 @@ python-pyqt5-sip
 python-pyqt6
 python-pyqt6-sip
 python-pyqt6-webengine
+python-pyserial
 python-pytest
+python-python-discovery
 python-pytorch-rocm
 python-pytz
 python-pyxdg
@@ -1754,6 +1789,7 @@ python-reportlab
 python-requests
 python-rich
 python-ruamel.yaml.clib
+python-ruff
 python-scipy
 python-semantic-version
 python-send2trash
@@ -1776,6 +1812,7 @@ python-sympy
 python-termcolor
 python-texttable
 python-tiktoken
+python-tinycss2
 python-tomli
 python-tomlkit
 python-torchaudio-rocm
@@ -1794,7 +1831,10 @@ python-urwid
 python-userpath
 python-validate-pyproject
 python-validators
+python-vcs-versioning
 python-vdf
+python-virtualenv
+python-virtualenv-clone
 python-wcwidth
 python-webencodings
 python-wheel
@@ -1909,6 +1949,7 @@ quakespasm-spiked-git
 quazip-qt5
 quazip-qt6
 radeontop
+ragel
 range-v3
 rapidjson
 rapidyaml
@@ -2012,6 +2053,7 @@ ruby-syslog
 ruby-test-unit
 ruby-typeprof
 rubygems
+ruff
 run-parts
 runc
 rust
@@ -2020,10 +2062,12 @@ rutabaga-ffi
 s-nail
 s-tui
 s2n-tls
+samba
 sameboy
 sane
 sbc
 scdoc
+scour
 scrcpy
 sd
 sdl12-compat
@@ -2035,6 +2079,7 @@ sdl2_net
 sdl2_pango
 sdl2_ttf
 sdl3
+sdl3_ttf
 sdl_gfx
 sdl_image
 sdl_mixer
@@ -2115,6 +2160,7 @@ supertux
 supertuxkart
 svt-av1
 svt-hevc
+sway
 swig
 syncthing
 syndication
@@ -2160,10 +2206,27 @@ tpm2-tss
 trash-cli
 tree
 tslib
+ttf-anonymous-pro
 ttf-bitstream-vera
+ttf-caladea
+ttf-croscore
 ttf-dejavu
+ttf-fira-mono
+ttf-fira-sans
+ttf-google-fonts-git
+ttf-inconsolata
+ttf-lato
 ttf-liberation
+ttf-merriweather
+ttf-merriweather-sans
 ttf-opensans
+ttf-oswald
+ttf-promptfont
+ttf-quintessential
+ttf-roboto
+ttf-roboto-mono
+ttf-signika
+ttf-ubuntu-font-family
 tumbler
 tuxpaint
 tuxpaint-config
@@ -2312,6 +2375,7 @@ webrtc-audio-processing-1
 welcome
 wget
 which
+whisper.cpp-vulkan
 whois
 wildmidi
 wine-gecko
@@ -2319,6 +2383,8 @@ wine-mono
 wine-staging
 winetricks
 wireplumber
+wlr-protocols
+wlroots0.19
 wmctrl
 woff2
 wolfssl
@@ -2407,6 +2473,7 @@ xorg-xsetroot
 xorg-xwayland
 xorg-xwininfo
 xorgproto
+xournalpp
 xrick
 xterm
 xvidcore

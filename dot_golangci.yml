@@ -1,0 +1,29 @@
+linters:
+  enable:
+    # bugs
+    - bodyclose
+    - nilerr
+    - nilnesserr
+    - sqlclosecheck
+    - rowserrcheck
+    - contextcheck
+    - durationcheck
+    - errorlint
+    - gosec
+    - makezero
+    - noctx
+    - gocheckcompilerdirectives
+    # quality
+    - unconvert
+    - goprintffuncname
+    - misspell
+    - gocritic
+    - revive
+    - unparam
+    - wastedassign
+    - asciicheck
+    - bidichk
+    - exhaustive
+    - intrange
+    - modernize
+    - perfsprint
