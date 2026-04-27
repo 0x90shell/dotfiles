@@ -1,0 +1,27 @@
+#!/bin/bash
+# Pull X/Wayland env from the live session into the systemd --user manager,
+# so graphical-session-bound user services can inherit DISPLAY/XAUTHORITY/etc.
+# Used as ExecStartPre by user units that need a working display.
+
+set -u
+
+VARS=(DISPLAY XAUTHORITY WAYLAND_DISPLAY XDG_SESSION_TYPE)
+
+# Find the most recent session leader for this user.
+# Try common DEs/compositors; fall back to anything providing the vars.
+for proc in xfce4-session gnome-session sway hyprland Hyprland kwin_x11 kwin_wayland xinit; do
+  pid=$(pgrep -u "$USER" -nx "$proc" 2>/dev/null) && break
+done
+
+if [[ -z "${pid:-}" ]]; then
+  echo "import-session-env: no graphical session process found" >&2
+  exit 0
+fi
+
+while IFS= read -r -d '' kv; do
+  for v in "${VARS[@]}"; do
+    [[ "$kv" == "$v="* ]] && export "$kv"
+  done
+done < "/proc/$pid/environ"
+
+exec systemctl --user import-environment "${VARS[@]}"
