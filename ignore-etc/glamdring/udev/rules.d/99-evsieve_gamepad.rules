@@ -1,1 +1,9 @@
-SUBSYSTEM=="input", KERNEL=="event*", SUBSYSTEMS=="hid", ENV{ID_INPUT_JOYSTICK}=="1", SYMLINK+="input/gamepad0"
+# Symlink the active game controller to /dev/input/gamepad0 for evsieve and
+# gamepad-osk. ID_INPUT_JOYSTICK is the precise classifier; SUBSYSTEMS is
+# intentionally NOT restricted to "hid" so this also catches uinput-direct
+# Sunshine virtual gamepads (Sunshine X-Box One/Nintendo emulation).
+#
+# The ATTRS{name}!= clause excludes Steam Input's downstream virtuals
+# (Microsoft X-Box 360 pad 0/1/...). Real wired Xbox 360 controllers are
+# named "Microsoft X-Box 360 pad" with no index suffix and still match.
+SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_JOYSTICK}=="1", ATTRS{name}!="Microsoft X-Box 360 pad [0-9]*", SYMLINK+="input/gamepad0"

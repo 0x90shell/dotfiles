@@ -10,6 +10,10 @@
         {
           "do": "/home/gandalf/bin/wake-display",
           "undo": ""
+        },
+        {
+          "do": "/home/gandalf/bin/gamepad-resync --bg",
+          "undo": ""
         }
       ],
       "wait-all": true
@@ -25,6 +29,10 @@
         {
           "do": "/home/gandalf/bin/wake-display",
           "undo": "killall es-de"
+        },
+        {
+          "do": "/home/gandalf/bin/gamepad-resync --bg",
+          "undo": ""
         }
       ],
       "wait-all": true
@@ -41,6 +49,10 @@
       "prep-cmd": [
         {
           "do": "/home/gandalf/bin/wake-display",
+          "undo": ""
+        },
+        {
+          "do": "/home/gandalf/bin/gamepad-resync --bg",
           "undo": ""
         }
       ],
@@ -59,6 +71,10 @@
         {
           "do": "/home/gandalf/bin/wake-display",
           "undo": "setsid steam steam://close/bigpicture"
+        },
+        {
+          "do": "/home/gandalf/bin/gamepad-resync --bg",
+          "undo": ""
         }
       ],
       "wait-all": true

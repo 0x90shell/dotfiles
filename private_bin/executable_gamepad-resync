@@ -1,0 +1,49 @@
+#!/bin/bash
+# gamepad-resync — restart evsieve-gamepad and gamepad-osk so they re-resolve
+# /dev/input/gamepad0. Both services hold their fd open across symlink swaps;
+# this forces them to bind to whichever device currently holds the symlink.
+#
+# Use cases:
+#   1. Manual: a fresh controller was just attached, rebind services to it.
+#      $ gamepad-resync
+#
+#   2. Sunshine prep-cmd: when launching ES-DE / Steam / etc. via Sunshine,
+#      the streamed Sunshine virtual gamepad needs to capture hotkeys.
+#      Sunshine creates the virtual *during* stream establishment (after
+#      prep-cmd starts running), so we delay 3 s and detach from prep-cmd
+#      so the launch itself isn't blocked.
+#      apps.json: "do": "/home/gandalf/bin/gamepad-resync --bg"
+#
+#   3. Sunshine "Resync Controller" app: a one-shot inside an active stream.
+#      The virtual already exists, so no delay needed.
+#      apps.json: "cmd": "/home/gandalf/bin/gamepad-resync"
+
+detach=0
+delay=0
+
+for arg in "$@"; do
+    case "$arg" in
+        --bg)   detach=1; delay=3 ;;  # for prep-cmd: detach + wait for Sunshine virtual
+        --wait) delay=3 ;;            # delay only, foreground
+        --help|-h)
+            sed -n '2,/^$/p' "$0" | sed 's/^# \?//'
+            exit 0
+            ;;
+    esac
+done
+
+if [[ $detach -eq 1 ]]; then
+    # Re-exec self detached so prep-cmd returns immediately.
+    setsid -f "$0" --wait >/dev/null 2>&1 < /dev/null
+    exit 0
+fi
+
+[[ $delay -gt 0 ]] && sleep "$delay"
+
+# Wait briefly for /dev/input/gamepad0 to exist (handles racing udev on hot-add).
+for _ in {1..10}; do
+    [[ -e /dev/input/gamepad0 ]] && break
+    sleep 0.2
+done
+
+systemctl --user restart evsieve-gamepad gamepad-osk
