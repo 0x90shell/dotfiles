@@ -6,6 +6,7 @@ aalib
 abseil-cpp
 accountsservice
 acl
+ada
 adobe-source-han-sans-cn-fonts
 adobe-source-han-sans-jp-fonts
 adobe-source-han-sans-kr-fonts
@@ -91,6 +92,7 @@ cairo
 cairomm
 cairomm-1.16
 cantarell-fonts
+catch2
 catfish
 cblas
 ccache
@@ -99,7 +101,6 @@ cemu-bin
 cheat
 chezmoi
 chromaprint
-chromium-bsu
 chrono-date
 cifs-utils
 citra-canary-bin
@@ -115,6 +116,8 @@ confuse
 containerd
 coreutils
 cpio
+cpp-httplib
+cpp-jwt
 cppdap
 cpu-checker-bzr
 cpupower
@@ -122,6 +125,7 @@ crack-attack
 cryptsetup
 csfml
 csvquote-git
+cubeb
 cups
 cups-filters
 curl
@@ -166,6 +170,7 @@ dotnet-sdk
 dotnet-targeting-pack
 double-conversion
 downgrade
+doxygen
 dracut
 dropbox
 dropbox-cli
@@ -175,12 +180,14 @@ duf
 duktape
 dwarfs
 e2fsprogs
+eden-git
 efibootmgr
 efitools
 efivar
 electron
 electron38
 electron39
+electron41
 elementary-icon-theme
 elfutils
 ell
@@ -263,9 +270,12 @@ fuse-common
 fuse-overlayfs
 fuse2
 fuse3
+fvs2
 fzf
+fzssh
 galculator
 gamemode
+gamepad-osk-git
 gamescope
 garcon
 gawk
@@ -288,6 +298,7 @@ gettext
 gflags
 ghc-libs
 ghostscript
+gi-docgen
 giflib
 git
 glances
@@ -295,6 +306,7 @@ glew
 glfw
 glib-networking
 glib2
+glib2-devel
 glibc
 glibmm
 glibmm-2.68
@@ -319,6 +331,7 @@ golangci-lint
 google-glog
 gopher64-bin
 gparted
+gperf
 gperftools
 gpgme
 gpgmepp
@@ -642,7 +655,7 @@ innoextract
 intltool
 inxi
 iproute2
-iptables-nft
+iptables
 iputils
 iso-codes
 it87-dkms-git
@@ -738,6 +751,7 @@ lcms2
 ldb
 leancrypto
 lensfun
+leptonica
 less
 lib32-alsa-lib
 lib32-alsa-plugins
@@ -1006,6 +1020,7 @@ libjpeg-turbo
 libjuice
 libjxl
 libkate
+libkdcraw
 libkdcraw5
 libkeybinder3
 libksane
@@ -1292,6 +1307,7 @@ lirc
 live-media
 lld
 llhttp
+llvm
 llvm-libs
 lm_sensors
 lmdb
@@ -1304,6 +1320,8 @@ lttng-ust2.12
 lua
 lua-lpeg
 lua51
+lua54
+lua54-lpeg
 luajit
 luit
 lutris
@@ -1407,6 +1425,7 @@ oniguruma
 openal
 openarena
 openbor-bin
+opencl-headers
 opencolorio
 openconnect
 opencore-amr
@@ -1469,10 +1488,12 @@ pcsclite
 pcsx2-latest-bin
 perfect-dark-git
 perl
+perl-class-inspector
 perl-clone
 perl-encode-locale
 perl-error
 perl-file-listing
+perl-file-sharedir
 perl-html-parser
 perl-html-tagset
 perl-http-cookiejar
@@ -1592,6 +1613,7 @@ python-jaraco.text
 python-jinja
 python-kiwisolver
 python-lxml
+python-magic
 python-mako
 python-markdown
 python-markupsafe
@@ -1631,6 +1653,7 @@ python-pyparsing
 python-pyproject-hooks
 python-pyqt5
 python-pyqt5-sip
+python-pytesseract
 python-pytest
 python-pytz
 python-pyxdg
@@ -1642,6 +1665,7 @@ python-setuptools-scm
 python-shtab
 python-simplejson
 python-six
+python-smartypants
 python-sortedcontainers
 python-soupsieve
 python-steamgriddb
@@ -1651,9 +1675,11 @@ python-tqdm
 python-typeguard
 python-typing-inspection
 python-typing_extensions
+python-typogrify
 python-urllib3
 python-urwid
 python-userpath
+python-vcs-versioning
 python-vdf
 python-wcwidth
 python-webencodings
@@ -1688,21 +1714,29 @@ qt6-5compat
 qt6-base
 qt6-charts
 qt6-declarative
+qt6-graphs
 qt6-imageformats
 qt6-multimedia
 qt6-multimedia-ffmpeg
+qt6-positioning
+qt6-quick3d
+qt6-quicktimeline
 qt6-sensors
 qt6-shadertools
 qt6-speech
 qt6-svg
+qt6-tools
 qt6-translations
 qt6-wayland
+qt6-webchannel
+qt6-webengine
 qt6-websockets
 qtkeychain-qt6
 quake3e-git
 quakespasm
 quakespasm-spiked-git
 quazip-qt5
+quazip-qt6
 radeontop
 range-v3
 rapidjson
@@ -1711,6 +1745,7 @@ rasqal
 rav1e
 raze
 rclone
+re2
 readline
 rebuild-detector
 redland
@@ -1718,11 +1753,13 @@ reflector
 reflector-simple
 reiserfsprogs
 remoteplaywhatever
+renderdoc
 retro-crisis-gdv-ntsc
 retroarch
 retroarch-assets-glui
 retroarch-assets-ozone
 retroarch-assets-xmb
+rgbds
 rhash
 ripgrep
 ristretto
@@ -1807,6 +1844,7 @@ sdl2_net
 sdl2_pango
 sdl2_ttf
 sdl3
+sdl3_ttf
 sdl_gfx
 sdl_image
 sdl_mixer
@@ -1849,6 +1887,7 @@ speex
 speexdsp
 spice-gtk
 spice-protocol
+spirv-headers
 spirv-tools
 spotify
 sqlite
@@ -1867,7 +1906,6 @@ stoken
 strace
 stratagus
 stress
-sudachi
 sudo
 suitesparse
 sunshine
@@ -1893,6 +1931,9 @@ tdb
 teeworlds
 telepathy-glib
 terminator
+tesseract
+tesseract-data-eng
+tesseract-data-osd
 tevent
 texinfo
 the-dark-mod-bin
@@ -1924,6 +1965,7 @@ ttf-bitstream-vera
 ttf-dejavu
 ttf-liberation
 ttf-opensans
+ttf-promptfont
 tumbler
 tuxmath
 tuxpaint
@@ -1934,6 +1976,7 @@ twolame
 tzdata
 uchardet
 udisks2
+unifdef
 unrar
 unzip
 upower
@@ -2052,6 +2095,7 @@ vulkan-headers
 vulkan-icd-loader
 vulkan-mesa-implicit-layers
 vulkan-radeon
+vulkan-utility-libraries
 vulkan-validation-layers
 war1gus
 wargus
@@ -2073,7 +2117,9 @@ widelands
 wildmidi
 wine-staging
 winetricks
+wireless_tools
 wireplumber
+wlr-protocols
 wmctrl
 woff2
 wpa_supplicant
@@ -2144,6 +2190,7 @@ xorg-server
 xorg-server-common
 xorg-server-xvfb
 xorg-setxkbmap
+xorg-util-macros
 xorg-xauth
 xorg-xdpyinfo
 xorg-xev
@@ -2161,6 +2208,7 @@ xorg-xsetroot
 xorg-xwayland
 xorg-xwininfo
 xorgproto
+xprintidle
 xrick
 xterm
 xvidcore
@@ -2176,6 +2224,7 @@ yasm
 yay
 yelp-tools
 yelp-xsl
+yoga
 zbar
 zenity
 zeromq
