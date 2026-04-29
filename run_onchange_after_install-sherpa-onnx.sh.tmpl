@@ -1,0 +1,93 @@
+{{- if eq .chezmoi.hostname "Excalibur" -}}
+#!/bin/bash
+set -euo pipefail
+
+# Install sherpa-onnx (with two PKGBUILD patches) and the diarization +
+# VAD models that whisper-diarize depends on. Idempotent — re-runs on any
+# edit to this template; steady-state apply is a no-op.
+#
+# Patches applied to the AUR PKGBUILD:
+#   1. -DSHERPA_ONNX_ENABLE_TTS=OFF
+#      espeak-ng's CFLAGS append `-Wno-format`, which collides with Arch's
+#      hardening flag `-Werror=format-security` (gcc errors when format-security
+#      is active without -Wformat). TTS isn't needed for diarization.
+#   2. Replace `mv ${pkgdir}/usr/sherpa-onnx.pc ${pkgdir}/usr/lib/pkgconfig`
+#      with `install -Dm644 ...`. The original mv runs before the target
+#      directory exists, so it ends up renaming the .pc file to a regular
+#      file named "pkgconfig" — which then conflicts with the system-owned
+#      /usr/lib/pkgconfig directory at install time.
+
+SHERPA_DIR="$HOME/.local/share/sherpa-onnx"
+WHISPER_DIR="$HOME/.local/share/whisper"
+SEG_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2"
+EMB_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
+VAD_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx"
+
+echo "=== whisper-diarize stack: sherpa-onnx + models ==="
+
+echo "[1/4] Ensuring build deps + onnxruntime (ROCm)..."
+yay -S --needed --noconfirm cmake ninja onnxruntime-opt-rocm
+
+if pacman -Q sherpa-onnx >/dev/null 2>&1; then
+    echo "[2/4] sherpa-onnx already installed — skipping build."
+else
+    echo "[2/4] Building patched sherpa-onnx from AUR..."
+    BUILD_DIR="$(mktemp -d)"
+    trap 'rm -rf "$BUILD_DIR"' EXIT
+
+    # Pull latest PKGBUILD into a clean dir we control
+    (cd "$BUILD_DIR" && yay --getpkgbuild --noconfirm sherpa-onnx)
+    cd "$BUILD_DIR/sherpa-onnx"
+
+    # Patch 1: skip TTS (and thus espeak-ng) — fixes -Wformat-security build break
+    sed -i '/-DSHERPA_ONNX_USE_PRE_INSTALLED_ONNXRUNTIME_IF_AVAILABLE=ON/a\        -DSHERPA_ONNX_ENABLE_TTS=OFF' PKGBUILD
+
+    # Patch 2: replace broken mv with install -Dm644 so /usr/lib/pkgconfig stays a directory
+    python3 - <<'PY'
+import re, pathlib
+p = pathlib.Path("PKGBUILD")
+src = p.read_text()
+old = re.compile(r'^\s*mv "\$\{pkgdir\}/usr/sherpa-onnx\.pc"\s+"\$\{pkgdir\}/usr/lib/pkgconfig"\s*$', re.M)
+new = (
+    '    install -Dm644 "${pkgdir}/usr/sherpa-onnx.pc" "${pkgdir}/usr/lib/pkgconfig/sherpa-onnx.pc"\n'
+    '    rm "${pkgdir}/usr/sherpa-onnx.pc"'
+)
+patched, n = old.subn(new, src)
+if n != 1:
+    raise SystemExit(f"PKGBUILD pkgconfig patch did not match (n={n}); upstream may have already fixed it.")
+p.write_text(patched)
+PY
+
+    makepkg -si --noconfirm
+fi
+
+echo "[3/4] Diarization models..."
+mkdir -p "$SHERPA_DIR"
+if [[ ! -f "$SHERPA_DIR/sherpa-onnx-pyannote-segmentation-3-0/model.onnx" ]]; then
+    echo "  Downloading pyannote segmentation model..."
+    tmp="$(mktemp --suffix=.tar.bz2)"
+    curl -L --progress-bar -o "$tmp" "$SEG_URL"
+    tar -xjf "$tmp" -C "$SHERPA_DIR"
+    rm -f "$tmp"
+else
+    echo "  Segmentation model present."
+fi
+
+if [[ ! -f "$SHERPA_DIR/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx" ]]; then
+    echo "  Downloading 3D-Speaker eres2net embedding model..."
+    curl -L --progress-bar -o "$SHERPA_DIR/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx" "$EMB_URL"
+else
+    echo "  Embedding model present."
+fi
+
+echo "[4/4] silero-vad model..."
+mkdir -p "$WHISPER_DIR"
+if [[ ! -f "$WHISPER_DIR/silero-vad.onnx" ]]; then
+    echo "  Downloading silero-vad model..."
+    curl -L --progress-bar -o "$WHISPER_DIR/silero-vad.onnx" "$VAD_URL"
+else
+    echo "  silero-vad present."
+fi
+
+echo "=== whisper-diarize stack ready ==="
+{{- end -}}
