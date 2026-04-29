@@ -60,7 +60,7 @@ bin/yaycache
 .config/autostart/dropbox.desktop
 .config/autostart/org.keepassxc.KeePassXC.desktop
 .config/autostart/xfwm4-safety.desktop
-.config/gamepad-osk/config.toml
+.config/gamepad-osk/
 .config/makepkg.conf
 .config/VacuumTube/config.json  
 .config/yay/config.json
