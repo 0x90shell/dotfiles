@@ -1,0 +1,25 @@
+#!/bin/bash
+{{- range (glob (joinPath .chezmoi.sourceDir "ignore-etc" (.chezmoi.hostname | lower) "systemd/sleep.conf.d" "*")) }}
+# {{ . | include | sha256sum }}
+{{- end }}
+{{- if eq .chezmoi.hostname "Glamdring" }}
+set -euo pipefail
+
+CHEZMOI_SOURCE="{{ .chezmoi.sourceDir }}"
+HOST="{{ .chezmoi.hostname | lower }}"
+SLEEP_CONF_DIR="${CHEZMOI_SOURCE}/ignore-etc/${HOST}/systemd/sleep.conf.d"
+
+echo "Deploying systemd sleep.conf.d drop-ins for ${HOST}..."
+
+if [[ -d "$SLEEP_CONF_DIR" ]]; then
+    for conf in "${SLEEP_CONF_DIR}"/*.conf; do
+        [[ -f "$conf" ]] || continue
+        conf_name=$(basename "$conf")
+        sudo install -m 644 -o root -g root "$conf" /etc/systemd/sleep.conf.d/
+        echo "  Added: $conf_name"
+    done
+fi
+
+# No reload needed — systemd-logind and systemd-sleep re-read drop-ins on each sleep operation.
+echo "Sleep configs deployed."
+{{- end }}
