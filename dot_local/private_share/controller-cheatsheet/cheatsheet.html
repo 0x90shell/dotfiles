@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Controller Reference</title>
+<style>
+  @font-face {
+    font-family: "PromptFont";
+    src: url("file:///usr/share/fonts/TTF/promptfont.ttf") format("truetype");
+    unicode-range: U+2194-27FF;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    color: #f0f0f0;
+    font-family: "PromptFont", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+    padding: 0;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: 12px;
+  }
+  .card {
+    background: rgba(10, 10, 10, 0.96);
+    
+    width: 760px;
+    padding: 24px 22px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .header {
+    border-bottom: 1px solid #2a2a2a;
+    padding-bottom: 12px;
+  }
+  .header h1 {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #ffffff;
+  }
+  .header p {
+    font-size: 12px;
+    color: #888;
+    margin-top: 4px;
+    letter-spacing: 0.3px;
+  }
+  .grid {
+    column-count: 2;
+    column-gap: 14px;
+  }
+  .section {
+    background: #141414;
+    border-left: 3px solid;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    break-inside: avoid;
+    display: block;
+  }
+  .section.exit { border-color: #c44; }
+  .section.osk { border-color: #48c; }
+  .section.emu { border-color: #cc8; }
+  .section.apps { border-color: #4a8; }
+  .section-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #888;
+    margin-bottom: 8px;
+  }
+  .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0;
+    font-size: 12px;
+  }
+  .row + .row {
+    border-top: 1px solid #1f1f1f;
+    padding-top: 6px;
+    margin-top: 2px;
+  }
+  .keys {
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 34px;
+    letter-spacing: 1px;
+    white-space: nowrap;
+    line-height: 1;
+  }
+  .keys .plus {
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 14px;
+    color: #888;
+    margin: 0 1px;
+    font-weight: 400;
+    vertical-align: middle;
+  }
+  .desc {
+    color: #b8b8b8;
+    text-align: right;
+    flex: 1;
+    font-size: 14px;
+  }
+  .footer {
+    font-size: 10px;
+    color: #555;
+    text-align: center;
+    letter-spacing: 0.5px;
+    padding-top: 6px;
+    border-top: 1px solid #2a2a2a;
+  }
+  .footer .glyph { font-size: 13px; vertical-align: -1px; }
+  /* Sunshine kiosk view (viewport >1500px = not the 820px wallpaper render) */
+  /* gets 25% zoom for couch readability without overflowing 1080p clients. */
+  @media (min-width: 1500px) {
+    body { zoom: 1.25; }
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+
+    <div class="header">
+      <h1>CONTROLLER REFERENCE</h1>
+      <p>Hold combo simultaneously, 200ms window</p>
+    </div>
+
+    <div class="grid">
+
+      <div class="section exit">
+        <div class="section-label">EXIT &amp; KEYBOARD</div>
+        <div class="row">
+          <div class="keys">&#x21F7;<span class="plus">+</span>&#x21F8;<span class="plus">+</span>&#x2198;<span class="plus">+</span>&#x2199;</div>
+          <div class="desc">Exit stream</div>
+        </div>
+        <div class="row">
+          <div class="keys">&#x21F8;<span class="plus">+</span>&#x2198;<span class="plus">+</span>&#x2199;</div>
+          <div class="desc">Show keyboard</div>
+        </div>
+        <div class="row">
+          <div class="keys">&#x21A6;</div>
+          <div class="desc">Hide keyboard</div>
+        </div>
+      </div>
+
+      <div class="section emu">
+        <div class="section-label">EMULATOR</div>
+        <div class="row">
+          <div class="keys">&#x21A1;<span class="plus">+</span>&#x21F7;</div>
+          <div class="desc">Open menu</div>
+        </div>
+        <div class="row">
+          <div class="keys">&#x21F7;<span class="plus">+</span>&#x2198; ×2</div>
+          <div class="desc">Quit game</div>
+        </div>
+        <div class="row">
+          <div class="keys">&#x21F7;<span class="plus">+</span>&#x2199;</div>
+          <div class="desc">Load state</div>
+        </div>
+        <div class="row">
+          <div class="keys">&#x21F7;<span class="plus">+</span>&#x2196;</div>
+          <div class="desc">Save state</div>
+        </div>
+        <div class="row">
+          <div class="keys">&#x21F7;<span class="plus">+</span>&#x2197;</div>
+          <div class="desc">Next save slot</div>
+        </div>
+        <div class="row">
+          <div class="keys">&#x21F7;<span class="plus">+</span>&#x21A7;</div>
+          <div class="desc">Slow motion</div>
+        </div>
+        <div class="row">
+          <div class="keys">&#x21F7;<span class="plus">+</span>&#x21A6;</div>
+          <div class="desc">Fast forward</div>
+        </div>
+        <div class="row">
+          <div class="keys">&#x21F7;<span class="plus">+</span>&#x21A4;</div>
+          <div class="desc">Rewind</div>
+        </div>
+      </div>
+
+      <div class="section apps">
+        <div class="section-label">APP LAUNCH</div>
+        <div class="row">
+          <div class="keys">&#x21F8;<span class="plus">+</span>&#x2199;<span class="plus">+</span>&#x21A1;</div>
+          <div class="desc">Launch ES-DE</div>
+        </div>
+        <div class="row">
+          <div class="keys">&#x21F8;<span class="plus">+</span>&#x2197;<span class="plus">+</span>&#x21A1;</div>
+          <div class="desc">Launch Steam</div>
+        </div>
+        <div class="row">
+          <div class="keys">&#x21F8;<span class="plus">+</span>&#x2198;<span class="plus">+</span>&#x21A1;</div>
+          <div class="desc">Launch Spotify</div>
+        </div>
+        <div class="row">
+          <div class="keys">&#x21F8;<span class="plus">+</span>&#x2196;<span class="plus">+</span>&#x21A1;</div>
+          <div class="desc">Launch Kasts</div>
+        </div>
+      </div>
+
+      <div class="section osk">
+        <div class="section-label">DESKTOP &amp; MEDIA</div>
+        <div class="row">
+          <div class="keys">&#x21F7;<span class="plus">+</span>&#x21BB;</div>
+          <div class="desc">Close window</div>
+        </div>
+        <div class="row">
+          <div class="keys">&#x21F7;<span class="plus">+</span>&#x2198;</div>
+          <div class="desc">Close emulator</div>
+        </div>
+        <div class="row">
+          <div class="keys">&#x21F7;<span class="plus">+</span>&#x219F;</div>
+          <div class="desc">Alt+Tab</div>
+        </div>
+        <div class="row">
+          <div class="keys">&#x21F7;<span class="plus">+</span>&#x21BA;</div>
+          <div class="desc">Play / Pause</div>
+        </div>
+        <div class="row">
+          <div class="keys">&#x21F7;<span class="plus">+</span>&#x219E;</div>
+          <div class="desc">Previous track</div>
+        </div>
+        <div class="row">
+          <div class="keys">&#x21F7;<span class="plus">+</span>&#x21A0;</div>
+          <div class="desc">Next track</div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="footer">
+      <span class="glyph">&#x21F7;</span> Back &middot; <span class="glyph">&#x21F8;</span> Menu &middot; <span class="glyph">&#x2198;</span><span class="glyph">&#x2199;</span> Bumpers &middot; <span class="glyph">&#x2196;</span><span class="glyph">&#x2197;</span> Triggers &middot; <span class="glyph">&#x21A7;&#x21A6;&#x21A4;&#x21A5;</span> Face &middot; <span class="glyph">&#x21BA;&#x21BB;</span> Stick clicks
+    </div>
+
+  </div>
+</body>
+</html>

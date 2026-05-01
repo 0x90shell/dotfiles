@@ -1,0 +1,19 @@
+{{- if eq .chezmoi.hostname "Glamdring" -}}
+#!/bin/bash
+set -euo pipefail
+
+# Re-render controller cheatsheet wallpaper + fullscreen image when any of:
+#   - source HTML changes
+#   - render script changes
+#   - user's XFCE wallpaper changes (excluding our generated composite)
+#
+# Hash markers below tie this template's content to those triggers so
+# chezmoi run_onchange fires on edit. The xfconf marker filters out our own
+# composite output to avoid re-render loops after we set the wallpaper.
+#
+# {{ joinPath .chezmoi.sourceDir "dot_local/private_share/controller-cheatsheet/cheatsheet.html" | include | sha256sum }}
+# {{ joinPath .chezmoi.sourceDir "dot_local/private_share/controller-cheatsheet/executable_render-wallpaper.sh" | include | sha256sum }}
+# xfconf-base: {{ output "sh" "-c" "xfconf-query -c xfce4-desktop -l 2>/dev/null | grep /last-image$ | xargs -I{} xfconf-query -c xfce4-desktop -p {} 2>/dev/null | grep -v wallpaper-with-cheatsheet- | sort -u | head -1 || true" | trim }}
+
+~/.local/share/controller-cheatsheet/render-wallpaper.sh
+{{- end -}}

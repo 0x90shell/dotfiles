@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="512" height="512">
+  <rect width="200" height="200" rx="22" fill="#0f0f0f"/>
+  <!-- Gamepad silhouette centered in square -->
+  <g>
+    <!-- Body curve (natural Xbox/PS shape) -->
+    <path d="M 55 75 Q 32 75 32 100 Q 32 132 60 132 L 92 132 Q 100 132 100 124 Q 100 132 108 132 L 140 132 Q 168 132 168 100 Q 168 75 145 75 Z"
+          fill="#1c1c1c" stroke="#48c" stroke-width="2.5"/>
+    <!-- Shoulder buttons (top edge) -->
+    <rect x="42" y="64" width="26" height="9" rx="4" fill="#48c"/>
+    <rect x="132" y="64" width="26" height="9" rx="4" fill="#48c"/>
+    <!-- Left stick -->
+    <circle cx="58" cy="100" r="11" fill="#48c"/>
+    <circle cx="58" cy="100" r="5" fill="#0f0f0f"/>
+    <!-- D-pad (cross) -->
+    <rect x="87" y="93" width="8" height="20" rx="1" fill="#888"/>
+    <rect x="81" y="99" width="20" height="8" rx="1" fill="#888"/>
+    <!-- Right stick -->
+    <circle cx="118" cy="112" r="11" fill="#48c"/>
+    <circle cx="118" cy="112" r="5" fill="#0f0f0f"/>
+    <!-- Face buttons (Xbox layout: Y top, X left, B right, A bottom) -->
+    <circle cx="148" cy="84"  r="5.5" fill="#cc8"/>
+    <circle cx="138" cy="94"  r="5.5" fill="#48c"/>
+    <circle cx="158" cy="94"  r="5.5" fill="#c44"/>
+    <circle cx="148" cy="104" r="5.5" fill="#4a8"/>
+    <!-- Center button -->
+    <circle cx="100" cy="80" r="3" fill="#48c"/>
+  </g>
+</svg>

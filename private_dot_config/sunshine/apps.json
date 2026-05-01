@@ -85,6 +85,20 @@
       "cmd": "/home/gandalf/bin/sunshine-restart",
       "auto-detach": "true",
       "wait-all": "true"
+    },
+    {
+      "name": "Controller Help",
+      "cmd": "firefox --kiosk --no-remote --profile /home/gandalf/.local/share/controller-cheatsheet/firefox-display-profile file:///home/gandalf/.local/share/controller-cheatsheet/cheatsheet.html",
+      "image-path": "/home/gandalf/.config/sunshine/assets/controller.png",
+      "auto-detach": false,
+      "exit-timeout": 5,
+      "exclude-global-prep-cmd": true,
+      "prep-cmd": [
+        {
+          "do": "/home/gandalf/bin/wake-display",
+          "undo": "pkill -f firefox-display-profile"
+        }
+      ]
     }
   ],
   "env": {
