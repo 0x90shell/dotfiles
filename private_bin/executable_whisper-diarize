@@ -18,7 +18,7 @@ Arguments:
 
 Environment variables:
   WHISPER_MODEL    Whisper GGML model    (default: ~/.local/share/whisper/ggml-large-v3.bin)
-  VAD_MODEL        Silero VAD model      (default: ~/.local/share/whisper/silero-vad.onnx)
+  VAD_MODEL        Silero VAD model (GGML) (default: ~/.local/share/whisper/ggml-silero-v5.1.2.bin)
   SHERPA_DIR       Sherpa-onnx model dir (default: ~/.local/share/sherpa-onnx)
   DIAR_THREADS     Diarization threads   (default: min(8, nproc))
 
@@ -38,7 +38,7 @@ if [[ ! -f "$INPUT" ]]; then
 fi
 
 WHISPER_MODEL="${WHISPER_MODEL:-$HOME/.local/share/whisper/ggml-large-v3.bin}"
-VAD_MODEL="${VAD_MODEL:-$HOME/.local/share/whisper/silero-vad.onnx}"
+VAD_MODEL="${VAD_MODEL:-$HOME/.local/share/whisper/ggml-silero-v5.1.2.bin}"
 SHERPA_DIR="${SHERPA_DIR:-$HOME/.local/share/sherpa-onnx}"
 SEG_MODEL="$SHERPA_DIR/sherpa-onnx-pyannote-segmentation-3-0/model.onnx"
 EMB_MODEL="$SHERPA_DIR/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"

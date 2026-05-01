@@ -21,7 +21,11 @@ SHERPA_DIR="$HOME/.local/share/sherpa-onnx"
 WHISPER_DIR="$HOME/.local/share/whisper"
 SEG_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2"
 EMB_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
-VAD_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx"
+# whisper.cpp's --vad-model expects its own GGML port of Silero VAD, not raw ONNX.
+# Source: https://huggingface.co/ggml-org/whisper-vad (matches whisper.cpp 1.8.4's
+# models/download-vad-model.sh).
+VAD_URL="https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin"
+VAD_FILE="ggml-silero-v5.1.2.bin"
 
 echo "=== whisper-diarize stack: sherpa-onnx + models ==="
 
@@ -80,13 +84,20 @@ else
     echo "  Embedding model present."
 fi
 
-echo "[4/4] silero-vad model..."
+echo "[4/4] silero-vad model (GGML, for whisper.cpp)..."
 mkdir -p "$WHISPER_DIR"
-if [[ ! -f "$WHISPER_DIR/silero-vad.onnx" ]]; then
-    echo "  Downloading silero-vad model..."
-    curl -L --progress-bar -o "$WHISPER_DIR/silero-vad.onnx" "$VAD_URL"
+if [[ ! -f "$WHISPER_DIR/$VAD_FILE" ]]; then
+    echo "  Downloading $VAD_FILE..."
+    curl -L --progress-bar -o "$WHISPER_DIR/$VAD_FILE" "$VAD_URL"
 else
-    echo "  silero-vad present."
+    echo "  $VAD_FILE present."
+fi
+
+# Clean up the legacy raw-ONNX VAD if a previous run of this script left it
+# behind — whisper.cpp's loader rejects it with "invalid model data (bad magic)".
+if [[ -f "$WHISPER_DIR/silero-vad.onnx" ]]; then
+    echo "  Removing obsolete silero-vad.onnx (incompatible with whisper.cpp)."
+    rm -f "$WHISPER_DIR/silero-vad.onnx"
 fi
 
 echo "=== whisper-diarize stack ready ==="
