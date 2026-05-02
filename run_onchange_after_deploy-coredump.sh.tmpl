@@ -1,0 +1,9 @@
+#!/bin/bash
+{{- $src := joinPath .chezmoi.sourceDir "ignore-etc" (.chezmoi.hostname | lower) "systemd" "coredump.conf" -}}
+{{- if stat $src }}
+# {{ $src | include | sha256sum }}
+set -euo pipefail
+sudo install -m 644 -o root -g root "{{ $src }}" /etc/systemd/coredump.conf
+sudo systemctl restart systemd-coredump.socket
+echo "Deployed coredump.conf"
+{{- end }}

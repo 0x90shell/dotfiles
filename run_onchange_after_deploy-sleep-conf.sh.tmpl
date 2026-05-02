@@ -1,8 +1,9 @@
 #!/bin/bash
-{{- range (glob (joinPath .chezmoi.sourceDir "ignore-etc" (.chezmoi.hostname | lower) "systemd/sleep.conf.d" "*")) }}
+{{- $dir := joinPath .chezmoi.sourceDir "ignore-etc" (.chezmoi.hostname | lower) "systemd" "sleep.conf.d" -}}
+{{- if stat $dir }}
+{{- range (glob (joinPath $dir "*")) }}
 # {{ . | include | sha256sum }}
 {{- end }}
-{{- if eq .chezmoi.hostname "Glamdring" }}
 set -euo pipefail
 
 CHEZMOI_SOURCE="{{ .chezmoi.sourceDir }}"
