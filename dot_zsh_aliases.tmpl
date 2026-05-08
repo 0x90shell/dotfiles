@@ -248,6 +248,8 @@ alias upd='sudo pacman -Sy'
 alias upg='sudo pacman -Syu'
 alias upg-all='yay'
 alias search='yay '
+yayup() { yay -Syu --devel "$@" && yay -Y --devel --gendb }
+
 {{- else }}
 alias fix='apt install -f'
 alias ins="apt install"
