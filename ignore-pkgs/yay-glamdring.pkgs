@@ -421,6 +421,7 @@ haskell-case-insensitive
 haskell-cassava
 haskell-cborg
 haskell-cereal
+haskell-character-ps
 haskell-citeproc
 haskell-cmdargs
 haskell-colour
@@ -1115,8 +1116,8 @@ libraw1394
 libreoffice-fresh
 libretro-beetle-pce
 libretro-beetle-pce-fast
-libretro-beetle-psx
-libretro-beetle-psx-hw
+libretro-beetle-psx-git
+libretro-beetle-psx-hw-git
 libretro-beetle-supergrafx
 libretro-blastem
 libretro-bluemsx-git
@@ -1145,7 +1146,7 @@ libretro-mesen-s
 libretro-meta
 libretro-mgba
 libretro-mrboom-git
-libretro-mupen64plus-next
+libretro-mupen64plus-next-git
 libretro-neocd-git
 libretro-nestopia
 libretro-nxengine-git
