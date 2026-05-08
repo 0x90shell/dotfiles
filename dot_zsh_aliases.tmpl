@@ -248,7 +248,7 @@ alias upd='sudo pacman -Sy'
 alias upg='sudo pacman -Syu'
 alias upg-all='yay'
 alias search='yay '
-yayup() { yay -Syu --devel "$@" && yay -Y --devel --gendb }
+yayup() {  sudo reflector --country 'United States' --latest 5 --age 2 --fastest 5 --protocol https --sort rate --save /etc/pacman.d/mirrorlist; sudo pacman -Sy&& yay -Syu --devel "$@" && yay -Y --devel --gendb }
 
 {{- else }}
 alias fix='apt install -f'
