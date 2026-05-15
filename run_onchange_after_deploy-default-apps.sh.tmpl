@@ -1,0 +1,61 @@
+#!/bin/bash
+{{- if or (eq .chezmoi.hostname "Glamdring") (eq .chezmoi.hostname "Excalibur") }}
+set -euo pipefail
+
+echo "Deploying default applications for {{ .chezmoi.hostname }}..."
+
+# --- Cinnamon gsettings (nemo "Open in Terminal") ---
+if command -v gsettings >/dev/null 2>&1 && [[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
+    gsettings set org.cinnamon.desktop.default-applications.terminal exec 'terminator'
+    gsettings set org.cinnamon.desktop.default-applications.terminal exec-arg '-x'
+    echo "  ✓ cinnamon terminal → terminator"
+else
+    echo "  ⚠ skipping gsettings (no DBus session — re-run chezmoi apply from a desktop terminal)"
+fi
+
+# --- mimeapps.list [Default Applications] via xdg-mime ---
+# xdg-mime edits the correct section and preserves [Added Associations].
+declare -A MIME_DEFAULTS=(
+    [inode/directory]=nemo.desktop
+    [x-scheme-handler/trash]=nemo.desktop
+    [text/html]=firefox.desktop
+    [application/xhtml+xml]=firefox.desktop
+    [x-scheme-handler/http]=firefox.desktop
+    [x-scheme-handler/https]=firefox.desktop
+    [x-scheme-handler/chrome]=firefox.desktop
+    [application/x-extension-htm]=firefox.desktop
+    [application/x-extension-html]=firefox.desktop
+    [application/x-extension-shtml]=firefox.desktop
+    [application/x-extension-xhtml]=firefox.desktop
+    [application/x-extension-xht]=firefox.desktop
+    [application/pdf]=okularApplication_pdf.desktop
+    [application/zip]=org.gnome.FileRoller.desktop
+    [application/x-compressed-tar]=org.gnome.FileRoller.desktop
+    [application/x-tar]=org.gnome.FileRoller.desktop
+    [application/x-7z-compressed]=org.gnome.FileRoller.desktop
+    [application/x-rar]=org.gnome.FileRoller.desktop
+    [application/gzip]=org.gnome.FileRoller.desktop
+    [application/x-bzip]=org.gnome.FileRoller.desktop
+    [application/x-bzip-compressed-tar]=org.gnome.FileRoller.desktop
+    [application/x-xz]=org.gnome.FileRoller.desktop
+    [application/x-xz-compressed-tar]=org.gnome.FileRoller.desktop
+    [application/octet-stream]=org.x.editor.desktop
+)
+
+if command -v xdg-mime >/dev/null 2>&1; then
+    for mime in "${!MIME_DEFAULTS[@]}"; do
+        xdg-mime default "${MIME_DEFAULTS[$mime]}" "$mime"
+    done
+    echo "  ✓ mimeapps defaults applied (${#MIME_DEFAULTS[@]} entries)"
+else
+    echo "  ✗ xdg-mime not found — install xdg-utils" >&2
+    exit 1
+fi
+
+# --- Refresh desktop database so launchers pick up changes promptly ---
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database "${XDG_DATA_HOME:-$HOME/.local/share}/applications" 2>/dev/null || true
+fi
+
+echo "Default applications deployed."
+{{- end }}
