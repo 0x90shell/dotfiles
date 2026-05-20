@@ -11,6 +11,26 @@ systemctl --user enable --now jstimeout.service
 systemctl --user enable --now daily@emu-backup.timer
 systemctl --user enable --now weekly@optimize-ra-screenshots.timer
 systemctl --user enable --now optimize-ra-input.path
+
+# Self-healing Sunshine unit alias.
+# The package ships its unit under a reverse-DNS name that has changed across
+# versions (e.g. app-dev.lizardbyte.app.Sunshine.service). Our drop-in,
+# watchdog, and sunshine-restart all reference the short name "sunshine.service",
+# so we maintain an alias pointing at whatever the real unit is currently called.
+sunshine_alias="${HOME}/.config/systemd/user/sunshine.service"
+sunshine_real=$(systemctl --user list-unit-files --no-legend 2>/dev/null \
+  | awk '{print $1}' | grep -i 'sunshine\.service$' | grep -ivx 'sunshine.service' | head -1)
+if [[ -n "$sunshine_real" ]]; then
+  # Real unit has a non-canonical name -> keep the short-name alias pointed at it.
+  ln -sfn "/usr/lib/systemd/user/${sunshine_real}" "$sunshine_alias"
+  echo "Aliased sunshine.service -> ${sunshine_real}"
+elif [[ -L "$sunshine_alias" && -e /usr/lib/systemd/user/sunshine.service ]]; then
+  # Package now provides canonical sunshine.service -> drop our shadowing alias.
+  rm -f "$sunshine_alias"
+  echo "Removed stale sunshine.service alias (package provides it directly)"
+fi
+systemctl --user daemon-reload
+
 systemctl --user enable --now sunshine.service
 systemctl --user enable --now playerctld
 {{ end }}
