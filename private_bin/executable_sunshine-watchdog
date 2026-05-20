@@ -2,13 +2,20 @@
 # Monitor Sunshine for fatal encoder errors and auto-recover.
 # Runs as a companion service, watching the journal in real-time.
 
-journalctl --user -u sunshine -f --no-pager -o cat | while read -r line; do
+# Resolve the real unit name. The package ships Sunshine under a reverse-DNS
+# name (app-dev.lizardbyte.app.Sunshine.service); our ~/.config sunshine.service
+# symlink only aliases it for systemctl. journald tags entries with the
+# canonical Id, NOT the alias, so journalctl -u must use the resolved name.
+unit=$(systemctl --user show -p Id --value sunshine.service 2>/dev/null)
+unit=${unit:-sunshine.service}
+
+journalctl --user -u "$unit" -f --no-pager -o cat | while read -r line; do
     if [[ "$line" == *"Fatal: Unable to find display or encoder"* ]]; then
         echo "sunshine-watchdog: fatal encoder error detected, recovering..."
         sleep 2
         "$HOME/bin/wake-display" || true
-        systemctl --user reset-failed sunshine 2>/dev/null
-        systemctl --user restart sunshine
+        systemctl --user reset-failed "$unit" 2>/dev/null
+        systemctl --user restart "$unit"
         # Cooldown to avoid rapid-fire restarts if display truly won't wake.
         sleep 60
     fi
