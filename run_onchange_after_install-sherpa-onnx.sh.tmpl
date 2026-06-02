@@ -19,8 +19,28 @@ set -euo pipefail
 
 SHERPA_DIR="$HOME/.local/share/sherpa-onnx"
 WHISPER_DIR="$HOME/.local/share/whisper"
-SEG_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2"
-EMB_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
+SHERPA_REL="https://github.com/k2-fsa/sherpa-onnx/releases/download"
+SEG_URL="$SHERPA_REL/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2"
+
+# Embedding models for sherpa-onnx-offline-speaker-diarization.
+#
+# Default = 3dspeaker ERes2Net (Mandarin SV training). Empirically beats the
+# higher-EER English SOTA models (WeSpeaker ResNet293_LM, TitaNet-Large) on
+# close-talking conversational English audio: the deeper SOTA embeddings get
+# noisy on the short (<3s) turns pyannote produces, and the clusterer either
+# fragments speakers or collapses them. The smaller Mandarin model is more
+# robust on this regime. VoxCeleb1-O EER and diarization DER measure
+# different things.
+#
+# The other two are installed as alternates so the user can override via
+# EMB_MODEL=$SHERPA_DIR/<file>.onnx if a recording works better with
+# English-trained embeddings (e.g., well-separated voices, long turns).
+EMB_FILES=(
+    "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
+    "nemo_en_titanet_large.onnx"
+    "wespeaker_en_voxceleb_resnet293_LM.onnx"
+)
+
 # whisper.cpp's --vad-model expects its own GGML port of Silero VAD, not raw ONNX.
 # Source: https://huggingface.co/ggml-org/whisper-vad (matches whisper.cpp 1.8.4's
 # models/download-vad-model.sh).
@@ -77,12 +97,19 @@ else
     echo "  Segmentation model present."
 fi
 
-if [[ ! -f "$SHERPA_DIR/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx" ]]; then
-    echo "  Downloading 3D-Speaker eres2net embedding model..."
-    curl -L --progress-bar -o "$SHERPA_DIR/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx" "$EMB_URL"
-else
-    echo "  Embedding model present."
-fi
+for emb in "${EMB_FILES[@]}"; do
+    if [[ ! -f "$SHERPA_DIR/$emb" ]]; then
+        # The release tag is misspelled upstream as "recongition" — keep it.
+        echo "  Downloading $emb..."
+        # CAM++ has '+' in the filename — URL-encode for curl.
+        url_name="${emb//+/%2B}"
+        curl -L --progress-bar \
+            -o "$SHERPA_DIR/$emb" \
+            "$SHERPA_REL/speaker-recongition-models/$url_name"
+    else
+        echo "  $emb present."
+    fi
+done
 
 echo "[4/4] silero-vad model (GGML, for whisper.cpp)..."
 mkdir -p "$WHISPER_DIR"

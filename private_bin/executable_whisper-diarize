@@ -2,11 +2,16 @@
 set -euo pipefail
 
 # whisper-diarize — local multi-speaker diarized transcription via whisper.cpp + sherpa-onnx
-# Output: <input>.transcript.txt with [speaker_NN] tagged lines
+# Output: <input>.transcript.txt with [speaker_NN] tagged lines.
+#
+# Speaker labels are assigned per-WORD via time overlap with the diarization
+# output, then consecutive same-speaker words are grouped into a single line.
+# This avoids the "right speaker for most of the line, wrong for the tail"
+# error caused by whisper segment boundaries straddling actual turn boundaries.
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     cat <<'EOF'
-usage: whisper-diarize <input> [num_speakers]
+usage: whisper-diarize <input> [num_speakers|auto]
 
 Local multi-speaker diarized transcription using whisper.cpp + sherpa-onnx.
 Output: <input>.transcript.txt with [speaker_NN]-tagged lines, ready to paste
@@ -14,23 +19,36 @@ into an LLM for speaker inference.
 
 Arguments:
   <input>          Audio/video file (any ffmpeg-supported format)
-  [num_speakers]   Number of speakers to detect (default: 3)
+  [num_speakers]   Number of speakers (positive int), or "auto" / omitted
+                   to let the clusterer pick a count via threshold.
 
 Environment variables:
-  WHISPER_MODEL    Whisper GGML model    (default: ~/.local/share/whisper/ggml-large-v3.bin)
-  VAD_MODEL        Silero VAD model (GGML) (default: ~/.local/share/whisper/ggml-silero-v5.1.2.bin)
-  SHERPA_DIR       Sherpa-onnx model dir (default: ~/.local/share/sherpa-onnx)
-  DIAR_THREADS     Diarization threads   (default: min(8, nproc))
+  WHISPER_MODEL     Whisper GGML model    (default: ~/.local/share/whisper/ggml-large-v3.bin)
+  VAD_MODEL         Silero VAD model      (default: ~/.local/share/whisper/ggml-silero-v5.1.2.bin)
+  SHERPA_DIR        Sherpa-onnx model dir (default: ~/.local/share/sherpa-onnx)
+  EMB_MODEL         Embedding model       (default: $SHERPA_DIR/nemo_en_titanet_small.onnx)
+  CLUSTER_THRESHOLD Auto-cluster distance threshold (default: 0.5)
+                    Lower -> more speakers, higher -> fewer. Used only in auto mode.
+  TURN_GAP          Silence gap (seconds) that forces a new turn line (default: 1.0)
+  MAX_TURN_WORDS    Force a line break after this many words even on same
+                    speaker (default: 40). Keeps output scannable when one
+                    speaker has a long monologue or diarization collapses.
+  MIN_TURN_WORDS    Turns shorter than this get absorbed into the previous
+                    turn (default: 2). Single-word flips usually reflect noisy
+                    embeddings on a sub-second segment, not a real interjection.
+  DIAR_THREADS      Diarization threads   (default: min(8, nproc))
 
 Examples:
-  whisper-diarize meeting.mkv 4
+  whisper-diarize meeting.mkv                      # auto-detect speaker count
+  whisper-diarize meeting.mkv 4                    # force 4 speakers
+  CLUSTER_THRESHOLD=0.6 whisper-diarize call.wav   # fewer, broader clusters
   DIAR_THREADS=4 whisper-diarize call.wav
 EOF
     exit 0
 fi
 
-INPUT="${1:?usage: whisper-diarize <input> [num_speakers]   (try --help)}"
-NUM_SPEAKERS="${2:-3}"
+INPUT="${1:?usage: whisper-diarize <input> [num_speakers|auto]   (try --help)}"
+NUM_SPEAKERS="${2:-auto}"
 
 if [[ ! -f "$INPUT" ]]; then
     echo "error: $INPUT not found" >&2
@@ -41,7 +59,21 @@ WHISPER_MODEL="${WHISPER_MODEL:-$HOME/.local/share/whisper/ggml-large-v3.bin}"
 VAD_MODEL="${VAD_MODEL:-$HOME/.local/share/whisper/ggml-silero-v5.1.2.bin}"
 SHERPA_DIR="${SHERPA_DIR:-$HOME/.local/share/sherpa-onnx}"
 SEG_MODEL="$SHERPA_DIR/sherpa-onnx-pyannote-segmentation-3-0/model.onnx"
-EMB_MODEL="$SHERPA_DIR/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
+# Embedding model. The "best on VoxCeleb1-O EER" choice (WeSpeaker
+# ResNet293_LM, 0.53% EER) turns out to collapse on close-talking
+# conversational audio with similar voices: its deeper embedding space gets
+# noisy on short (<3s) turns and the clusterer either over-splits or merges
+# everyone into one speaker. Smaller embedding nets are empirically more
+# robust for this audio profile. Tested ranking on close-talking 2-speaker
+# English audio (better -> worse): Mandarin ERes2Net > TitaNet-Large >
+# CAM++_LM > ResNet293_LM. Alternatives installed alongside; switch via env:
+#   EMB_MODEL=$SHERPA_DIR/nemo_en_titanet_large.onnx
+#   EMB_MODEL=$SHERPA_DIR/wespeaker_en_voxceleb_resnet293_LM.onnx
+EMB_MODEL="${EMB_MODEL:-$SHERPA_DIR/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx}"
+CLUSTER_THRESHOLD="${CLUSTER_THRESHOLD:-0.5}"
+TURN_GAP="${TURN_GAP:-1.0}"
+MAX_TURN_WORDS="${MAX_TURN_WORDS:-40}"
+MIN_TURN_WORDS="${MIN_TURN_WORDS:-2}"
 
 for f in "$WHISPER_MODEL" "$VAD_MODEL" "$SEG_MODEL" "$EMB_MODEL"; do
     [[ -f "$f" ]] || { echo "error: missing model: $f" >&2; exit 1; }
@@ -50,6 +82,24 @@ done
 for cmd in ffmpeg whisper-cli sherpa-onnx-offline-speaker-diarization awk; do
     command -v "$cmd" >/dev/null || { echo "error: $cmd not on PATH" >&2; exit 1; }
 done
+
+# Build the clustering arg: forced count vs. threshold-driven auto-count.
+# Forcing the wrong count is unrecoverable (two real voices collapse, or one
+# fragments across clusters), so auto is the new default — let threshold pick.
+case "$NUM_SPEAKERS" in
+    auto)
+        CLUSTER_ARG="--clustering.cluster-threshold=$CLUSTER_THRESHOLD"
+        CLUSTER_DESC="auto, threshold=$CLUSTER_THRESHOLD"
+        ;;
+    *[!0-9]*|0|"")
+        echo "error: num_speakers must be a positive integer or 'auto' (got: '$NUM_SPEAKERS')" >&2
+        exit 1
+        ;;
+    *)
+        CLUSTER_ARG="--clustering.num-clusters=$NUM_SPEAKERS"
+        CLUSTER_DESC="forced=$NUM_SPEAKERS"
+        ;;
+esac
 
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
@@ -62,18 +112,21 @@ echo "[1/4] Converting to 16kHz mono WAV..."
 ffmpeg -y -i "$INPUT" -ar 16000 -ac 1 -c:a pcm_s16le "$WAV" \
     -hide_banner -loglevel error
 
-echo "[2/4] Transcribing with whisper (large-v3, VAD-gated)..."
-# VAD trims silence regions before whisper sees them, killing the
-# "thank you for watching" YouTube-corpus hallucination at file start.
+echo "[2/4] Transcribing with whisper (large-v3, VAD-gated, word-level SRT)..."
+# -ml 1 -sow gives one word per SRT segment with its own timestamps, so the
+# merger can assign a speaker per word instead of per phrase. This is the
+# single biggest correctness win: whisper segments often straddle actual
+# turn boundaries, and per-segment merging mislabels the trailing words.
 whisper-cli -pp -m "$WHISPER_MODEL" -l en -f "$WAV" \
     --vad --vad-model "$VAD_MODEL" \
+    -ml 1 -sow \
     -of "$SRT_BASE" -osrt --max-context 0 --suppress-nst >/dev/null
 
-# Cap at 8: eres2net is small, memory-bandwidth bound past that. Override via env.
+# Cap at 8: small embedding nets are memory-bandwidth bound past that. Override via env.
 DIAR_THREADS="${DIAR_THREADS:-$(( $(nproc) > 8 ? 8 : $(nproc) ))}"
-echo "[3/4] Diarizing ($NUM_SPEAKERS speakers, $DIAR_THREADS threads)..."
+echo "[3/4] Diarizing ($CLUSTER_DESC, $DIAR_THREADS threads)..."
 sherpa-onnx-offline-speaker-diarization \
-    --clustering.num-clusters="$NUM_SPEAKERS" \
+    "$CLUSTER_ARG" \
     --segmentation.pyannote-model="$SEG_MODEL" \
     --segmentation.num-threads="$DIAR_THREADS" \
     --embedding.model="$EMB_MODEL" \
@@ -85,17 +138,36 @@ if [[ ! -s "$WORKDIR/diar.txt" ]]; then
     exit 1
 fi
 
-echo "[4/4] Merging speaker labels into SRT segments..."
-# For each whisper SRT segment, find the diarization speaker with the most
-# time overlap and prepend [speaker_NN] to the segment text.
-awk -v diar="$WORKDIR/diar.txt" '
+echo "[4/4] Merging speaker labels into word-level transcript..."
+# Two-pass merge. Pass 1: assign each whisper word to its best-overlap
+# diarization speaker (or nearest in time on no overlap), grouping
+# consecutive same-speaker words into turns. A turn breaks on speaker
+# change, on a silence gap > TURN_GAP, or after MAX_TURN_WORDS words
+# (so a long monologue or diarization collapse stays scannable).
+# Pass 2: absorb turns shorter than MIN_TURN_WORDS into the prior turn.
+# Single-word flips almost always reflect a noisy embedding on a
+# sub-second segment rather than a real interjection.
+awk -v diar="$WORKDIR/diar.txt" \
+    -v turn_gap="$TURN_GAP" \
+    -v max_words="$MAX_TURN_WORDS" \
+    -v min_words="$MIN_TURN_WORDS" '
 function ts2sec(s,   p) {
-    # "HH:MM:SS,mmm" -> float seconds
     split(s, p, /[:,]/)
     return p[1]*3600 + p[2]*60 + p[3] + p[4]/1000
 }
+function commit_turn() {
+    if (cur_text == "") return
+    sub(/^[[:space:]]+/, "", cur_text)
+    sub(/[[:space:]]+$/, "", cur_text)
+    if (cur_text == "") return
+    nturns++
+    t_spk[nturns] = cur_spk
+    t_text[nturns] = cur_text
+    t_count[nturns] = cur_count
+    cur_text = ""
+    cur_count = 0
+}
 BEGIN {
-    # Load diar lines like: "0.031 -- 1.486 speaker_00"
     while ((getline line < diar) > 0) {
         n = split(line, f, /[ \t]+/)
         if (n >= 4 && f[2] == "--") {
@@ -106,28 +178,90 @@ BEGIN {
         }
     }
     close(diar)
+    if (ndi == 0) { print "error: empty diarization" > "/dev/stderr"; exit 1 }
+    gap_thresh  = turn_gap  + 0
+    max_w       = max_words + 0
+    min_w       = min_words + 0
     state = "idx"
+    cur_spk = ""
+    cur_text = ""
+    cur_count = 0
+    cur_end = -1e9
 }
 state == "idx" && /^[0-9]+$/ { state = "ts"; next }
 state == "ts" && / --> / {
     split($0, p, " --> ")
     seg_s = ts2sec(p[1]); seg_e = ts2sec(p[2])
-    state = "text"; text = ""; next
+    state = "text"; word = ""; next
 }
 state == "text" && /^[[:space:]]*$/ {
+    sub(/^[[:space:]]+/, "", word); sub(/[[:space:]]+$/, "", word)
+    if (word == "") { state = "idx"; next }
+
     delete ov
     for (i = 1; i <= ndi; i++) {
         a = (di_s[i] > seg_s) ? di_s[i] : seg_s
         b = (di_e[i] < seg_e) ? di_e[i] : seg_e
         if (b > a) ov[di_k[i]] += (b - a)
     }
-    best = "speaker_??"; bv = 0
+    best = ""; bv = 0
     for (s in ov) if (ov[s] > bv) { bv = ov[s]; best = s }
-    sub(/^[[:space:]]+/, "", text); sub(/[[:space:]]+$/, "", text)
-    if (text != "") printf "[%s] %s\n", best, text
+    if (best == "") {
+        mind = 1e18
+        for (i = 1; i <= ndi; i++) {
+            if      (seg_s > di_e[i]) d = seg_s - di_e[i]
+            else if (di_s[i] > seg_e) d = di_s[i] - seg_e
+            else                      d = 0
+            if (d < mind) { mind = d; best = di_k[i] }
+        }
+        if (best == "") best = "speaker_??"
+    }
+
+    gap = seg_s - cur_end
+    break_turn = (cur_text == "" || best != cur_spk || gap > gap_thresh)
+    if (!break_turn && max_w > 0 && cur_count >= max_w) break_turn = 1
+    if (break_turn) {
+        commit_turn()
+        cur_spk = best
+        cur_text = word
+        cur_count = 1
+    } else {
+        cur_text = cur_text " " word
+        cur_count++
+    }
+    cur_end = seg_e
     state = "idx"; next
 }
-state == "text" { text = (text == "" ? $0 : text " " $0) }
+state == "text" { word = (word == "" ? $0 : word " " $0) }
+END {
+    commit_turn()
+
+    # Pass 2: absorb short spurious turns into the previous turn, then
+    # re-fuse adjacent same-speaker turns produced by that absorption.
+    # The same-speaker fuse must respect max_w, otherwise it undoes
+    # the max-word splits from pass 1 and we collapse to one long line
+    # when diarization sticks on one speaker.
+    for (i = 1; i <= nturns; i++) {
+        if (i > 1) {
+            if (t_count[i] < min_w) {
+                t_text[out_i]  = t_text[out_i] " " t_text[i]
+                t_count[out_i] += t_count[i]
+                continue
+            }
+            fuse_ok = (max_w <= 0 || t_count[out_i] + t_count[i] <= max_w)
+            if (t_spk[i] == t_spk[out_i] && fuse_ok) {
+                t_text[out_i]  = t_text[out_i] " " t_text[i]
+                t_count[out_i] += t_count[i]
+                continue
+            }
+        }
+        out_i++
+        t_spk[out_i]   = t_spk[i]
+        t_text[out_i]  = t_text[i]
+        t_count[out_i] = t_count[i]
+    }
+    for (i = 1; i <= out_i; i++) printf "[%s] %s\n", t_spk[i], t_text[i]
+}
 ' "$SRT_BASE.srt" > "$OUT"
 
 echo
