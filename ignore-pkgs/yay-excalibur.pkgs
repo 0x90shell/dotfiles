@@ -27,6 +27,7 @@ alsa-topology-conf
 alsa-ucm-conf
 alsa-utils
 amd-ucode
+amdsmi
 android-tools
 android-udev
 antimicrox
@@ -34,7 +35,6 @@ aom
 apache-orc
 appstream
 appstream-glib
-appstream-qt
 arc-gtk-theme-eos
 archivemount
 archlinux-keyring
@@ -46,10 +46,8 @@ asio
 aspell
 at-spi2-core
 atkmm
-attica
 attr
 audit
-aurorae
 autoconf
 autoconf-archive
 automake
@@ -96,8 +94,6 @@ boost
 boost-libs
 botan
 bottles
-breeze
-breeze-cursors
 breeze-icons
 bridge-utils
 brother-mfc-l2740dw
@@ -172,6 +168,7 @@ cups-browsed
 cups-filters
 cups-pdf
 curl
+curl-impersonate
 czkawka-gui
 d-feet
 dateutils
@@ -190,6 +187,7 @@ desktop-file-utils
 desmume
 device-mapper
 devil
+dex
 dhclient
 diffutils
 ding-libs
@@ -231,7 +229,6 @@ duktape
 dupeguru
 dwarfs-bin
 e2fsprogs
-editorconfig-core-c
 edk2-ovmf
 efibootmgr
 efitools
@@ -240,6 +237,7 @@ eigen
 electron
 electron39
 electron41
+electron42
 elementary-icon-theme
 elfutils
 ell
@@ -319,7 +317,6 @@ foomatic-db-gutenprint-ppds
 foomatic-db-nonfree
 foomatic-db-nonfree-ppds
 foomatic-db-ppds
-frameworkintegration
 freeglut
 freeimage
 freerdp2
@@ -346,6 +343,7 @@ gc
 gcc
 gcc-libs
 gcompris-qt
+gcovr
 gcr
 gcr-4
 gd
@@ -450,6 +448,7 @@ gtksourceview4
 gtksourceview5
 gts
 guile
+gumbo-parser
 gupnp
 gupnp-dlna
 gupnp-igd
@@ -542,6 +541,7 @@ hipsparse
 hipsparselt
 hiredis
 hplip
+hsa-amd-aqlprofile
 hsa-rocr
 htop
 http-parser
@@ -559,7 +559,6 @@ icoextract
 icoutils
 icu
 iftop
-iio-sensor-proxy
 ijs
 imagemagick
 imath
@@ -605,7 +604,6 @@ jsoncpp
 jupyter-console
 jxrlib
 kaccounts-integration
-kactivitymanagerd
 karchive
 karchive5
 kasts
@@ -616,6 +614,7 @@ kbookmarks
 kcmutils
 kcodecs
 kcodecs5
+kcolorpicker
 kcolorscheme
 kcompletion
 kcompletion5
@@ -630,32 +629,21 @@ kcrash
 kcrash5
 kdbusaddons
 kdbusaddons5
-kde-cli-tools
 kdeclarative
 kdeconnect
-kdecoration
-kded
-kdesu
-kdnssd
-kdsoap
-kdsoap-ws-discovery-client
 keepassxc
 kernel-install-for-dracut
 kernel-modules-hook
 keyutils
 kglobalaccel
-kglobalacceld
 kguiaddons
 kguiaddons5
-kholidays
 ki18n
 ki18n5
 kiconthemes
 kiconthemes5
-kidletime
+kimageannotator
 kio
-kio-extras
-kio-fuse
 kirigami
 kirigami-addons
 kirigami2
@@ -665,8 +653,6 @@ kitemviews5
 kjobwidgets
 kmag
 kmod
-knewstuff
-knighttime
 knotifications
 knotifications5
 kodi
@@ -677,34 +663,24 @@ kodi-addon-visualization-spectrum
 kodi-addon-visualization-waveform
 kodi-platform
 kolourpaint
-kpackage
 kparts
 kpeople
 kpipewire
-kpty
-kquickcharts
+kquickimageeditor
 krb5
 krita
 krita-ai-tools
 krita-plugin-gmic
-krunner
 ksanecore
-kscreenlocker
 kseexpr
 kservice
 kservice5
 kstatusnotifieritem
 ksvg
-ksystemstats
-ktexteditor
 ktextwidgets
-kuserfeedback
 kwallet
-kwallet5
-kwayland
 kwidgetsaddons
 kwidgetsaddons5
-kwin
 kwindowsystem
 kwindowsystem5
 kxmlgui
@@ -716,6 +692,7 @@ lcms2
 ldb
 leancrypto
 lensfun
+leptonica
 less
 level-zero-loader
 lib2geom
@@ -864,9 +841,13 @@ lib32-pango
 lib32-pcre2
 lib32-pcsclite
 lib32-pipewire
+lib32-pipewire-jack
 lib32-pixman
 lib32-polkit
 lib32-popt
+lib32-rust-libs
+lib32-sdl2-compat
+lib32-sdl3
 lib32-speex
 lib32-spirv-tools
 lib32-sqlite
@@ -977,6 +958,7 @@ libelf
 libepoxy
 libepubgen
 libetonyek
+libev
 libevdev
 libevent
 libexif
@@ -1040,8 +1022,6 @@ libkexiv2
 libkeybinder3
 libksane
 libksba
-libkscreen
-libksysguard
 liblangtag
 liblc3
 libldac
@@ -1069,6 +1049,7 @@ libmng
 libmnl
 libmodplug
 libmp3splt
+libmp4v2
 libmpc
 libmpcdec
 libmpeg2
@@ -1097,6 +1078,7 @@ libnma-common
 libnma-gtk4
 libnotify
 libnsl
+libntfs-3g
 libnumbertext
 libnvme
 libobjc
@@ -1111,6 +1093,7 @@ libosinfo
 libp11-kit
 libpagemaker
 libpaper
+libpathrs
 libpcap
 libpciaccess
 libpeas
@@ -1118,7 +1101,6 @@ libpgm
 libpipeline
 libpipewire
 libplacebo
-libplasma
 libplist
 libpng
 libportal
@@ -1208,7 +1190,6 @@ libspeechd
 libspiro
 libspng
 libsrtp
-libssc
 libssh
 libssh2
 libstaroffice
@@ -1337,6 +1318,7 @@ linux-lts-headers
 linux-zen
 linux-zen-headers
 lirc
+litehtml0.9
 live-media
 llama.cpp-vulkan
 lld
@@ -1366,6 +1348,7 @@ lvm2
 lz4
 lzo
 m4
+m4b-tool-bin
 magma-hip
 mailcap
 make
@@ -1397,7 +1380,6 @@ mesa-utils
 meson
 metamorphose2-python3-git
 migraphx
-milou
 miniupnpc
 minizip
 minizip-ng
@@ -1487,7 +1469,6 @@ ntp
 numactl
 nvm
 oath-toolkit
-ocean-sound-theme
 ocl-icd
 oh-my-zsh-git
 oh-my-zsh-powerline-theme-git
@@ -1587,6 +1568,7 @@ perl-json
 perl-libwww
 perl-lwp-mediatypes
 perl-mailtools
+perl-mime-base32
 perl-net-http
 perl-path-tiny
 perl-rename
@@ -1603,6 +1585,7 @@ perl-xml-writer
 phodav
 phonon-qt6
 phonon-qt6-vlc
+php
 physfs
 pinentry
 pinta
@@ -1615,10 +1598,6 @@ pixman
 pkcs11-helper
 pkgconf
 pkgfile
-plasma-activities
-plasma-activities-stats
-plasma-integration
-plasma-workspace
 playerctl
 plocate
 pngquant
@@ -1648,7 +1627,6 @@ procps-ng
 progress
 projectm
 protobuf
-protobuf-c
 proton-ge-custom-bin
 protontricks
 prrte
@@ -1692,6 +1670,7 @@ python-chardet
 python-charset-normalizer
 python-click
 python-colorama
+python-colorlog
 python-comm
 python-configobj
 python-configparser
@@ -1701,6 +1680,8 @@ python-cryptography
 python-css-parser
 python-cssselect
 python-ctranslate2-bin
+python-curl-adapter
+python-curl_cffi
 python-cycler
 python-darkdetect
 python-datasets
@@ -1715,6 +1696,7 @@ python-distro
 python-dnspython
 python-entrypoints
 python-evdev
+python-eventlet
 python-ewmh
 python-executing
 python-fastjsonschema
@@ -1727,9 +1709,11 @@ python-fonttools
 python-frozenlist
 python-fsspec
 python-fvs
+python-gevent
 python-gmpy2
 python-gobject
 python-grapheme
+python-greenlet
 python-h11
 python-h5py
 python-hf-xet
@@ -1918,6 +1902,8 @@ python-yaml
 python-yara
 python-yarl
 python-zeroconf
+python-zope-event
+python-zope-interface
 python-zstandard
 qalculate-gtk
 qbittorrent
@@ -1969,7 +1955,6 @@ qemu-vhost-user-gpu
 qhull
 qml-box2d
 qpdf
-qqc2-breeze-style
 qqc2-desktop-style
 qrencode
 qt5-base
@@ -1999,7 +1984,6 @@ qt6-connectivity
 qt6-declarative
 qt6-graphs
 qt6-imageformats
-qt6-location
 qt6-multimedia
 qt6-multimedia-ffmpeg
 qt6-positioning
@@ -2011,7 +1995,6 @@ qt6-speech
 qt6-svg
 qt6-tools
 qt6-translations
-qt6-virtualkeyboard
 qt6-wayland
 qt6-webchannel
 qt6-webengine
@@ -2050,7 +2033,6 @@ retroarch-assets-xmb
 rgbds
 rhash
 ripgrep
-ripgrep-all
 ristretto
 rnnoise
 rocalution
@@ -2069,6 +2051,7 @@ rocm-smi-lib
 rocm-toolchain
 rocminfo
 rocprim
+rocprofiler
 rocprofiler-register
 rocrand
 rocsolver
@@ -2203,6 +2186,7 @@ source-highlight
 sox
 spandsp
 spdlog
+spectacle
 speech-dispatcher
 speedtest++
 speex
@@ -2240,7 +2224,6 @@ swaybg
 swig
 syncthing
 syndication
-syntax-highlighting
 sysfsutils
 sysstat
 system-config-printer
@@ -2257,6 +2240,9 @@ tdb
 telegram-desktop
 telepathy-glib
 terminator
+tesseract
+tesseract-data-eng
+tesseract-data-osd
 tevent
 texinfo
 the-dark-mod-bin
@@ -2293,7 +2279,6 @@ ttf-dejavu
 ttf-fira-mono
 ttf-fira-sans
 ttf-google-fonts-git
-ttf-hack
 ttf-inconsolata
 ttf-lato
 ttf-liberation
@@ -2382,7 +2367,6 @@ vlc-plugin-jack
 vlc-plugin-journal
 vlc-plugin-jpeg
 vlc-plugin-kate
-vlc-plugin-kwallet
 vlc-plugin-libsecret
 vlc-plugin-lirc
 vlc-plugin-live555
@@ -2401,7 +2385,6 @@ vlc-plugin-ogg
 vlc-plugin-opus
 vlc-plugin-png
 vlc-plugin-pulse
-vlc-plugin-quicksync
 vlc-plugin-samplerate
 vlc-plugin-sdl
 vlc-plugin-sftp
@@ -2493,7 +2476,6 @@ xdg-dbus-proxy
 xdg-desktop-portal
 xdg-desktop-portal-gnome
 xdg-desktop-portal-gtk
-xdg-desktop-portal-kde
 xdg-user-dirs
 xdg-user-dirs-gtk
 xdg-utils
