@@ -238,6 +238,7 @@ electron
 electron39
 electron41
 electron42
+electron43
 elementary-icon-theme
 elfutils
 ell
@@ -264,6 +265,7 @@ eos-settings-xfce4
 eos-translations
 eos-update
 eos-update-notifier
+espeak-ng
 etherwake
 ethtool
 evtest
@@ -995,6 +997,7 @@ libgusb
 libgxps
 libhdhomerun
 libheif
+libhwasan
 libibus
 libice
 libid3tag
@@ -1182,6 +1185,7 @@ libslirp
 libsm
 libsndfile
 libsodium
+libsonic
 libsoup
 libsoup3
 libsoxr
@@ -1440,7 +1444,6 @@ networkmanager-openconnect
 networkmanager-openvpn
 networkmanager-vpn-plugin-openconnect
 networkmanager-vpn-plugin-openvpn
-neverball
 nfs-utils
 nfsidmap
 nftables
@@ -1534,6 +1537,7 @@ patch
 patchelf
 patool
 pavucontrol
+pcaudiolib
 pciutils
 pcre
 pcre2
@@ -1880,6 +1884,8 @@ python-typer
 python-typing-inspection
 python-typing_extensions
 python-typogrify
+python-tzdata
+python-tzlocal
 python-unrardll
 python-urllib3
 python-urwid
