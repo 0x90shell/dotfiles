@@ -1,0 +1,190 @@
+#!/bin/bash
+# Capture the attached display's EDID and force its connector permanently on.
+#
+# Why: the TV is routed through a soundbar that is normally off, and the
+# soundbar does not pass EDID when off. Any DRM re-probe (hibernate, reboot)
+# with the soundbar off loses the display for good, which surfaces hours later
+# as "Sunshine is broken". Forcing the connector on with a saved copy of the
+# real EDID makes the GPU stop asking the soundbar whether a display exists.
+#
+# The real EDID is used rather than a synthesised mode (video=...@60D) because
+# it also carries the audio capabilities that produce the ELD, and therefore
+# the HDMI surround sink Sunshine streams through.
+#
+#   edid-sync            capture if possible, then apply (sudo only if needed)
+#   edid-sync --check    report what would change, touch nothing, no sudo
+#   edid-sync --capture  capture only, never escalate (for a hotplug hook)
+#
+# Captured blobs are written into the chezmoi source tree under
+# ignore-etc/glamdring/firmware/edid/ -- that path is covered by 'ignore-*/' in
+# .chezmoiignore, so it is version-controlled but never applied into $HOME.
+set -euo pipefail
+
+SOURCE_DIR="${CHEZMOI_SOURCE_DIR:-$HOME/.local/share/chezmoi}"
+STORE="$SOURCE_DIR/ignore-etc/glamdring/firmware/edid"
+FW_DIR="/usr/lib/firmware/edid"
+CMDLINE="/etc/kernel/cmdline"
+
+CHECK=false
+CAPTURE_ONLY=false
+case "${1:-}" in
+    --check)   CHECK=true ;;
+    --capture) CAPTURE_ONLY=true ;;
+    "")        ;;
+    *)         echo "usage: ${0##*/} [--check|--capture]" >&2; exit 2 ;;
+esac
+
+say() { printf '%s\n' "$*"; }
+
+# An EDID is valid if it starts with the fixed 8-byte header and is a whole
+# number of 128-byte blocks. Size must come from reading the file, not stat:
+# sysfs binary attributes report a stat size of 0 no matter what they contain,
+# which also rules out [[ -s ]].
+edid_valid() {
+    local f=$1 size
+    size=$(wc -c < "$f" 2>/dev/null) || return 1
+    (( size >= 128 && size <= 512 && size % 128 == 0 )) || return 1
+    [[ "$(head -c 8 "$f" | xxd -p)" == "00ffffffffffff00" ]]
+}
+
+# Compare by content, never with cmp: GNU cmp -s short-circuits on st_size for
+# regular files, and a sysfs attribute reports 0, so it would call every sysfs
+# EDID "different" without ever reading it. Redirecting keeps filenames out of
+# the digest.
+same_content() {
+    [[ -f $1 || -r $1 ]] && [[ -f $2 ]] || return 1
+    [[ "$(sha256sum < "$1")" == "$(sha256sum < "$2")" ]]
+}
+
+# Once drm.edid_firmware is active the kernel serves our saved blob back through
+# sysfs, so re-capturing would just copy our own override and could never notice
+# a genuinely new display. Capture only when the override is not in effect.
+override_active() { grep -q 'drm\.edid_firmware=' /proc/cmdline; }
+
+mkdir -p "$STORE"
+
+# ---------------------------------------------------------------- capture ---
+captured=()
+for dir in /sys/class/drm/card*-*/; do
+    conn=$(basename "$dir")
+    name=${conn#card*-}                       # card1-HDMI-A-1 -> HDMI-A-1
+    if [[ $name == Writeback-* ]]; then continue; fi
+    [[ "$(cat "$dir/status" 2>/dev/null)" == connected ]] || continue
+    edid_valid "$dir/edid" || continue
+    captured+=("$name")
+
+    dest="$STORE/$name.bin"
+    if override_active; then
+        say "capture: $name connected, but drm.edid_firmware is active -> keeping stored blob"
+    elif same_content "$dir/edid" "$dest"; then
+        say "capture: $name unchanged"
+    elif $CHECK; then
+        say "capture: $name WOULD be written to $dest"
+    else
+        cp "$dir/edid" "$dest"
+        chmod 644 "$dest"
+        say "capture: $name -> $dest ($(stat -c %s "$dest") bytes)"
+    fi
+done
+
+(( ${#captured[@]} )) || say "capture: no connected display right now"
+
+if $CAPTURE_ONLY; then exit 0; fi
+
+# ----------------------------------------------------------------- target ---
+# Apply whichever connector we have a stored blob for. Exactly one is the
+# normal case; more than one is ambiguous, so do nothing rather than guess.
+stored=()
+for f in "$STORE"/*.bin; do
+    [[ -e $f ]] || continue
+    stored+=("$(basename "$f" .bin)")
+done
+
+if (( ${#stored[@]} == 0 )); then
+    say "apply: no stored EDID yet -- run this once with the display powered on"
+    exit 0
+elif (( ${#stored[@]} > 1 )); then
+    say "apply: multiple stored EDIDs (${stored[*]}) -- refusing to guess, remove the unwanted one"
+    exit 1
+fi
+
+CONN="${stored[0]}"
+BLOB="$STORE/$CONN.bin"
+edid_valid "$BLOB" || { say "apply: stored blob for $CONN is not a valid EDID"; exit 1; }
+
+WANT_FW="drm.edid_firmware=$CONN:edid/$CONN.bin"
+WANT_VIDEO="video=$CONN:e"
+
+# ------------------------------------------------------------ what's stale ---
+need_blob=false
+if ! same_content "$BLOB" "$FW_DIR/$CONN.bin"; then need_blob=true; fi
+
+current=$(cat "$CMDLINE")
+desired=$current
+
+# Note any blob a previous run installed under a different name, so switching
+# naming schemes or displays doesn't strand an orphan in /usr/lib/firmware.
+stale_blob=""
+for tok in $current; do
+    case $tok in
+        drm.edid_firmware=*)
+            old=${tok##*/}
+            if [[ -n $old && $old != "$CONN.bin" ]]; then stale_blob=$old; fi
+            ;;
+    esac
+done
+# Drop any prior copies of the two parameters, then append the ones we want, so
+# a changed connector or blob name self-corrects instead of accumulating.
+for tok in $current; do
+    case $tok in
+        drm.edid_firmware=*|video=$CONN:*) desired=${desired//$tok/} ;;
+    esac
+done
+desired=$(printf '%s %s %s' "$desired" "$WANT_FW" "$WANT_VIDEO" | tr -s ' ' | sed 's/^ //; s/ $//')
+
+need_cmdline=false
+if [[ "$desired" != "$current" ]]; then need_cmdline=true; fi
+
+if ! $need_blob && ! $need_cmdline; then
+    say "apply: already correct ($CONN forced on, blob installed)"
+    exit 0
+fi
+
+if $need_blob; then
+    say "apply: blob $FW_DIR/$CONN.bin needs install"
+fi
+if $need_cmdline; then
+    say "apply: cmdline needs update"
+    say "  from: $current"
+    say "    to: $desired"
+fi
+
+if $CHECK; then
+    say "apply: --check, nothing written"
+    exit 0
+fi
+
+# -------------------------------------------------------------- escalate ----
+say "apply: escalating with sudo"
+if $need_blob; then
+    sudo install -Dm644 "$BLOB" "$FW_DIR/$CONN.bin"
+    say "  installed $FW_DIR/$CONN.bin"
+fi
+
+if [[ -n $stale_blob && -f "$FW_DIR/$stale_blob" ]]; then
+    sudo rm -f "$FW_DIR/$stale_blob"
+    say "  removed superseded $FW_DIR/$stale_blob"
+fi
+
+if $need_cmdline; then
+    sudo cp -a "$CMDLINE" "$CMDLINE.bak-$(date +%Y%m%d-%H%M%S)"
+    printf '%s\n' "$desired" | sudo tee "$CMDLINE" > /dev/null
+    say "  wrote $CMDLINE (previous version backed up alongside it)"
+    sudo reinstall-kernels
+    say "  regenerated boot entries"
+fi
+
+# The previous cmdline is preserved as $CMDLINE.bak-* by the block above; it is
+# deliberately not copied into the source tree, since it carries the root and
+# resume UUIDs that this repo keeps encrypted elsewhere.
+say "apply: done -- reboot to activate"

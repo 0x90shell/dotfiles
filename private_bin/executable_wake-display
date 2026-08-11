@@ -27,7 +27,12 @@ for i in $(seq 1 30); do
     sleep 0.2
 done
 
+# Deliberately non-fatal. This runs as Sunshine's ExecStartPre, so a hard
+# failure burns StartLimitBurst and wedges the unit in start-limit-hit, which
+# buries the real cause behind a generic systemd error. Let Sunshine start and
+# report its own far clearer "Couldn't find monitor" instead.
 if [ "$display_ready" = false ]; then
-    echo "wake-display: display did not come online within 6s" >&2
-    exit 1
+    echo "wake-display: display did not come online within 6s; starting anyway" >&2
 fi
+
+exit 0

@@ -1,0 +1,12 @@
+{{- if eq .chezmoi.hostname "Glamdring" -}}
+#!/bin/bash
+set -euo pipefail
+
+# Keep the TV's EDID captured and its connector forced on, so a hibernate or
+# reboot with the soundbar powered off cannot take the display away from
+# Sunshine. edid-sync exits early when everything is already correct, so this
+# only escalates to sudo when something genuinely changed.
+if [[ -x "$HOME/bin/edid-sync" ]]; then
+    "$HOME/bin/edid-sync"
+fi
+{{- end }}
