@@ -403,7 +403,13 @@ scrape_metadata() {
     local input_dir="$2"
     shift 2
     local extension_args=("$@")  # Use array for extension arguments
-    
+
+    # ScummVM "ROMs" are .scummvm stub files one level down inside a per-game
+    # folder, not loose files in the input dir, so subdirectory scanning has to
+    # stay enabled for that system or Skyscraper matches zero games.
+    local subdir_flag="nosubdirs,"
+    [[ "$console" == "scummvm" ]] && subdir_flag=""
+
     log_info "🎮 Running Skyscraper metadata scrapes for $console..."
     log_verbose "Input directory: $input_dir"
     log_verbose "Extension args: ${extension_args[*]:-none}"
@@ -411,17 +417,17 @@ scrape_metadata() {
     # ES gamelist scrape (existing metadata)
     log_verbose "Scraping ES gamelist metadata..."
     Skyscraper -p "$console" -s esgamelist -i "$input_dir" \
-        --flags videos,relative,nosubdirs,unattend --refresh ${extension_args[@]+"${extension_args[@]}"}
+        --flags "videos,relative,${subdir_flag}unattend" --refresh ${extension_args[@]+"${extension_args[@]}"}
     
     # ScreenScraper database scrape
     log_verbose "Scraping ScreenScraper database..."
     Skyscraper -p "$console" -s screenscraper -i "$input_dir" \
-        --flags noscreenshots,nocovers,nowheels,nomarquees,nosubdirs,unattend ${extension_args[@]+"${extension_args[@]}"}
+        --flags "noscreenshots,nocovers,nowheels,nomarquees,${subdir_flag}unattend" ${extension_args[@]+"${extension_args[@]}"}
     
     # TheGamesDB scrape
     log_verbose "Scraping TheGamesDB database..."
     Skyscraper -p "$console" -s thegamesdb -i "$input_dir" \
-        --flags nosubdirs,unattend ${extension_args[@]+"${extension_args[@]}"}
+        --flags "${subdir_flag}unattend" ${extension_args[@]+"${extension_args[@]}"}
     
     # Generate final gamelist
     log_verbose "Generating final gamelist..."
