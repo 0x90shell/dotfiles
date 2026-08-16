@@ -235,6 +235,21 @@ run_rsync() {
     fi
 }
 
+# rsync that always reports transfer progress.
+#
+# These syncs move tens of gigabytes over CIFS and can run for hours. Without
+# progress output a live transfer looks exactly like a hung mount, so the
+# single-line --info=progress2 summary (percent, rate, ETA) is always on.
+# --verbose additionally lists every file, which stays opt-in because it buries
+# the progress line under thousands of paths.
+sync_with_progress() {
+    if [[ "$VERBOSE" == true ]]; then
+        run_rsync -avz --info=progress2 "$@"
+    else
+        run_rsync -az --info=progress2 "$@"
+    fi
+}
+
 # Run rm with dry-run support
 run_rm() {
     if [[ "$DRY_RUN" == true ]]; then
@@ -566,11 +581,7 @@ sync_media_files() {
                 fi
             elif [[ "$mode" == "rsync" ]]; then
                 # For initialize mode, sync with rsync
-                if [[ "$VERBOSE" == true ]]; then
-                    run_rsync -avz --info=progress2 "$src_path/" "$dest_path"
-                else
-                    run_rsync -az "$src_path/" "$dest_path"
-                fi
+                sync_with_progress "$src_path/" "$dest_path"
                 log_verbose "✓ Synced $src_type -> $dest_type"
             fi
         else
@@ -1336,11 +1347,7 @@ mode_initialize() {
     
     # Sync all ROMs from NAS (with delete to match exactly)
     log_info "🔄 Syncing ROMs from NAS (with --delete)..."
-    if [[ "$VERBOSE" == true ]]; then
-        run_rsync -avz --info=progress2 "$nas_rom_dir/" "$local_rom_dir" --delete
-    else
-        run_rsync -az "$nas_rom_dir/" "$local_rom_dir" --delete
-    fi
+    sync_with_progress "$nas_rom_dir/" "$local_rom_dir" --delete
     log_info "✅ ROM sync completed"
     
     # Scrape metadata
@@ -1382,11 +1389,7 @@ mode_additions() {
     
     # Process 0merge directory
     log_info "📁 Processing 0merge directory..."
-    if [[ "$VERBOSE" == true ]]; then
-        run_rsync -avz --info=progress2 "$nas_merge_dir/" "$local_merge_dir"
-    else
-        run_rsync -az "$nas_merge_dir/" "$local_merge_dir"
-    fi
+    sync_with_progress "$nas_merge_dir/" "$local_merge_dir"
     log_info "✅ 0merge synced"
     
     # Scrape metadata for new ROMs
@@ -1417,11 +1420,7 @@ mode_additions() {
     if [[ -d "$nas_rom_dir/hacks" ]]; then
         log_info "🎯 Syncing hacks directory..."
         local hacks_dir="$local_rom_dir/hacks"
-        if [[ "$VERBOSE" == true ]]; then
-            run_rsync -avz --info=progress2 "$nas_rom_dir/hacks/" "$hacks_dir/" --delete
-        else
-            run_rsync -az "$nas_rom_dir/hacks/" "$hacks_dir/" --delete
-        fi
+        sync_with_progress "$nas_rom_dir/hacks/" "$hacks_dir/" --delete
         # Remove any gamelist from hacks directory
         run_rm -f "$hacks_dir/gamelist.xml"
         log_info "✅ Hacks synced"
