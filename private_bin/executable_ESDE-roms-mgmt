@@ -244,10 +244,32 @@ run_rsync() {
 # the progress line under thousands of paths.
 sync_with_progress() {
     if [[ "$VERBOSE" == true ]]; then
-        run_rsync -avz --info=progress2 "$@"
-    else
-        run_rsync -az --info=progress2 "$@"
+        run_rsync -avzh --info=progress2 "$@"
+        return $?
     fi
+
+    # Output is being captured, not watched. Redrawing is pointless there, and
+    # the truncation below would only corrupt the log.
+    if [[ ! -t 1 ]] || ! command -v stdbuf >/dev/null 2>&1; then
+        run_rsync -azh --info=progress2 "$@"
+        return $?
+    fi
+
+    # Keep each redraw just inside the terminal. rsync's progress2 line reaches
+    # ~80 characters once the xfr counter grows, and on an 80-column terminal
+    # (the SSH default) a full-width line wraps. The \r then returns to the
+    # start of the *wrapped* line, so every update strands another line instead
+    # of redrawing one -- which looks like the progress bar spamming the screen.
+    # RS='\r' makes each redraw its own awk record so it can be clipped.
+    local cols rc
+    cols=$(tput cols 2>/dev/null) || cols=80
+    [[ -z "$cols" || "$cols" -lt 40 ]] && cols=80
+
+    run_rsync -azh --info=progress2 "$@" \
+        | stdbuf -o0 awk -v RS='\r' -v w=$((cols - 1)) '{ printf "%.*s\r", w, $0; fflush() }'
+    rc=${PIPESTATUS[0]}
+    printf '\n'
+    return "$rc"
 }
 
 # Run rm with dry-run support
