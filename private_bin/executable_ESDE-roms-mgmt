@@ -410,6 +410,12 @@ scrape_metadata() {
     local subdir_flag="nosubdirs,"
     [[ "$console" == "scummvm" ]] && subdir_flag=""
 
+    # Skyscraper builds the title as "<scraped name> (<brackets from the ROM
+    # filename>)", so "007 - The World Is Not Enough (USA).7z" becomes a display
+    # name ending in "(USA)" and every scummvm stub picks up its "(CD - DOS)"
+    # platform tag. Display names should read as the game, never the filename's
+    # region or media notes, so brackets stay off for every console.
+
     log_info "🎮 Running Skyscraper metadata scrapes for $console..."
     log_verbose "Input directory: $input_dir"
     log_verbose "Extension args: ${extension_args[*]:-none}"
@@ -432,7 +438,7 @@ scrape_metadata() {
     # Generate final gamelist
     log_verbose "Generating final gamelist..."
     Skyscraper -p "$console" -i "$input_dir" \
-        --flags unattend,relative ${extension_args[@]+"${extension_args[@]}"}
+        --flags nobrackets,unattend,relative ${extension_args[@]+"${extension_args[@]}"}
     
     log_info "✅ Metadata scraping completed"
 }
