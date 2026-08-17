@@ -522,10 +522,40 @@ sync_gamelist_replace() {
     # Copy new gamelist
     if [[ -f "$source_gamelist" ]]; then
         run_rsync "$source_gamelist" "$target_gamelist"
+        strip_dangling_media_refs "$target_gamelist"
         log_info "✅ Gamelist synced"
     else
         log_error "Source gamelist not found: $source_gamelist"
     fi
+}
+
+# Skyscraper is invoked with --flags relative, so it writes media paths as
+# ./media/<type>/<name>.png, resolved by ES-DE against the ROM directory. But
+# cleanup_temp_files deletes "$rom_dir/media" at the end of every run, so those
+# refs are dangling by the time ES-DE reads them and it renders nothing at all.
+#
+# The media itself is already in ~/ES-DE/downloaded_media/<console>, which ES-DE
+# finds by filename convention with no gamelist tag involved. Dropping the refs
+# is what makes that fallback kick in -- it is how the systems that work here
+# (doom, dreamcast) are set up. Text metadata is untouched.
+strip_dangling_media_refs() {
+    local gamelist="$1"
+
+    [[ -f "$gamelist" ]] || return 0
+
+    local count
+    count=$(grep -c '>\./media/' "$gamelist" || true)
+    (( count > 0 )) || return 0
+
+    if [[ "$DRY_RUN" == true ]]; then
+        log_dryrun "strip $count dangling media refs from $gamelist"
+        return 0
+    fi
+
+    # One media element per line, so match on the value rather than enumerating
+    # every tag name.
+    grep -v '>\./media/' "$gamelist" > "$gamelist.tmp" && mv "$gamelist.tmp" "$gamelist"
+    log_verbose "✓ Stripped $count dangling media refs"
 }
 
 # Merge gamelist for additions mode (append)
@@ -629,7 +659,50 @@ sync_media_files() {
         fi
     done
     
+    suffix_media_for_dirs_as_files "$console" "$source_dir" "$es_media"
+
     log_info "✅ Media files synced"
+}
+
+# ES-DE can interpret a game directory as a single file when the directory name
+# matches the file inside it, extension included -- "Blue Force (Floppy - DOS)
+# .scummvm/Blue Force (Floppy - DOS).scummvm". scummvm is set up that way so the
+# frontend shows one entry per game instead of a folder to descend into.
+#
+# The catch is that ES-DE then keys media on the full directory name, suffix and
+# all, while Skyscraper names its output after the stub minus extension. Every
+# file lands one name short and no artwork resolves. Rename them to match.
+#
+# Only files whose basename corresponds to an existing game directory are
+# touched, which leaves multi-stub bundles alone: the Crystal Shard bundle stays
+# a real folder holding three stubs, and ES-DE keys those on the stub name
+# ("larrylotter.png"), which is already correct.
+suffix_media_for_dirs_as_files() {
+    local console="$1"
+    local roms_dir="$2"
+    local media_dir="$3"
+
+    [[ "$console" == "scummvm" ]] || return 0
+    [[ -d "$media_dir" ]] || return 0
+
+    local suffix=".scummvm"
+    local renamed=0
+    local f dir file ext base
+
+    while IFS= read -r -d '' f; do
+        dir=${f%/*}
+        file=${f##*/}
+        ext=${file##*.}
+        base=${file%.*}
+
+        [[ "$base" == *"$suffix" ]] && continue
+        [[ -d "$roms_dir/$base$suffix" ]] || continue
+
+        run_mv -n "$f" "$dir/$base$suffix.$ext"
+        renamed=$((renamed + 1))
+    done < <(find "$media_dir" -type f -print0)
+
+    log_verbose "✓ Suffixed $renamed media files for directories-as-files"
 }
 
 # --- Cleanup Functions ---
