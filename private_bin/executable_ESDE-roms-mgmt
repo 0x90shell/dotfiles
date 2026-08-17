@@ -458,8 +458,15 @@ scrape_metadata() {
     log_verbose "Extension args: ${extension_args[*]:-none}"
     
     # ES gamelist scrape (existing metadata)
+    #
+    # -g is required, not optional: the esgamelist module reads gamelist.xml
+    # from Skyscraper's gameListFolder, which defaults to a frontend-specific
+    # path (a RetroPie tree) and NOT the -i input folder. Without it the run
+    # dies with "Gamelist file 'gamelist.xml' not found for platform ..." even
+    # though the file is sitting right there in the ROM directory -- and that
+    # gamelist is what carries the authored names, genres and kidgame flags.
     log_verbose "Scraping ES gamelist metadata..."
-    Skyscraper -p "$console" -s esgamelist -i "$input_dir" \
+    Skyscraper -p "$console" -s esgamelist -i "$input_dir" -g "$input_dir" \
         --flags "videos,relative,${subdir_flag}unattend" --refresh ${extension_args[@]+"${extension_args[@]}"}
     
     # ScreenScraper database scrape
@@ -473,8 +480,14 @@ scrape_metadata() {
         --flags "${subdir_flag}unattend" ${extension_args[@]+"${extension_args[@]}"}
     
     # Generate final gamelist
+    #
+    # -g and -o pin the outputs to the ROM directory, because that is where
+    # sync_gamelist_replace and sync_media_files look for them afterwards
+    # ("$source_dir/gamelist.xml" and "$source_dir/media/<type>"). Left to the
+    # frontend defaults Skyscraper writes them somewhere else entirely and the
+    # later steps silently find nothing to sync.
     log_verbose "Generating final gamelist..."
-    Skyscraper -p "$console" -i "$input_dir" \
+    Skyscraper -p "$console" -i "$input_dir" -g "$input_dir" -o "$input_dir/media" \
         --flags nobrackets,unattend,relative ${extension_args[@]+"${extension_args[@]}"}
     
     log_info "✅ Metadata scraping completed"
