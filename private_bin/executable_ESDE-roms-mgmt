@@ -1393,6 +1393,18 @@ mode_initialize() {
     # caching. Worth skipping when re-running purely to redo the scrape.
     if [[ "$NO_SYNC" == true ]]; then
         log_info "⏭️  Skipping NAS ROM sync (--no-sync)"
+        # cleanup_temp_files deletes gamelist.xml from the ROM directory at the
+        # end of every run, and the esgamelist scrape reads it back from there
+        # on the next one. The full sync is what normally restores it, so
+        # skipping the sync leaves nothing to read and the run dies with
+        # "Gamelist file 'gamelist.xml' not found for platform ...". Fetch just
+        # that one file; it costs nothing next to the full --delete stat pass.
+        if [[ -f "$nas_rom_dir/gamelist.xml" ]]; then
+            run_rsync -t "$nas_rom_dir/gamelist.xml" "$local_rom_dir/gamelist.xml"
+            log_info "✅ Restored gamelist.xml from NAS"
+        else
+            log_info "⚠️  No gamelist.xml on NAS; scrape will fail if the local copy is missing"
+        fi
     else
         log_info "🔄 Syncing ROMs from NAS (with --delete)..."
         sync_with_progress "$nas_rom_dir/" "$local_rom_dir" --delete
