@@ -1,0 +1,321 @@
+#!/usr/bin/env python3
+"""Propose ES-DE favorites for a console by scoring it against the local rating
+datasets and any curated best-of lists.
+
+Scoring is delegated to ra_tool rather than reimplemented, so every tool here
+agrees on what a game is worth. ra_tool normalizes each source onto 0-100:
+
+    GameFAQs   rating * 20        user score, the densest source by far
+    RAWG       rating * 20        user score, plus its metacritic column
+    Metacritic metascore/userscore
+
+and combines them as the mean of the critic average and the user average, or
+whichever of the two exists.
+
+Selection has three gates, any one of which qualifies a game:
+
+    1. combined score reaches --threshold          absolute quality
+    2. lands in the top --cutoff percent           relative quality, so a
+                                                   console whose scores all sit
+                                                   low still yields picks
+    3. named by --vote-qualify distinct lists      for games no database scores
+
+The third gate exists because no commercial database indexes freeware AGS games,
+and plenty of pre-1999 releases have no GameFAQs row either. On a ScummVM
+collection that is 30% of the catalogue, including titles as well regarded as
+Conquests of the Longbow. Several independent curated lists naming the same game
+is real evidence, it just is not a number. It counts DISTINCT sources rather than
+weighted votes, which is what stops one enthusiast list from promoting its whole
+catalogue on its own.
+
+Curated lists live one title per line in
+
+    ~/bin/.ratool_datasets/lists/<platform>-<source>.txt
+
+which is the shape the wii and gamecube lists were already built in. Anything
+under lists/derived/ is skipped, since those are unions of the others and would
+count their contents twice. An optional lists/weights.conf gives a source more
+pull when ranking, for example a genre-specific enthusiast poll over a general
+listicle that happens to mention a game. Weights never affect qualification.
+
+Coverage varies enormously by platform and era. GameFAQs reaches 64-85% of a
+typical console; Metacritic ranges from 7% on a DOS-era collection to 50% on Wii.
+
+Usage:
+    rank-favorites <gamelist.xml> --platform wii [--cutoff 25] [--threshold 80]
+                   [--vote-qualify 2] [--vote-boost 2] [--out table.tsv] [--apply]
+"""
+import argparse
+import importlib.util
+import os
+import re
+import shutil
+import sys
+import time
+import unicodedata
+import xml.etree.ElementTree as ET
+
+RA_TOOL = os.path.expanduser("~/bin/ra_tool")
+LISTS_DIR = os.path.expanduser("~/bin/.ratool_datasets/lists")
+
+
+def load_ra_tool():
+    """Import ra_tool as a library. It has a __main__ guard, so this is safe."""
+    if not os.path.isfile(RA_TOOL):
+        sys.exit(f"ERROR: ra_tool not found at {RA_TOOL}")
+    spec = importlib.util.spec_from_loader(
+        "ra_tool", importlib.machinery.SourceFileLoader("ra_tool", RA_TOOL))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def clean_title(name):
+    """Undo the shapes ES-DE and Skyscraper impose before ra_tool normalizes.
+
+    ra_tool strips a leading "The " but not the trailing ", The" that Skyscraper
+    produces, and only removes a parenthetical at the end of the string, so
+    "Blue's Birthday Adventure (Red) (CD - Windows)" keeps its first bracket.
+    """
+    s = unicodedata.normalize("NFKC", name or "").strip()
+    s = re.sub(r",\s*(The|A|An)\s*$", "", s, flags=re.I)
+    s = re.sub(r",\s*(The|A|An)\b", " ", s, flags=re.I)
+    s = re.sub(r"\s*\([^)]*\)", " ", s)
+    s = re.sub(r"\s*\[[^\]]*\]", " ", s)
+    return " ".join(s.split())
+
+
+def load_weights():
+    """Optional per-source weights from lists/weights.conf, one 'source = 1.5' per line.
+
+    Weights only influence ranking, never qualification. A genre-specific
+    enthusiast poll is better evidence than a general listicle that happens to
+    mention a game, but letting one source outvote the independence requirement
+    would defeat the point of counting distinct lists.
+    """
+    weights = {}
+    path = os.path.join(LISTS_DIR, "weights.conf")
+    if not os.path.isfile(path):
+        return weights
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            line = line.split("#", 1)[0].strip()
+            if not line or "=" not in line:
+                continue
+            name, _, val = line.partition("=")
+            try:
+                weights[name.strip()] = float(val)
+            except ValueError:
+                continue
+    return weights
+
+
+def load_lists(platform, key_fn, weights):
+    """Curated best-of lists, keyed the same way as the datasets.
+
+    Returns both a distinct-source count and a weighted total per game. The
+    count drives qualification because independence is what makes two sources
+    agreeing meaningful. The weighted total drives ranking, where how much a
+    source is worth is the useful question.
+    """
+    votes, weighted, sources = {}, {}, {}
+    if not os.path.isdir(LISTS_DIR):
+        return votes, weighted, sources, []
+    used = []
+    for fn in sorted(os.listdir(LISTS_DIR)):
+        if not fn.endswith(".txt") or not fn.startswith(f"{platform}-"):
+            continue
+        label = fn[len(platform) + 1:-4]
+        used.append(fn)
+        w = weights.get(label, 1.0)
+        seen = set()
+        with open(os.path.join(LISTS_DIR, fn), encoding="utf-8", errors="replace") as f:
+            for line in f:
+                k = key_fn(clean_title(line))
+                # A list naming the same game twice is still one vote.
+                if not k or k in seen:
+                    continue
+                seen.add(k)
+                votes[k] = votes.get(k, 0) + 1
+                weighted[k] = weighted.get(k, 0.0) + w
+                sources.setdefault(k, []).append(label)
+    return votes, weighted, sources, used
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("gamelist")
+    ap.add_argument("--platform", required=True,
+                    help="ES-DE console name, e.g. wii, psx, scummvm")
+    ap.add_argument("--cutoff", type=float, default=25.0,
+                    help="top N%% of scored games also qualify (default 25)")
+    ap.add_argument("--threshold", type=float, default=80.0,
+                    help="combined score at or above this qualifies (default 80)")
+    ap.add_argument("--vote-boost", type=float, default=0.0,
+                    help="points added per curated-list vote before ranking")
+    ap.add_argument("--min-sources", type=int, default=1,
+                    help="datasets that must agree before a game can be selected. "
+                         "Leave at 1 for pre-2000 catalogues where GameFAQs is "
+                         "usually the only source that has heard of the game")
+    ap.add_argument("--include-hacks", action="store_true",
+                    help="allow several builds of one game to be selected "
+                         "separately instead of keeping only the best")
+    ap.add_argument("--vote-qualify", type=int, default=0,
+                    help="a game named by this many DISTINCT curated lists "
+                         "qualifies even with no numeric score. 0 disables. "
+                         "Counts sources, not weights, so no single list can "
+                         "qualify a game on its own")
+    ap.add_argument("--out", help="write the full table as TSV")
+    ap.add_argument("--apply", action="store_true",
+                    help="write favorite=true into the gamelist")
+    args = ap.parse_args()
+
+    ra = load_ra_tool()
+    key = ra.normalize_score_title
+
+    tree = ET.parse(args.gamelist)
+    root = tree.getroot()
+
+    games = []
+    for g in root.findall("game"):
+        name = (g.findtext("name") or "").strip()
+        if not name:
+            continue
+        games.append({
+            "el": g,
+            "name": name,
+            "title": clean_title(name),
+            "fav": (g.findtext("favorite") or "").strip().lower() == "true",
+        })
+
+    weights = load_weights()
+    votes, weighted, vote_src, list_files = load_lists(args.platform, key, weights)
+
+    for entry in games:
+        agg = ra.fetch_all_scores(entry["title"], args.platform, use_api=False)
+        entry["critic"] = agg.critic_score
+        entry["user"] = agg.user_score
+        entry["score"] = agg.combined_score
+        srcs = sorted({s.source for s in agg.sources})
+        entry["srcs"] = ",".join(srcs)
+        entry["n_src"] = len(srcs)
+        # "[h] [Project M]" and friends mark a modified build.
+        entry["is_hack"] = 1 if re.search(r"\[(h|hack)\]", entry["name"], re.I) else 0
+        k = key(entry["title"])
+        entry["votes"] = votes.get(k, 0)
+        entry["weight"] = weighted.get(k, 0.0)
+        entry["vote_src"] = ",".join(vote_src.get(k, []))
+        entry["ranked"] = (entry["score"] + args.vote_boost * entry["weight"]
+                           if entry["score"] is not None else None)
+
+    scored = [e for e in games if e["ranked"] is not None]
+    unscored = [e for e in games if e["ranked"] is None]
+    scored.sort(key=lambda e: (-e["ranked"], -e["weight"], -e["votes"], e["name"]))
+
+    # Romhacks and alternate builds normalize to the same title as the game they
+    # are built from, so they inherit its score. That is correct for scoring but
+    # would let one game claim several favorite slots, so keep only the best
+    # ranked build and prefer an unmodified one at equal score.
+    eligible = scored
+    suppressed = 0
+    if not args.include_hacks:
+        best, order = {}, []
+        for e in scored:
+            k = key(e["title"])
+            if k not in best:
+                best[k] = e
+                order.append(k)
+            else:
+                suppressed += 1
+                if e["is_hack"] < best[k]["is_hack"]:
+                    best[k] = e
+        eligible = [best[k] for k in order]
+
+    # A single dataset having heard of a game is weak evidence on its own.
+    if args.min_sources > 1:
+        eligible = [e for e in eligible if e["n_src"] >= args.min_sources]
+
+    n_top = round(len(eligible) * args.cutoff / 100.0)
+    in_top = {id(e) for e in eligible[:n_top]}
+    picked = [e for e in eligible if e["ranked"] >= args.threshold or id(e) in in_top]
+
+    # Third gate. No commercial database indexes freeware AGS games or some
+    # pre-1999 releases, so a numeric score is simply unavailable for them.
+    # Several independent curated lists naming the same game is real evidence,
+    # it just is not a number. Requiring distinct sources is what stops one
+    # enthusiast list from promoting its whole catalogue.
+    by_votes = []
+    if args.vote_qualify:
+        by_votes = [e for e in unscored if e["votes"] >= args.vote_qualify]
+        by_votes.sort(key=lambda e: (-e["weight"], -e["votes"], e["name"]))
+        picked += by_votes
+
+    print(f"  platform        : {args.platform}")
+    print(f"  games           : {len(games)}")
+    print(f"  scored          : {len(scored)}   unscored: {len(unscored)}")
+    if list_files:
+        print(f"  curated lists   : {len(list_files)} ({', '.join(list_files)})")
+        print(f"  games with votes: {sum(1 for e in games if e['votes'])}")
+    else:
+        print(f"  curated lists   : none found for '{args.platform}' in {LISTS_DIR}")
+    if suppressed:
+        print(f"  duplicate builds: {suppressed} suppressed (romhacks and alternate "
+              f"versions of a game already in the running)")
+    if args.min_sources > 1:
+        print(f"  min sources     : {args.min_sources}")
+    print(f"  eligible        : {len(eligible)}")
+    print(f"  rule            : score >= {args.threshold:g} OR top {args.cutoff:g}% of eligible ({n_top})")
+    if args.vote_boost:
+        print(f"  vote boost      : +{args.vote_boost:g} per list appearance")
+    if args.vote_qualify:
+        print(f"  vote gate       : {len(by_votes)} unscored games named by "
+              f"{args.vote_qualify}+ distinct lists")
+    if weights:
+        print(f"  source weights  : {', '.join(f'{k}={v:g}' for k, v in sorted(weights.items()))}")
+    print(f"  SELECTED        : {len(picked)}  ({len(picked) * 100.0 / len(games):.1f}% of collection)")
+    print(f"  already favorite: {sum(1 for e in picked if e['fav'])} of "
+          f"{sum(1 for e in games if e['fav'])} existing")
+
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as f:
+            f.write("selected\tranked\tcombined\tcritic\tuser\tvotes\tweight\t"
+                    "sources\tlist_sources\twas_favorite\tname\n")
+            chosen = {id(e) for e in picked}
+            for e in scored + unscored:
+                f.write("\t".join([
+                    "1" if id(e) in chosen else "0",
+                    f"{e['ranked']:.1f}" if e["ranked"] is not None else "",
+                    f"{e['score']:.1f}" if e["score"] is not None else "",
+                    f"{e['critic']:.0f}" if e["critic"] else "",
+                    f"{e['user']:.0f}" if e["user"] else "",
+                    str(e["votes"]), f"{e['weight']:.1f}", e["srcs"], e["vote_src"],
+                    "1" if e["fav"] else "0", e["name"],
+                ]) + "\n")
+        print(f"  table           -> {args.out}")
+
+    if not args.apply:
+        print("\n  DRY RUN -- rerun with --apply to write favorites")
+        return
+
+    chosen = {id(e) for e in picked}
+    added = 0
+    for e in games:
+        if id(e) not in chosen:
+            continue
+        el = e["el"].find("favorite")
+        if el is None:
+            el = ET.SubElement(e["el"], "favorite")
+        if (el.text or "").strip().lower() != "true":
+            el.text = "true"
+            added += 1
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    shutil.copyfile(args.gamelist, f"{args.gamelist}.pre-favorites-{stamp}")
+    ET.indent(tree, space="  ")
+    tree.write(args.gamelist, encoding="utf-8", xml_declaration=True)
+    print(f"\n  newly favorited : {added}")
+    print(f"  written (backup .pre-favorites-{stamp})")
+
+
+if __name__ == "__main__":
+    main()

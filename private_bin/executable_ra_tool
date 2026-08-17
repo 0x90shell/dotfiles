@@ -281,6 +281,11 @@ SCORE_PLATFORM_TO_GAMEFAQS = {
     'c64': 'C64',
     'amiga': 'AMI',
     'dos': 'PC',
+    # ScummVM, Windows and bare PC collections all resolve to the same GameFAQs
+    # platform. ScummVM titles frequently also appear under the home micros they
+    # were first released on, which the unrestricted fallback picks up.
+    'pc': 'PC', 'windows': 'PC', 'scummvm': 'PC',
+    'macintosh': 'MAC', 'atarist': 'AST',
     '3do': '3DO',
     'wonderswan': 'WS',
     'wonderswancolor': 'WSC',
@@ -315,6 +320,9 @@ SCORE_PLATFORM_TO_RAWG = {
     'ps2': 'PlayStation 2',
     'psp': 'PSP',
     'neogeo': 'Neo Geo',
+    'pc': 'PC', 'dos': 'PC', 'windows': 'PC', 'scummvm': 'PC',
+    'amiga': 'Commodore / Amiga', 'atarist': 'Atari ST',
+    'macintosh': 'Classic Macintosh', 'appleii': 'Apple II',
 }
 
 # Metacritic platform columns (for per-platform user reviews)

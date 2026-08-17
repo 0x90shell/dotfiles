@@ -17,9 +17,25 @@ bin/test-setup*
 .config/autostart/bt-headset-autoconnect.desktop
 {{ end }}
 {{ if ne .chezmoi.hostname "Excalibur" }}
-.config/kastsrc  
+.config/kastsrc
 {{ else }}
 {{ end }}
+{{/*
+   The curated best-of lists that feed rank-favorites are small hand-editable
+   text files, but several of their sources are already gone: retrosanctuary is
+   a parked domain, the Adventure Gamers top 100 survives only in Wayback
+   snapshots, and IGN retired the newer adventure articles. Re-scraping would not
+   reproduce them, so they are tracked rather than treated as a cache.
+
+   Only the two machines that actually rank collections carry them. The rating
+   datasets themselves stay untracked everywhere at ~100MB.
+*/}}
+{{ if not (or (eq .chezmoi.hostname "Excalibur") (eq .chezmoi.hostname "Glamdring")) }}
+bin/.ratool_datasets/lists/
+{{ end }}
+bin/.ratool_datasets/*.csv
+bin/.ratool_datasets/*.7z
+bin/.ratool_datasets/lists/derived/
 {{- if eq .chezmoi.osRelease.id "arch" "endeavouros" }}
 .vim/plugins/
 bin/bash*
