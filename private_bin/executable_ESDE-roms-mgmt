@@ -17,6 +17,7 @@ SCRIPT_NAME="$(basename "$0")"
 VERBOSE=false
 QUIET=false
 DRY_RUN=false
+NO_SYNC=false
 EXTENSION=""
 NAS_MOUNT="$HOME/mnt/Games"
 NAS_USER_RO="lolguest"
@@ -120,6 +121,10 @@ OTHER OPTIONS:
     -v, --verbose      Enable verbose output (detailed progress information)
     -q, --quiet        Suppress informational messages (errors still shown)
     -n, --dry-run      Show what would be done without making changes
+    --no-sync          Skip the NAS ROM sync and go straight to scraping.
+                       Use when the local copy is already current and you only
+                       want to redo the scrape; the sync is slow even with
+                       nothing to transfer because --delete stats every file.
     -e, --extension    Add file extension filter to Skyscraper commands
                        Example: -e "*.wua" for Wii U archives
     --overrides-file   Path to genre overrides TSV file
@@ -1381,9 +1386,18 @@ mode_initialize() {
     validate_paths "$console" "initialize"
     
     # Sync all ROMs from NAS (with delete to match exactly)
-    log_info "🔄 Syncing ROMs from NAS (with --delete)..."
-    sync_with_progress "$nas_rom_dir/" "$local_rom_dir" --delete
-    log_info "✅ ROM sync completed"
+    #
+    # --no-sync skips this when the local copy is already current. The transfer
+    # itself may be a no-op, but --delete still stats every entry on both sides,
+    # and over a CIFS mount with actimeo=0 that is a long silent pass with no
+    # caching. Worth skipping when re-running purely to redo the scrape.
+    if [[ "$NO_SYNC" == true ]]; then
+        log_info "⏭️  Skipping NAS ROM sync (--no-sync)"
+    else
+        log_info "🔄 Syncing ROMs from NAS (with --delete)..."
+        sync_with_progress "$nas_rom_dir/" "$local_rom_dir" --delete
+        log_info "✅ ROM sync completed"
+    fi
     
     # Scrape metadata
     scrape_metadata "$console" "$local_rom_dir" ${extension_args[@]+"${extension_args[@]}"}
@@ -1553,6 +1567,10 @@ main() {
                 ;;
             -n|--dry-run)
                 DRY_RUN=true
+                shift
+                ;;
+            --no-sync)
+                NO_SYNC=true
                 shift
                 ;;
             -e|--extension)
