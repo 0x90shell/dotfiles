@@ -284,7 +284,7 @@ SCORE_PLATFORM_TO_GAMEFAQS = {
     # ScummVM, Windows and bare PC collections all resolve to the same GameFAQs
     # platform. ScummVM titles frequently also appear under the home micros they
     # were first released on, which the unrestricted fallback picks up.
-    'pc': 'PC', 'windows': 'PC', 'scummvm': 'PC',
+    'pc': 'PC', 'windows': 'PC', 'scummvm': 'PC', 'doom': 'PC',
     'macintosh': 'MAC', 'atarist': 'AST',
     '3do': '3DO',
     'wonderswan': 'WS',
@@ -320,7 +320,7 @@ SCORE_PLATFORM_TO_RAWG = {
     'ps2': 'PlayStation 2',
     'psp': 'PSP',
     'neogeo': 'Neo Geo',
-    'pc': 'PC', 'dos': 'PC', 'windows': 'PC', 'scummvm': 'PC',
+    'pc': 'PC', 'dos': 'PC', 'windows': 'PC', 'scummvm': 'PC', 'doom': 'PC',
     'amiga': 'Commodore / Amiga', 'atarist': 'Atari ST',
     'macintosh': 'Classic Macintosh', 'appleii': 'Apple II',
 }
