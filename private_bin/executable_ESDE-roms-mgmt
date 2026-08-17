@@ -659,50 +659,73 @@ sync_media_files() {
         fi
     done
     
-    suffix_media_for_dirs_as_files "$console" "$source_dir" "$es_media"
+    place_media_for_esde "$source_dir" "$es_media"
 
     log_info "✅ Media files synced"
 }
 
-# ES-DE can interpret a game directory as a single file when the directory name
-# matches the file inside it, extension included -- "Blue Force (Floppy - DOS)
-# .scummvm/Blue Force (Floppy - DOS).scummvm". scummvm is set up that way so the
-# frontend shows one entry per game instead of a folder to descend into.
+# Skyscraper writes media as a flat "<stub name minus extension>.<ext>", which is
+# what ES-DE expects for an ordinary ROM sitting at the top of the system folder.
+# Two other shapes are in use here and neither matches that layout:
 #
-# The catch is that ES-DE then keys media on the full directory name, suffix and
-# all, while Skyscraper names its output after the stub minus extension. Every
-# file lands one name short and no artwork resolves. Rename them to match.
+#   1. A directory interpreted as a file. When a directory holds a file of the
+#      exact same name ES-DE shows it as a single game, and keys its media on the
+#      full directory name, extension included. Skyscraper's name is one
+#      extension short, so nothing resolves and the entry renders bare.
 #
-# Only files whose basename corresponds to an existing game directory are
-# touched, which leaves multi-stub bundles alone: the Crystal Shard bundle stays
-# a real folder holding three stubs, and ES-DE keys those on the stub name
-# ("larrylotter.png"), which is already correct.
-suffix_media_for_dirs_as_files() {
-    local console="$1"
-    local roms_dir="$2"
-    local media_dir="$3"
+#   2. A game inside a real folder. Multi-stub bundles are left as folders on
+#      purpose so every game in them stays reachable, and ES-DE then looks for
+#      the media under a matching subdirectory of each media type.
+#
+# Both are read off the generated gamelist rather than guessed, so no platform
+# name, file extension or directory layout is assumed. Idempotent: once a file
+# is in place its name or parent no longer matches the untransformed key.
+place_media_for_esde() {
+    local roms_dir="$1"
+    local media_dir="$2"
+    local gamelist="$roms_dir/gamelist.xml"
 
-    [[ "$console" == "scummvm" ]] || return 0
-    [[ -d "$media_dir" ]] || return 0
+    [[ -d "$media_dir" && -f "$gamelist" ]] || return 0
 
-    local suffix=".scummvm"
-    local renamed=0
-    local f dir file ext base
+    # Keyed on the basename Skyscraper produced.
+    declare -A as_file=()   # -> directory name ES-DE keys the game on
+    declare -A in_folder=() # -> folder the media has to be nested under
+    local path rel dir base
+
+    # A game one level down is either shape 1 or shape 2, told apart by whether
+    # the directory repeats the filename. Anything at the top level is an
+    # ordinary ROM that Skyscraper has already named correctly.
+    while IFS= read -r path; do
+        rel=${path#./}
+        [[ "$rel" == */* ]] || continue
+        dir=${rel%%/*}
+        base=${rel##*/}
+        if [[ "$dir" == "$base" ]]; then
+            as_file["${dir%.*}"]=$dir
+        else
+            in_folder["${base%.*}"]=$dir
+        fi
+    done < <(grep -o '<path>[^<]*</path>' "$gamelist" | sed 's/<[^>]*>//g')
+
+    local f parent file ext renamed=0 nested=0
 
     while IFS= read -r -d '' f; do
-        dir=${f%/*}
+        parent=${f%/*}
         file=${f##*/}
         ext=${file##*.}
         base=${file%.*}
 
-        [[ "$base" == *"$suffix" ]] && continue
-        [[ -d "$roms_dir/$base$suffix" ]] || continue
-
-        run_mv -n "$f" "$dir/$base$suffix.$ext"
-        renamed=$((renamed + 1))
+        if [[ -n "${as_file[$base]:-}" ]]; then
+            run_mv -n "$f" "$parent/${as_file[$base]}.$ext"
+            renamed=$((renamed + 1))
+        elif [[ -n "${in_folder[$base]:-}" && "${parent##*/}" != "${in_folder[$base]}" ]]; then
+            [[ "$DRY_RUN" == true ]] || mkdir -p "$parent/${in_folder[$base]}"
+            run_mv -n "$f" "$parent/${in_folder[$base]}/$file"
+            nested=$((nested + 1))
+        fi
     done < <(find "$media_dir" -type f -print0)
 
-    log_verbose "✓ Suffixed $renamed media files for directories-as-files"
+    log_verbose "✓ Media placed for ES-DE: $renamed renamed, $nested nested"
 }
 
 # --- Cleanup Functions ---
