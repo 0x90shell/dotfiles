@@ -6,10 +6,10 @@ export DISPLAY=:0
 echo "emucloser: running"
 
 # Cemu
-if xdotool search --classname 'Cemu' search --name 'Cemu ' windowquit 2>/dev/null; then 
+if xdotool search --classname 'Cemu' search --name 'Cemu ' windowquit 2>/dev/null; then
   pkill -15 cemu 2>/dev/null
   { sleep 2; pkill -9 cemu 2>/dev/null; } &
-cho "emucloser: closed Cemu"
+  echo "emucloser: closed Cemu"
 fi
 
 # simple64
@@ -35,6 +35,17 @@ fi
 if xdotool search --class 'vacuumtube' windowquit 2>/dev/null; then
   pkill -15 vacuumtube 2>/dev/null
   echo "emucloser: closed VacuumTube"
+fi
+
+# ScummVM (standalone). Only the standalone build is handled here: ScummVM games
+# launched through the libretro core live inside RetroArch, which binds this same
+# combo to its own exit and so never reaches this script.
+# Verified on the launcher: windowquit alone closes it, 1 process to 0. The
+# escalation is kept for a game running fullscreen, which may not respond as
+# readily as the launcher does.
+if xdotool search --class 'scummvm' windowquit 2>/dev/null; then
+  { sleep 2; pkill -15 scummvm 2>/dev/null; sleep 2; pkill -9 scummvm 2>/dev/null; } &
+  echo "emucloser: closed ScummVM"
 fi
 
 echo "emucloser: done"
