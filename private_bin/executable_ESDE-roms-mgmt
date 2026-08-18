@@ -439,6 +439,31 @@ validate_paths() {
 
 # --- Skyscraper Functions ---
 
+# ES-DE splits several systems that Skyscraper treats as one platform, and spells
+# others differently. Skyscraper rejects an unrecognised -p outright rather than
+# falling back, so the console name has to be translated before every scrape.
+#
+# Only systems that actually hold ROMs are listed. The rest of the ~80 ES-DE
+# systems Skyscraper does not know contain nothing but a systeminfo.txt
+# placeholder, so they are left out until they have content worth scraping.
+declare -A SKYSCRAPER_PLATFORM=(
+    [satellaview]=snes      # Satellaview and Sufami Turbo are SNES add-ons and
+    [sufami]=snes           # registered as snes aliases in peas.json
+    [snesna]=snes
+    [sfc]=snes
+    [amigacd32]=cd32        # cd32 is its own platform, more specific than amiga
+    [n3ds]=3ds
+    [megacd]=segacd
+    [genesis]=megadrive
+    [colecovision]=coleco
+)
+
+# Skyscraper platform for an ES-DE console, defaulting to the console name.
+skyscraper_platform() {
+    local console="$1"
+    echo "${SKYSCRAPER_PLATFORM[$console]:-$console}"
+}
+
 # Run Skyscraper metadata scraping with optional extension
 scrape_metadata() {
     local console="$1"
@@ -451,6 +476,14 @@ scrape_metadata() {
     # stay enabled for that system or Skyscraper matches zero games.
     local subdir_flag="nosubdirs,"
     [[ "$console" == "scummvm" ]] && subdir_flag=""
+
+    # Only the -p argument is translated. Everything else stays keyed on the
+    # console, so satellaview artwork lands under satellaview rather than being
+    # merged into snes.
+    local platform
+    platform=$(skyscraper_platform "$console")
+    [[ "$platform" != "$console" ]] && \
+        log_verbose "Scraping '$console' as Skyscraper platform '$platform'"
 
     # Skyscraper builds the title as "<scraped name> (<brackets from the ROM
     # filename>)", so "007 - The World Is Not Enough (USA).7z" becomes a display
@@ -471,17 +504,17 @@ scrape_metadata() {
     # though the file is sitting right there in the ROM directory -- and that
     # gamelist is what carries the authored names, genres and kidgame flags.
     log_verbose "Scraping ES gamelist metadata..."
-    Skyscraper -p "$console" -s esgamelist -i "$input_dir" -g "$input_dir" \
+    Skyscraper -p "$platform" -s esgamelist -i "$input_dir" -g "$input_dir" \
         --flags "videos,relative,${subdir_flag}unattend" --refresh ${extension_args[@]+"${extension_args[@]}"}
     
     # ScreenScraper database scrape
     log_verbose "Scraping ScreenScraper database..."
-    Skyscraper -p "$console" -s screenscraper -i "$input_dir" \
+    Skyscraper -p "$platform" -s screenscraper -i "$input_dir" \
         --flags "noscreenshots,nocovers,nowheels,nomarquees,${subdir_flag}unattend" ${extension_args[@]+"${extension_args[@]}"}
     
     # TheGamesDB scrape
     log_verbose "Scraping TheGamesDB database..."
-    Skyscraper -p "$console" -s thegamesdb -i "$input_dir" \
+    Skyscraper -p "$platform" -s thegamesdb -i "$input_dir" \
         --flags "${subdir_flag}unattend" ${extension_args[@]+"${extension_args[@]}"}
     
     # Generate final gamelist
@@ -492,7 +525,7 @@ scrape_metadata() {
     # frontend defaults Skyscraper writes them somewhere else entirely and the
     # later steps silently find nothing to sync.
     log_verbose "Generating final gamelist..."
-    Skyscraper -p "$console" -i "$input_dir" -g "$input_dir" -o "$input_dir/media" \
+    Skyscraper -p "$platform" -i "$input_dir" -g "$input_dir" -o "$input_dir/media" \
         --flags nobrackets,unattend,relative ${extension_args[@]+"${extension_args[@]}"}
     
     log_info "✅ Metadata scraping completed"
