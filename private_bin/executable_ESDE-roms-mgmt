@@ -822,6 +822,13 @@ move_all_contents() {
 step_uppercase_genres() {
     local file="$1"
     sed -i 's|<genre>\([^<]*\)</genre>|<genre>\U\1\E</genre>|g' "$file"
+    # \U uppercases the XML entity along with the text, so a scraped
+    # "Shoot&apos;em Up" comes out as "SHOOT&APOS;EM UP". XML only defines the
+    # lowercase &apos;, so that is malformed, and it also stops the vocabulary
+    # rules below from matching. An apostrophe needs no escaping in XML text, so
+    # decode it. &APOS; can only exist because of the line above, which is what
+    # makes replacing it globally safe.
+    sed -i "s|&APOS;|'|g" "$file"
 }
 
 # Step 2: Vocabulary normalization
@@ -861,6 +868,20 @@ step_vocab_normalize() {
     sed -i 's|<genre>APPLICATION</genre>|<genre>APP</genre>|g' "$file"
     sed -i 's|<genre>MEDIA</genre>|<genre>APP</genre>|g' "$file"
     sed -i 's|<genre>UTILITY</genre>|<genre>APP</genre>|g' "$file"
+
+    # ScreenScraper genres that only turn up on Japanese platforms. Mahjong and
+    # shougi are tile and board games rather than card games, and "build and
+    # management" is ScreenScraper's label for business sims like Aerobiz.
+    sed -i 's|<genre>JAPANESE RPG</genre>|<genre>RPG</genre>|g' "$file"
+    sed -i 's|<genre>MAHJONG</genre>|<genre>BOARD GAME</genre>|g' "$file"
+    sed -i 's|<genre>SHOUGI</genre>|<genre>BOARD GAME</genre>|g' "$file"
+    sed -i 's|<genre>ASIATIC BOARD GAME</genre>|<genre>BOARD GAME</genre>|g' "$file"
+    sed -i 's|<genre>HORSE RACING</genre>|<genre>SPORTS</genre>|g' "$file"
+    sed -i 's|<genre>HUNTING AND FISHING</genre>|<genre>SPORTS</genre>|g' "$file"
+    sed -i 's|<genre>BUILD AND MANAGEMENT</genre>|<genre>STRATEGY</genre>|g' "$file"
+    # VARIOUS is deliberately not mapped. It is ScreenScraper's "no genre
+    # assigned" placeholder, so forcing it into a real genre would invent data;
+    # the validation warning is the correct outcome.
 }
 
 # Step 2.4: Map known compound genres to specific single genres
