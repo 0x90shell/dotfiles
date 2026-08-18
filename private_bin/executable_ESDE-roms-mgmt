@@ -840,6 +840,29 @@ step_uppercase_genres() {
     sed -i "s|&APOS;|'|g" "$file"
 }
 
+# Safety guard: ScreenScraper's ADULTS tag marks mature content, but the
+# compound-strip below flattens it away to a plain genre (mahjong -> BOARD GAME
+# etc.), losing the signal. Any entry carrying ADULTS must never be flagged
+# kidgame, so drop <kidgame>true</kidgame> from those blocks before the genre is
+# stripped. Runs per <game> block so it only affects the adult entry.
+step_guard_adult_kidgame() {
+    local file="$1"
+    awk '
+    {
+      if ($0 ~ /<game[ >]/) { inblk=1; nlines=0; adult=0 }
+      if (inblk) {
+        blk[nlines++]=$0
+        if ($0 ~ /<genre>[^<]*ADULTS/) adult=1
+        if ($0 ~ /<\/game>/) {
+          for (i=0;i<nlines;i++)
+            if (!(adult && blk[i] ~ /<kidgame>true<\/kidgame>/)) print blk[i]
+          inblk=0
+        }
+      } else { print }
+    }
+    ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+}
+
 # Step 2: Vocabulary normalization
 step_vocab_normalize() {
     local file="$1"
@@ -888,9 +911,35 @@ step_vocab_normalize() {
     sed -i 's|<genre>HORSE RACING</genre>|<genre>SPORTS</genre>|g' "$file"
     sed -i 's|<genre>HUNTING AND FISHING</genre>|<genre>SPORTS</genre>|g' "$file"
     sed -i 's|<genre>BUILD AND MANAGEMENT</genre>|<genre>STRATEGY</genre>|g' "$file"
-    # VARIOUS is deliberately not mapped. It is ScreenScraper's "no genre
-    # assigned" placeholder, so forcing it into a real genre would invent data;
-    # the validation warning is the correct outcome.
+
+    # More ScreenScraper genres common on SNES/Satellaview that lack a canonical
+    # equivalent. Sports variants (bass fishing, jockey/horse-breeding games)
+    # fold into SPORTS; the board/tile games (Go, Othello, Renju gomoku, mahjong
+    # "adult" titles) into BOARD GAME; Hanafuda into CARD GAME; the racing
+    # sub-perspectives into RACING. QUIZ has no canonical genre so it maps to
+    # PARTY (its game-show/trivia home); COMPILATION and CASUAL GAME fold into
+    # ARCADE; MISCELLANEOUS (creative tools like Mario Paint) into APP.
+    sed -i 's|<genre>FISHING</genre>|<genre>SPORTS</genre>|g' "$file"
+    sed -i 's|<genre>SPORTS WITH ANIMALS</genre>|<genre>SPORTS</genre>|g' "$file"
+    sed -i 's|<genre>GO</genre>|<genre>BOARD GAME</genre>|g' "$file"
+    sed -i 's|<genre>OTHELLO</genre>|<genre>BOARD GAME</genre>|g' "$file"
+    sed -i 's|<genre>RENJU</genre>|<genre>BOARD GAME</genre>|g' "$file"
+    sed -i 's|<genre>HANAFUDA</genre>|<genre>CARD GAME</genre>|g' "$file"
+    sed -i 's|<genre>RACING TPV</genre>|<genre>RACING</genre>|g' "$file"
+    sed -i 's|<genre>MOTORCYCLE RACE FPV</genre>|<genre>RACING</genre>|g' "$file"
+    sed -i 's|<genre>ACTION MAZE</genre>|<genre>ACTION</genre>|g' "$file"
+    sed -i 's|<genre>DUNGEON CRAWLER RPG</genre>|<genre>RPG</genre>|g' "$file"
+    sed -i 's|<genre>THINKING</genre>|<genre>PUZZLE</genre>|g' "$file"
+    sed -i 's|<genre>QUIZ</genre>|<genre>PARTY</genre>|g' "$file"
+    sed -i 's|<genre>COMPILATION</genre>|<genre>ARCADE</genre>|g' "$file"
+    sed -i 's|<genre>CASUAL GAME</genre>|<genre>ARCADE</genre>|g' "$file"
+    sed -i 's|<genre>MISCELLANEOUS</genre>|<genre>APP</genre>|g' "$file"
+    # VARIOUS and ADULTS are deliberately not mapped. VARIOUS is ScreenScraper's
+    # "no genre assigned" placeholder; ADULTS is a mature-content tag, not a
+    # genre (an adult title could be a mahjong game, a visual novel, etc.), so no
+    # single mapping is correct. Forcing either into a real genre would invent
+    # data; the validation warning is the correct outcome and the specific entry
+    # should get the right genre in the source gamelist instead.
 }
 
 # Step 2.4: Map known compound genres to specific single genres
@@ -1099,6 +1148,7 @@ normalize_genres() {
         _extract_players "$file" > "$bp"
 
         step_uppercase_genres "$tmp_file"
+        step_guard_adult_kidgame "$tmp_file"
         step_vocab_normalize "$tmp_file"
         step_map_compound_genres "$tmp_file"
         step_strip_compound_genres "$tmp_file"
@@ -1128,6 +1178,7 @@ normalize_genres() {
         _extract_players "$file" > "$bp"
 
         step_uppercase_genres "$file"
+        step_guard_adult_kidgame "$file"
         step_vocab_normalize "$file"
         step_map_compound_genres "$file"
         step_strip_compound_genres "$file"
