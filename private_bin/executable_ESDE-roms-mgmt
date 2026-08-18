@@ -477,6 +477,15 @@ scrape_metadata() {
     local subdir_flag="nosubdirs,"
     [[ "$console" == "scummvm" ]] && subdir_flag=""
 
+    # The esgamelist import phase is different: subdir entries (hacks/,
+    # ra-alternates/, sufami hacks) already carry authored metadata in our
+    # gamelist, and importing those is the whole point. Skipping subdirs here is
+    # what silently dropped every hack entry (~9,700 for snes) from the output --
+    # the online scrapes below keep nosubdirs so hacks are never queried against
+    # a remote database, but they still inherit our curated metadata from this
+    # phase. So esgamelist always recurses regardless of console.
+    local esgl_subdir_flag=""
+
     # Only the -p argument is translated. Everything else stays keyed on the
     # console, so satellaview artwork lands under satellaview rather than being
     # merged into snes.
@@ -505,7 +514,7 @@ scrape_metadata() {
     # gamelist is what carries the authored names, genres and kidgame flags.
     log_verbose "Scraping ES gamelist metadata..."
     Skyscraper -p "$platform" -s esgamelist -i "$input_dir" -g "$input_dir" \
-        --flags "videos,relative,${subdir_flag}unattend" --refresh ${extension_args[@]+"${extension_args[@]}"}
+        --flags "videos,relative,${esgl_subdir_flag}unattend" --refresh ${extension_args[@]+"${extension_args[@]}"}
     
     # ScreenScraper database scrape
     log_verbose "Scraping ScreenScraper database..."
