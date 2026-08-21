@@ -2959,6 +2959,51 @@ def md5_file(filepath: Path) -> str:
     return hash_md5.hexdigest()
 
 
+# Systems whose dumps may carry a 512-byte copier header. RetroAchievements
+# ignores that header when it identifies a ROM, so it has to come off before
+# hashing or the digest matches nothing in the registry and the game is
+# reported as unsupported.
+#
+# These systems are NOT in RAHASHER_REQUIRED, so they take the plain-MD5 path
+# below and would otherwise never get the header handled at all. A local SNES
+# collection of 11,537 archives had 108 headered files, 27 of them registered
+# with RA, including Front Mission: Gun Hazard at 112 achievements. All 27 were
+# reported as having no achievements.
+COPIER_HEADER_SYSTEMS = {
+    3,  # SNES / Super Famicom  (.smc, .fig, .swc copier dumps)
+}
+COPIER_HEADER_SIZE = 512
+
+
+def _copier_header_len(size: int, system_id: int) -> int:
+    """Bytes of copier header to skip, per RetroAchievements' own rule.
+
+    The test is on size, not content: a headered dump is exactly 512 bytes
+    longer than the power-of-two cartridge image, so `size % 8192 == 512`
+    identifies one. Mod 8192, not mod 1024 -- the looser test also fires on
+    sizes RA does not treat as headered.
+    """
+    if system_id in COPIER_HEADER_SYSTEMS and size % 8192 == COPIER_HEADER_SIZE:
+        return COPIER_HEADER_SIZE
+    return 0
+
+
+def ra_cartridge_md5(data: bytes, system_id: int) -> str:
+    """MD5 of in-memory ROM data the way RA computes it for cartridge systems."""
+    return hashlib.md5(data[_copier_header_len(len(data), system_id):]).hexdigest()
+
+
+def ra_cartridge_md5_file(filepath: Path, system_id: int) -> str:
+    """MD5 of a ROM file the way RA computes it, streaming, header skipped."""
+    skip = _copier_header_len(filepath.stat().st_size, system_id)
+    hash_md5 = hashlib.md5()
+    with open(filepath, "rb") as f:
+        f.seek(skip)
+        for chunk in iter(lambda: f.read(65536), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
+
 def hash_rom(filepath: Path, system_id: int, rahasher_path: Optional[str] = None, verbose: bool = False) -> list:
     """
     Hash a ROM file for RetroAchievements comparison.
@@ -3026,7 +3071,7 @@ def hash_rom(filepath: Path, system_id: int, rahasher_path: Optional[str] = None
 
                 # For cartridge systems: MD5 the ROM data directly (no extraction needed)
                 data = zf.read(rom_file)
-                return [('md5', hashlib.md5(data).hexdigest())]
+                return [('md5', ra_cartridge_md5(data, system_id))]
 
         except zipfile.BadZipFile:
             return [('error', 'bad_zip')]
@@ -3077,7 +3122,7 @@ def hash_rom(filepath: Path, system_id: int, rahasher_path: Optional[str] = None
                         szf.extract(path=tmpdir, targets=[rom_file])
                         extracted = Path(tmpdir) / rom_file
                         data = extracted.read_bytes()
-                        return [('md5', hashlib.md5(data).hexdigest())]
+                        return [('md5', ra_cartridge_md5(data, system_id))]
 
             except py7zr.Bad7zFile:
                 return [('error', 'bad_7z')]
@@ -3135,7 +3180,7 @@ def hash_rom(filepath: Path, system_id: int, rahasher_path: Optional[str] = None
 
                     # For cartridge systems: MD5 the ROM data
                     data = rom_file.read_bytes()
-                    return [('md5', hashlib.md5(data).hexdigest())]
+                    return [('md5', ra_cartridge_md5(data, system_id))]
 
             except subprocess.TimeoutExpired:
                 return [('error', '7z_timeout')]
@@ -3179,8 +3224,8 @@ def hash_rom(filepath: Path, system_id: int, rahasher_path: Optional[str] = None
                 return [('rahasher', ra_hash)]
             return [('error', 'rahasher_failed')]
 
-        # Cartridge systems: plain MD5
-        return [('md5', md5_file(filepath))]
+        # Cartridge systems: plain MD5, minus any copier header RA ignores
+        return [('md5', ra_cartridge_md5_file(filepath, system_id))]
 
 # ============================================================================
 # CACHE MANAGEMENT
