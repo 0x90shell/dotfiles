@@ -27,9 +27,18 @@ close_app() {
     [[ -z "$wid" ]] && continue
     xdotool windowquit "$wid" 2>/dev/null && wins=$((wins + 1))
   done < <(xdotool search --pid "$pid" 2>/dev/null)
-  { sleep 3; kill -15 "$pid" 2>/dev/null
-    sleep 2; kill -9 "$pid" 2>/dev/null; } &
-  echo "emucloser: closed $label (pid $pid, windows=$wins)"
+  # Escalate only if the polite close did not take. Each step re-checks the
+  # pid, so an app that exited cleanly is never signalled.
+  {
+    sleep 5
+    kill -0 "$pid" 2>/dev/null || exit 0
+    kill -15 "$pid" 2>/dev/null
+    sleep 3
+    kill -0 "$pid" 2>/dev/null || exit 0
+    kill -9 "$pid" 2>/dev/null
+    toast "$label force-killed (-9)" critical 4000
+  } &
+  echo "emucloser: closing $label (pid $pid, windows=$wins)"
 }
 
 # State lives on disk because evsieve runs this script fresh on each press.
