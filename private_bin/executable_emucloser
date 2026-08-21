@@ -24,6 +24,9 @@ toast() {  # msg [urgency] [ms]
 # is also called, so the pid is confirmed via /proc/PID/exe before use.
 close_app() {
   local label="$1" proc="$2" needle="${3:-}" pid="" p target wid wins=0
+  # The kernel caps comm at 15 chars and pgrep -x matches against that, so a
+  # longer binary name (jellyfin-desktop) never matches unless trimmed first.
+  proc="${proc:0:15}"
   for p in $(pgrep -x "$proc" 2>/dev/null); do
     if [[ -n "$needle" ]]; then
       target=$(readlink -f "/proc/$p/exe" 2>/dev/null) || continue
