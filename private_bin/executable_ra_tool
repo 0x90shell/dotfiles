@@ -2185,9 +2185,15 @@ def get_patch_category(patch_url: str) -> str:
     if not patch_url or 'RAPatches' not in patch_url:
         return 'other'
 
-    # Pattern: /RAPatches/raw/main/{SYSTEM}/{CATEGORY}/...
+    # Pattern: /RAPatches/raw/{ref}/{SYSTEM}/{CATEGORY}/...
     # Categories: Hacks, Translation, Fix, Improvement, Subset, MSU-1, etc.
-    match = re.search(r'/RAPatches/raw/main/[^/]+/([^/]+)/', patch_url)
+    #
+    # The ref segment is optional-but-varying: the API used to hand out
+    # ".../raw/main/..." and now hands out ".../raw/refs/heads/main/...".
+    # Matching only the old form silently filed every patch under 'other',
+    # which breaks the patch index pipeline.sh builds from these folders.
+    match = re.search(
+        r'/RAPatches/raw/(?:refs/heads/)?[^/]+/[^/]+/([^/]+)/', patch_url)
     if match:
         category = match.group(1).lower()
         return category
