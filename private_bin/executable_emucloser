@@ -1,9 +1,36 @@
 #!/bin/bash
 # emucloser — close running emulators/media apps via gamepad hotkey
-# Called by evsieve-gamepad (Select + L1)
+# Called by evsieve-gamepad (Select + L1). Needs two presses within
+# CONFIRM_WINDOW seconds. Deliberately SHORTER than RetroArch's 3s
+# QUIT_DELAY_USEC: confirming here must imply RA also confirmed, or the
+# escalation below could kill a game RA is still happily running.
 export DISPLAY=:0
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
 
-echo "emucloser: running"
+CONFIRM_WINDOW=${EMUCLOSER_WINDOW:-2}
+STATE="${XDG_RUNTIME_DIR:-/tmp}/emucloser.armed"
+
+toast() {  # msg [urgency] [ms]
+  notify-send -u "${2:-normal}" -t "${3:-2500}" \
+    -i dialog-information "emucloser" "$1" 2>/dev/null || true
+}
+
+# State lives on disk because evsieve runs this script fresh on each press.
+now=$(date +%s)
+armed_at=0
+[[ -f "$STATE" ]] && armed_at=$(<"$STATE")
+[[ "$armed_at" =~ ^[0-9]+$ ]] || armed_at=0
+
+if (( now - armed_at > CONFIRM_WINDOW )); then
+  echo "$now" > "$STATE"
+  # RA shows its own "Press again to quit..." OSD; don't double up.
+  pgrep -x retroarch >/dev/null || toast "Press again to quit..." low 3000
+  echo "emucloser: armed"
+  exit 0
+fi
+
+rm -f "$STATE"
+echo "emucloser: confirmed, running"
 
 # Cemu
 if xdotool search --classname 'Cemu' search --name 'Cemu ' windowquit 2>/dev/null; then
@@ -37,12 +64,28 @@ if xdotool search --class 'vacuumtube' windowquit 2>/dev/null; then
   echo "emucloser: closed VacuumTube"
 fi
 
-# ScummVM (standalone). Only the standalone build is handled here: ScummVM games
-# launched through the libretro core live inside RetroArch, which binds this same
-# combo to its own exit and so never reaches this script.
-# Verified on the launcher: windowquit alone closes it, 1 process to 0. The
-# escalation is kept for a game running fullscreen, which may not respond as
-# readily as the launcher does.
+# RetroArch. This same combo is RA's own quit, so give it time to save and exit
+# on its own; only escalate if it survives. The ScummVM core can deadlock in
+# retro_unload_game, which blocks RA's main loop so the first SIGTERM's quit
+# flag is never polled — a second signal takes the force-exit path.
+if pgrep -x retroarch >/dev/null; then
+  {
+    sleep 5
+    pgrep -x retroarch >/dev/null || exit 0
+    pkill -15 -x retroarch; sleep 2
+    pgrep -x retroarch >/dev/null || exit 0
+    pkill -15 -x retroarch; sleep 2
+    if pgrep -x retroarch >/dev/null; then
+      pkill -9 -x retroarch
+      toast "RetroArch force-killed (-9)" critical 4000
+    fi
+  } &
+  echo "emucloser: retroarch escalation armed"
+fi
+
+# ScummVM (standalone). Core-launched games run inside RetroArch and are handled
+# above; this matches only the standalone build. windowquit alone closes the
+# launcher — escalation covers a fullscreen game that may not respond as readily.
 if xdotool search --class 'scummvm' windowquit 2>/dev/null; then
   { sleep 2; pkill -15 scummvm 2>/dev/null; sleep 2; pkill -9 scummvm 2>/dev/null; } &
   echo "emucloser: closed ScummVM"
@@ -50,4 +93,3 @@ fi
 
 echo "emucloser: done"
 exit 0
-
