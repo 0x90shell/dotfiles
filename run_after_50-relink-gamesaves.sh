@@ -26,6 +26,7 @@ LINKS=(
   "$HOME/.local/share/dolphin-emu/GC	$GS/dolphin/GC"
   "$HOME/.local/share/dolphin-emu/StateSaves	$GS/dolphin/StateSaves"
   "$HOME/.local/share/dolphin-emu/Wii	$GS/dolphin/Wii"
+  "$HOME/.local/share/Cemu/mlc01/usr/save	$GS/cemu/save"
 )
 
 created=0 ok=0 refused=0 skipped=0
