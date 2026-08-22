@@ -23,6 +23,9 @@ LINKS=(
   "$HOME/.local/share/duckstation/savestates	$GS/duckstation/savestates"
   "$HOME/.config/retroarch/saves	$GS/retroarch/saves"
   "$HOME/.config/retroarch/states	$GS/retroarch/states"
+  "$HOME/.local/share/dolphin-emu/GC	$GS/dolphin/GC"
+  "$HOME/.local/share/dolphin-emu/StateSaves	$GS/dolphin/StateSaves"
+  "$HOME/.local/share/dolphin-emu/Wii	$GS/dolphin/Wii"
 )
 
 created=0 ok=0 refused=0 skipped=0
