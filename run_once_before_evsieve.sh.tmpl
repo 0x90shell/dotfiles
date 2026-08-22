@@ -4,11 +4,26 @@ set -euo pipefail
 
 echo "=== Setting up evsieve gamepad hotkeys ==="
 
-echo "[1/2] Installing evsieve..."
-yay -S --noconfirm --needed evsieve
+# yay escalates via sudo. With no tty (chezmoi apply from a script, over ssh,
+# or during a bare-metal restore) the password prompt blocks forever and the
+# whole apply deadlocks. Only attempt the install when sudo can run without
+# prompting, or a terminal is attached to answer it.
+if pacman -Q evsieve >/dev/null 2>&1; then
+  echo "[1/2] evsieve already installed, skipping"
+elif sudo -n true 2>/dev/null || [ -t 0 ]; then
+  echo "[1/2] Installing evsieve..."
+  yay -S --noconfirm --needed evsieve
+else
+  echo "[1/2] SKIP: evsieve is not installed and sudo would prompt with no" >&2
+  echo "        terminal attached. Install it manually with:" >&2
+  echo "          yay -S --needed evsieve" >&2
+fi
 
 echo "[2/2] Enabling evsieve-gamepad service..."
 systemctl --user daemon-reload
-systemctl --user enable --now evsieve-gamepad.service
+if command -v evsieve >/dev/null 2>&1; then
+  systemctl --user enable --now evsieve-gamepad.service
+else
+  echo "        Service not enabled: evsieve binary not present." >&2
+fi
 {{- end -}}
-
