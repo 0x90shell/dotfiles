@@ -533,11 +533,154 @@ scrape_metadata() {
     # ("$source_dir/gamelist.xml" and "$source_dir/media/<type>"). Left to the
     # frontend defaults Skyscraper writes them somewhere else entirely and the
     # later steps silently find nothing to sync.
+    # Feed the cache before compositing, or the generate step rebuilds
+    # miximages from stale cached art (see sync_cache_from_esde).
+    sync_cache_from_esde "$console" "$input_dir"
+
+    # -a pins the artwork recipe. Skyscraper's default renders 640x480 and
+    # top-aligns the wheel over the screenshot; this collection is 1280x960
+    # with the gamebox bottom-left and the logo bottom-right.
+    local artwork_xml="$HOME/.skyscraper/artwork-esde1280.xml"
+    local artwork_args=()
+    [[ -f "$artwork_xml" ]] && artwork_args=(-a "$artwork_xml")
+
     log_verbose "Generating final gamelist..."
     Skyscraper -p "$platform" -i "$input_dir" -g "$input_dir" -o "$input_dir/media" \
+        ${artwork_args[@]+"${artwork_args[@]}"} \
         --flags nobrackets,unattend,relative ${extension_args[@]+"${extension_args[@]}"}
     
     log_info "✅ Metadata scraping completed"
+}
+
+# --- ES-DE user-state preservation -------------------------------------------
+#
+# Skyscraper's generate step emits only:
+#   path name desc rating releasedate developer publisher genre players
+#   image marquee
+# The live gamelists also carry favorite, kidgame, sortname, lastplayed,
+# playcount, playtime and altemulator. Those are ES-DE USER STATE - no scraper
+# will ever return them - so a replace-mode sync silently destroys them
+# (522 kidgame flags, 189 favorites and 189 sortnames on scummvm alone).
+# altemulator is set by ES-DE/ScummVM itself, which is exactly why a scrape
+# must not clobber it.
+# An ARRAY, not a space-separated string: this script sets IFS=$'\n\t', so an
+# unquoted string would NOT word-split and all seven tags would reach python as
+# a single argument, matching nothing.
+PRESERVE_TAGS=(favorite kidgame sortname lastplayed playcount playtime altemulator)
+
+# preserve_user_fields <source-gamelist> <target-gamelist>
+# Copies the tags above from source into target for matching <path> values,
+# only where the target lacks them. Safe to run twice: local first
+# (authoritative), then the NAS copy to back-fill anything we never had.
+preserve_user_fields() {
+    local src="$1" dst="$2"
+    [[ -f "$src" && -f "$dst" ]] || return 0
+
+    if [[ "$DRY_RUN" == true ]]; then
+        log_dryrun "preserve user fields from $src into $dst"
+        return 0
+    fi
+
+    python3 - "$src" "$dst" "${PRESERVE_TAGS[@]}" <<'PYEOF'
+import sys, xml.etree.ElementTree as ET
+src, dst, *tags = sys.argv[1:]
+try:
+    old = ET.parse(src).getroot()
+except ET.ParseError as exc:
+    print(f"  user-field source unparsable ({exc}); skipping")
+    raise SystemExit(0)
+keep = {}
+# iterate every top-level entry, not just <game>: ES-DE also writes <folder>
+# entries and those carry user state too (the Crystal Shard bundle folder has
+# a lastplayed).
+for g in list(old):
+    p = g.findtext("path")
+    if not p:
+        continue
+    vals = {t: g.findtext(t) for t in tags if g.findtext(t) not in (None, "")}
+    if vals:
+        keep[p] = vals
+tree = ET.parse(dst); root = tree.getroot()
+added = 0; touched = 0
+for g in list(root):
+    vals = keep.get(g.findtext("path"))
+    if not vals:
+        continue
+    hit = False
+    for t, v in vals.items():
+        if g.find(t) is None:
+            ET.SubElement(g, t).text = v
+            added += 1; hit = True
+    touched += 1 if hit else 0
+tree.write(dst, encoding="UTF-8", xml_declaration=True)
+print(f"  restored {added} user fields across {touched} games")
+PYEOF
+}
+
+# --- Skyscraper cache sync ----------------------------------------------------
+#
+# Skyscraper composites artwork from ITS OWN CACHE, not from downloaded_media.
+# Nothing else in this script puts the curated ES-DE art into that cache, so
+# the generate step re-composites from whatever the scrapers left there - which
+# for many games is box art sitting in the screenshot slot, producing the
+# "box on box" miximages. `import` outranks every scraper in priorities.xml,
+# so importing first makes the curated art win.
+sync_cache_from_esde() {
+    local console="$1" rom_dir="$2"
+    local platform; platform=$(skyscraper_platform "$console")
+    local media_dir="$HOME/ES-DE/downloaded_media/$console"
+    local import_dir="$HOME/.skyscraper/import/$platform"
+
+    [[ -d "$media_dir" ]] || { log_verbose "No ES-DE media for $console"; return 0; }
+
+    if [[ "$DRY_RUN" == true ]]; then
+        log_dryrun "sync ES-DE media into Skyscraper cache for $console"
+        return 0
+    fi
+
+    log_info "🗃️  Importing curated ES-DE media into Skyscraper cache..."
+
+    python3 - "$media_dir" "$import_dir" "$rom_dir" <<'PYEOF'
+import os, shutil, sys
+from pathlib import Path
+media, imp, roms = (Path(p) for p in sys.argv[1:4])
+# ES-DE slot -> Skyscraper resource. The wheel is what artwork.xml's logo
+# layer and the gamebox side both read.
+MAP = {"screenshots": "screenshots", "covers": "covers", "marquees": "wheels"}
+# No rom-name filter: globbing two levels of the ROM tree to build a stem set
+# also sweeps up every asset INSIDE each game folder (21k entries for scummvm),
+# which is slow and risks a media file matching some unrelated asset stem.
+# Staging an orphan costs nothing - Skyscraper ignores imports with no rom.
+total = 0
+for src_name, dst_name in MAP.items():
+    src, dst = media / src_name, imp / dst_name
+    if not src.is_dir():
+        continue
+    dst.mkdir(parents=True, exist_ok=True)
+    n = 0
+    for f in list(src.glob("*")) + list(src.glob("*/*")):
+        if not f.is_file():
+            continue
+        # ES-DE names media "<rom>.<romext>.<imgext>"; Skyscraper matches on
+        # the rom's complete base name, so the rom extension comes off.
+        base = f.stem
+        if "." in base:
+            base = base.rsplit(".", 1)[0]
+        target = dst / f"{base}{f.suffix}"
+        if target.exists():
+            target.unlink()
+        try:
+            os.link(f, target)
+        except OSError:
+            shutil.copy2(f, target)
+        n += 1
+    print(f"  staged {n:5} {src_name} -> import/{dst_name}")
+    total += n
+print(f"  {total} files staged for import")
+PYEOF
+
+    Skyscraper -p "$platform" -s import -i "$rom_dir" --flags unattend \
+        || log_verbose "import scrape returned non-zero (continuing)"
 }
 
 # --- Gamelist Management Functions ---
@@ -563,8 +706,27 @@ sync_gamelist_replace() {
     
     # Copy new gamelist
     if [[ -f "$source_gamelist" ]]; then
+        # Snapshot the old list first: the incoming one has none of ES-DE's
+        # user-state tags, so a bare rsync wipes favourites, kidgame flags,
+        # sortnames and play history for the entire system.
+        local prev_gamelist=""
+        if [[ -f "$target_gamelist" ]]; then
+            prev_gamelist="$es_gamelist/.gamelist-prev.xml"
+            cp "$target_gamelist" "$prev_gamelist"
+        fi
+
         run_rsync "$source_gamelist" "$target_gamelist"
         strip_dangling_media_refs "$target_gamelist"
+
+        if [[ -n "$prev_gamelist" ]]; then
+            log_info "🏷️  Restoring ES-DE user fields..."
+            preserve_user_fields "$prev_gamelist" "$target_gamelist"
+            rm -f "$prev_gamelist"
+        fi
+        # Back-fill anything the NAS knew that we never had. Runs second so
+        # local values always win - the helper only fills absent tags.
+        preserve_user_fields "$source_dir/gamelist-nas.xml" "$target_gamelist"
+
         log_info "✅ Gamelist synced"
     else
         log_error "Source gamelist not found: $source_gamelist"
@@ -635,6 +797,29 @@ EOF
         log_verbose "✓ Created new empty gamelist"
     fi
     
+    # Drop entries the incoming batch supersedes. Without this, re-running
+    # additions for a ROM already in the gamelist appends a SECOND <game> with
+    # the same <path>, and ES-DE's behaviour with duplicates is undefined.
+    if [[ "$DRY_RUN" != true ]]; then
+        python3 - "$target_gamelist" "$source_gamelist" <<'PYEOF'
+import re, sys, xml.etree.ElementTree as ET
+target, source = sys.argv[1:3]
+incoming = {m.group(1).replace("/0merge", "")
+            for m in re.finditer(r"<path>(.*?)</path>", open(source).read())}
+try:
+    tree = ET.parse(target)
+except ET.ParseError:
+    raise SystemExit(0)          # empty/fresh list, nothing to dedupe
+root = tree.getroot(); n = 0
+for g in list(root.findall("game")):
+    if g.findtext("path") in incoming:
+        root.remove(g); n += 1
+if n:
+    tree.write(target, encoding="UTF-8", xml_declaration=True)
+print(f"  removed {n} superseded entries before merge")
+PYEOF
+    fi
+
     # Merge gamelists
     cat "$target_gamelist" "$source_gamelist" > "$merge_gamelist"
     
