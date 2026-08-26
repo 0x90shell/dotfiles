@@ -27,7 +27,7 @@ NAS_SHARE="gamer"
 GAMELISTS_DIR="$HOME/ES-DE/gamelists"
 OVERRIDES_FILE="$HOME/bin/.ESDE-genre-overrides.tsv"
 
-# Canonical genre vocabulary (27 genres)
+# Canonical genre vocabulary (28 genres)
 VALID_GENRES=(
     "ACTION"
     "ACTION RPG"
@@ -55,6 +55,7 @@ VALID_GENRES=(
     "STRATEGY"
     "SURVIVAL HORROR"
     "TACTICAL RPG"
+    "TEXT ADVENTURE"
     "VISUAL NOVEL"
 )
 
@@ -1061,6 +1062,16 @@ step_vocab_normalize() {
     sed -i 's|<genre>CARD GAMES</genre>|<genre>CARD GAME</genre>|g' "$file"
     sed -i "s|<genre>BEAT'EM UP</genre>|<genre>BEAT 'EM UP</genre>|g" "$file"
 
+    # Parser games. Scrapers label these inconsistently - MobyGames files them
+    # under Genre "Text Adventure" but also exposes Interface "Text Parser",
+    # while older sets say "Interactive Fiction". The hyphenated form has to be
+    # caught HERE rather than left to the compound strip below, whose hyphen
+    # rule would truncate "TEXT-ADVENTURE" to "TEXT".
+    sed -i 's|<genre>INTERACTIVE FICTION</genre>|<genre>TEXT ADVENTURE</genre>|g' "$file"
+    sed -i 's|<genre>TEXT ADVENTURES</genre>|<genre>TEXT ADVENTURE</genre>|g' "$file"
+    sed -i 's|<genre>TEXT-ADVENTURE</genre>|<genre>TEXT ADVENTURE</genre>|g' "$file"
+    sed -i 's|<genre>TEXT PARSER</genre>|<genre>TEXT ADVENTURE</genre>|g' "$file"
+
     # Single-word substitutions
     sed -i 's|<genre>PLATFORM</genre>|<genre>PLATFORMER</genre>|g' "$file"
     sed -i 's|<genre>SPORT</genre>|<genre>SPORTS</genre>|g' "$file"
@@ -1426,7 +1437,7 @@ check_genre_mismatch() {
     if [[ "$valid" == false ]]; then
         echo ""
         echo "[INVALID GENRE] $name ($console) — Genre: $genre"
-        echo "  Not in canonical 27-genre vocabulary"
+        echo "  Not in canonical 28-genre vocabulary"
 
         if [[ "$DRY_RUN" == true ]]; then
             echo "  (dry-run: no changes made)"
@@ -1465,10 +1476,63 @@ check_genre_mismatch() {
         return
     fi
 
+    # Rule 0.5: parser games mis-filed as ADVENTURE. Every Infocom title in the
+    # scummvm set arrives as plain ADVENTURE, but typing at a parser is a
+    # different game to clicking on scenery, which is the whole reason the
+    # genre exists.
+    if [[ "$desc_lower" == *"text adventure"* ]] || \
+       [[ "$desc_lower" == *"interactive fiction"* ]] || \
+       [[ "$desc_lower" == *"text parser"* ]]; then
+        if [[ "$genre" == "ADVENTURE" ]]; then
+            suggested="TEXT ADVENTURE"
+            reason="Desc mentions: text adventure / interactive fiction / parser"
+        fi
+    fi
+
+    # Rule 0.7: explicit survival horror. Checked before plain horror so the
+    # more specific genre wins.
+    if [[ -z "$suggested" ]]; then
+        if [[ "$desc_lower" == *"survival horror"* ]]; then
+            if [[ "$genre" == "ADVENTURE" || "$genre" == "HORROR" ]]; then
+                suggested="SURVIVAL HORROR"
+                reason="Desc mentions: survival horror"
+            fi
+        fi
+    fi
+
+    # Rule 0.8: horror. Requires the literal word - atmosphere words like
+    # "haunted" or "ghost" appear in plenty of comedies and mysteries, and
+    # guessing from those would mis-file half the Nancy Drew catalogue.
+    if [[ -z "$suggested" ]]; then
+        if [[ "$desc_lower" == *"horror"* ]] && [[ "$desc_lower" != *"visual novel"* ]]; then
+            if [[ "$genre" == "ADVENTURE" ]]; then
+                suggested="HORROR"
+                reason="Desc mentions: horror"
+            fi
+        fi
+    fi
+
+    # Rule 0.9: children's educational titles - Freddi Fish, Putt-Putt, Pajama
+    # Sam and the Humongous catalogue generally. Deliberately narrow: an age
+    # range or an explicit teaching claim, not merely "for kids".
+    if [[ -z "$suggested" ]]; then
+        if [[ "$desc_lower" == *"educational"* ]] || [[ "$desc_lower" == *"teaches"* ]] || \
+           [[ "$desc_lower" == *"learning"* ]] || [[ "$desc_lower" == *"ages 3"* ]] || \
+           [[ "$desc_lower" == *"ages 4"* ]] || [[ "$desc_lower" == *"ages 5"* ]] || \
+           [[ "$desc_lower" == *"ages 6"* ]]; then
+            if [[ "$genre" == "ADVENTURE" ]]; then
+                suggested="EDUCATIONAL"
+                reason="Desc mentions: educational / teaches / age range"
+            fi
+        fi
+    fi
+
     # Rule 1: "metroidvania" literal
-    if [[ "$desc_lower" == *"metroidvania"* ]] && [[ "$genre" != "METROIDVANIA" ]]; then
-        suggested="METROIDVANIA"
-        reason="Desc mentions: \"metroidvania\""
+    if [[ -z "$suggested" ]]; then
+        if [[ "$desc_lower" == *"metroidvania"* ]] && [[ "$genre" != "METROIDVANIA" ]]; then
+            suggested="METROIDVANIA"
+            reason="Desc mentions: \"metroidvania\""
+        fi
     fi
 
     # Rule 2: interconnected + world/map + ability/unlock
@@ -1570,10 +1634,10 @@ check_genre_mismatch() {
 
     # Rule 11: "visual novel"
     if [[ -z "$suggested" ]]; then
-        if [[ "$desc_lower" == *"visual novel"* ]]; then
+        if [[ "$desc_lower" == *"visual novel"* ]] || [[ "$desc_lower" == *"dating sim"* ]]; then
             if [[ "$genre" == "ADVENTURE" || "$genre" == "RPG" ]]; then
                 suggested="VISUAL NOVEL"
-                reason="Desc mentions: visual novel"
+                reason="Desc mentions: visual novel / dating sim"
             fi
         fi
     fi
