@@ -1,0 +1,8 @@
+[flake8]
+# Match line-length = 120 in ~/.config/ruff/ruff.toml. Without this, flake8
+# falls back to pycodestyle's default of 79 and contradicts ruff on every file.
+max-line-length = 120
+
+# flake8 runs alongside ruff, and earns its place on the pycodestyle whitespace
+# rules (E1xx/E2xx/E3xx) that ruff still gates behind preview. Its pyflakes (F)
+# checks do overlap with ruff, which is left enabled so the two cross-check.

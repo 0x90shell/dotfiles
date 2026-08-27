@@ -8,6 +8,14 @@ bin/test-setup*
 .config/autostart/Caffeine-ng.desktop
 .config/autostart/redshift-gtk.desktop
 {{ else }}
+{{/*
+   The 1280x960 miximage recipe. Only Glamdring runs Skyscraper against the
+   ES-DE collection, and without this file an -i run silently falls back to
+   the stock 640x480 artwork with the logo top-aligned over the screenshot.
+   Tracked rather than left loose because it is hand-authored and nothing
+   regenerates it.
+*/}}
+.skyscraper/artwork-esde1280.xml
 .config/systemd/user/esde-backup.service
 .config/systemd/user/optimize-ra*
 .config/systemd/user/emu-backup.service

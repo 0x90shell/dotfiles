@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ES-DE miximage recipe for the scummvm collection - 1280x960.
+
+  Skyscraper's stock artwork.xml scaled x2 from 640x480, so every proportion
+  matches what the collection already used, at double the detail for 4K:
+      520x390 screenshot -> 1040x780     250 cover/wheel -> 500
+      radius 10 -> 20    stroke 5 -> 10    shadow 5 -> 10
+
+  Two deliberate differences from stock:
+
+  * wheel carries valign="bottom". Stock omits valign, which defaults to TOP
+    and drops the logo over the screenshot; this collection has always had the
+    gamebox bottom-LEFT and the logo bottom-RIGHT.
+
+  * wheel y="-30" rather than -20. At -20 tall logos were clipped by the
+    canvas edge - "Untold", "FORMULA" and "EGG" all lost their bottom line.
+    Width is 600, not the stock-derived 500. Layer width is what sets
+    rendered size - a logo file cannot be enlarged into a bigger render - so
+    widening the layer was the only way to make wide, short logos like The
+    Journeyman Project read at a glance. This affects every game.
+
+  * cover x="6" rather than 0. The original miximages sat the gamebox 4px in
+    from the left edge on an 800px canvas; 6px is the proportional equivalent
+    at 1280px.
+
+  Rendered gamebox lands ~64% of canvas height, matching the originals - the
+  3D rotation adds perspective height beyond the layer's `height` value.
+-->
+<artwork>
+  <output type="screenshot" width="1280" height="960">
+    <layer resource="screenshot" x="40" width="1040" height="780" align="center" valign="middle">
+      <rounded radius="20"/>
+      <stroke width="10"/>
+    </layer>
+    <layer resource="cover" height="500" x="6" y="-20" valign="bottom">
+      <gamebox side="wheel" rotate="90"/>
+      <shadow distance="10" softness="10" opacity="70"/>
+    </layer>
+    <layer resource="wheel" width="600" x="-20" y="-30" align="right" valign="bottom">
+      <shadow distance="10" softness="10" opacity="70"/>
+    </layer>
+  </output>
+  <output type="marquee" resource="wheel"/>
+</artwork>
