@@ -83,6 +83,23 @@ for cmd in ffmpeg whisper-cli sherpa-onnx-offline-speaker-diarization awk; do
     command -v "$cmd" >/dev/null || { echo "error: $cmd not on PATH" >&2; exit 1; }
 done
 
+# Existing on PATH is not the same as runnable. sherpa-onnx links onnxruntime,
+# which ships exactly one symbol-version node per release (VERS_x.y.z) and is
+# therefore NOT backward compatible: any onnxruntime upgrade silently breaks
+# the sherpa binary until it is rebuilt. Probing here costs milliseconds;
+# discovering it at step 3 costs a full whisper pass (~12 min on a long file).
+if ! probe="$(sherpa-onnx-offline-speaker-diarization --help 2>&1)"; then
+    case "$probe" in
+        *"not found"*|*"cannot open shared object"*|*"undefined symbol"*)
+            echo "error: sherpa-onnx-offline-speaker-diarization is installed but will not run:" >&2
+            echo "  ${probe%%$'\n'*}" >&2
+            echo "hint: an onnxruntime upgrade likely broke the ABI. Rebuild sherpa-onnx:" >&2
+            echo "  yay -S --rebuild sherpa-onnx" >&2
+            exit 1
+            ;;
+    esac
+fi
+
 # Build the clustering arg: forced count vs. threshold-driven auto-count.
 # Forcing the wrong count is unrecoverable (two real voices collapse, or one
 # fragments across clusters), so auto is the new default — let threshold pick.
@@ -125,16 +142,27 @@ whisper-cli -pp -m "$WHISPER_MODEL" -l en -f "$WAV" \
 # Cap at 8: small embedding nets are memory-bandwidth bound past that. Override via env.
 DIAR_THREADS="${DIAR_THREADS:-$(( $(nproc) > 8 ? 8 : $(nproc) ))}"
 echo "[3/4] Diarizing ($CLUSTER_DESC, $DIAR_THREADS threads)..."
+# stderr goes to a file rather than /dev/null: it is noisy on success (progress
+# chatter) but it is the ONLY description of the failure when things break.
+# Discarding it turns every fault into a bare non-zero exit.
+diar_rc=0
 sherpa-onnx-offline-speaker-diarization \
     "$CLUSTER_ARG" \
     --segmentation.pyannote-model="$SEG_MODEL" \
     --segmentation.num-threads="$DIAR_THREADS" \
     --embedding.model="$EMB_MODEL" \
     --embedding.num-threads="$DIAR_THREADS" \
-    "$WAV" 2>/dev/null > "$WORKDIR/diar.txt"
+    "$WAV" 2>"$WORKDIR/diar.err" > "$WORKDIR/diar.txt" || diar_rc=$?
+
+if (( diar_rc != 0 )); then
+    echo "error: diarization failed (exit $diar_rc)" >&2
+    sed 's/^/  /' "$WORKDIR/diar.err" >&2
+    exit 1
+fi
 
 if [[ ! -s "$WORKDIR/diar.txt" ]]; then
     echo "error: diarization produced no output" >&2
+    sed 's/^/  /' "$WORKDIR/diar.err" >&2
     exit 1
 fi
 
