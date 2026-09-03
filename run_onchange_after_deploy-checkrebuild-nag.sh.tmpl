@@ -1,0 +1,144 @@
+{{- if eq .chezmoi.osRelease.id "arch" "endeavouros" -}}
+#!/bin/bash
+set -euo pipefail
+
+# =============================================================================
+# checkrebuild nag — report only NEWLY broken AUR packages after an upgrade
+# =============================================================================
+#
+# pacman cannot see a whole class of breakage. onnxruntime, for one, exports a
+# single symbol-version node per release (VERS_x.y.z) with no backward
+# compatibility while keeping the soname libonnxruntime.so.1. Nothing in the
+# dependency graph changes, so pacman is satisfied, and every AUR package
+# linked against it dies at runtime with "version `VERS_1.28.0' not found"
+# until it is rebuilt.
+#
+# rebuild-detector's checkrebuild does catch that, but its stock hook prints
+# every foreign package with a broken link: 14 chronic entries on Excalibur,
+# 19 on Glamdring, mostly bundled-binary packages that always look broken. A
+# real regression is one extra alphabetical line in that list, which is how
+# sherpa-onnx sat broken for a day after the 1.28.0 -> 1.29.0 bump.
+#
+# This replaces the stock hook with one that diffs against the previous run,
+# prints only what newly broke, and records it for ~/bin/yayup to rebuild.
+# The split is forced: makepkg refuses to run as root, and the hook runs while
+# pacman still holds the DB lock, so the hook can only ever notify.
+#
+# Idempotent — re-runs on any edit to this template; steady-state is a no-op.
+
+if ! pacman -Q rebuild-detector >/dev/null 2>&1; then
+    echo "Installing rebuild-detector..."
+    yay -S --needed --noconfirm rebuild-detector
+fi
+
+sudo tee /usr/local/bin/checkrebuild-newly-broken > /dev/null << 'WRAPPER'
+#!/bin/bash
+# Pacman PostTransaction hook: report AUR packages a library upgrade just broke.
+# Notify only; the list is left in $PENDING for `yayup` to act on.
+set -uo pipefail
+
+BASELINE=/var/lib/checkrebuild.baseline
+PENDING=/var/lib/checkrebuild.pending
+IGNORE=/etc/checkrebuild-ignore
+
+current="$(mktemp)"
+raw="$(mktemp)"
+trap 'rm -f "$current" "$raw"' EXIT
+
+# stdin closed on purpose: checkrebuild reads a scoped target list from stdin
+# when it is not a tty (the stock hook passes one via NeedsTargets). A scoped
+# list is not comparable between transactions, so force the full-system scan.
+# checkrebuild exits non-zero when it finds nothing; that is not an error here.
+/usr/bin/checkrebuild </dev/null 2>/dev/null | awk '{print $NF}' | sort -u > "$raw"
+
+# Drop packages listed in $IGNORE. The baseline already hides anything that is
+# chronically flagged, so this is for the harder case: a package that stays
+# flagged even after a successful rebuild would otherwise sit in $PENDING and
+# be retried by yayup on every single run. Comments and blank lines allowed.
+if [[ -s "$IGNORE" ]]; then
+    grep -vxFf <(grep -vE '^[[:space:]]*(#|$)' "$IGNORE") "$raw" > "$current" || true
+else
+    cp "$raw" "$current"
+fi
+
+if [[ ! -f "$BASELINE" ]]; then
+    install -Dm644 "$current" "$BASELINE"
+    echo "checkrebuild: baseline recorded ($(wc -l < "$current") package(s) already flagged)"
+    exit 0
+fi
+
+new="$(comm -13 "$BASELINE" "$current")"
+install -Dm644 "$current" "$BASELINE"
+
+[[ -z "$new" ]] && exit 0
+
+# Union with anything still pending from an earlier transaction that has not
+# been rebuilt yet, so a plain `pacman -Syu` between yayup runs cannot drop a
+# package off the list.
+{ cat "$PENDING" 2>/dev/null; echo "$new"; } | sed '/^$/d' | sort -u > "$PENDING.tmp"
+install -Dm644 "$PENDING.tmp" "$PENDING"
+rm -f "$PENDING.tmp"
+
+echo
+echo "############################################################"
+echo "#  NEWLY BROKEN by this transaction, rebuild required:"
+while IFS= read -r pkg; do
+    [[ -n "$pkg" ]] && echo "#    $pkg"
+done <<< "$new"
+echo "#"
+echo "#  yayup            (rebuilds automatically)"
+echo "#  yay -S --rebuild $(echo "$new" | tr '\n' ' ')"
+echo "############################################################"
+echo
+WRAPPER
+sudo chmod 755 /usr/local/bin/checkrebuild-newly-broken
+
+echo "Deployed wrapper: /usr/local/bin/checkrebuild-newly-broken"
+
+# Same filename as the hook in /usr/share/libalpm/hooks overrides it, so
+# checkrebuild runs once per transaction rather than twice.
+#
+# No NeedsTargets, unlike the stock hook: it scopes checkrebuild to the current
+# transaction's reverse deps, which makes the output non-comparable between
+# runs and breaks the baseline diff.
+sudo mkdir -p /etc/pacman.d/hooks
+sudo tee /etc/pacman.d/hooks/rebuild-detector.hook > /dev/null << 'HOOK'
+[Trigger]
+Operation = Upgrade
+Type = Package
+Target = *
+
+[Action]
+Description = Checking which packages newly need rebuilding
+Exec = /usr/local/bin/checkrebuild-newly-broken
+When = PostTransaction
+HOOK
+
+echo "Deployed hook: /etc/pacman.d/hooks/rebuild-detector.hook (overrides stock)"
+
+# Escape hatch for packages checkrebuild flags forever. Created empty on first
+# deploy and never overwritten, so hand-added entries survive re-runs.
+if [[ ! -f /etc/checkrebuild-ignore ]]; then
+    sudo tee /etc/checkrebuild-ignore > /dev/null << 'IGNORE'
+# Packages checkrebuild flags that a rebuild does not fix.
+# One package name per line. Blank lines and # comments ignored.
+#
+# Only add a package here after rebuilding it and confirming it is STILL
+# listed. A package that drops off the list after a rebuild is a true positive
+# and belongs in the normal flow: emulationstation-de, for instance, breaks
+# repeatedly and clears every time, which is exactly what yayup is for.
+IGNORE
+    echo "Created: /etc/checkrebuild-ignore"
+else
+    echo "Kept existing: /etc/checkrebuild-ignore"
+fi
+
+# Seed the baseline so the first real upgrade reports only genuine regressions
+# rather than every package that already looks broken.
+if [[ ! -f /var/lib/checkrebuild.baseline ]]; then
+    echo "Seeding baseline (this takes a few seconds)..."
+    sudo /usr/local/bin/checkrebuild-newly-broken
+else
+    echo "Baseline already present: $(sudo wc -l < /var/lib/checkrebuild.baseline) package(s) flagged"
+fi
+{{- end -}}

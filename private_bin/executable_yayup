@@ -1,0 +1,113 @@
+#!/bin/bash
+set -euo pipefail
+
+# yayup — full system upgrade, then rebuild anything the upgrade broke.
+#
+# The rebuild half exists because pacman cannot see a whole class of breakage.
+# onnxruntime, for one, exports a single symbol-version node per release
+# (VERS_x.y.z) with no backward compatibility, while keeping the soname
+# libonnxruntime.so.1. Nothing in the dependency graph changes, so pacman is
+# satisfied, and every AUR package linked against it dies at runtime with
+# "version `VERS_1.28.0' not found" until it is rebuilt.
+#
+# rebuild-detector's checkrebuild does catch this, but it prints every foreign
+# package with a broken link: 14 chronic entries on Excalibur, 19 on Glamdring,
+# mostly bundled-binary packages that always look broken. A real regression is
+# one extra alphabetical line in that list, which is how sherpa-onnx sat broken
+# for a day. So the pacman hook diffs against a baseline and records only what
+# newly broke; this script consumes that list.
+#
+# The split is forced: makepkg refuses to run as root and the hook runs while
+# pacman holds the DB lock, so the hook can only ever notify. Rebuilding
+# happens here, where sudo is already warm and someone is watching.
+
+PENDING=/var/lib/checkrebuild.pending
+BASELINE=/var/lib/checkrebuild.baseline
+IGNORE=/etc/checkrebuild-ignore
+MIRROR_COUNTRY="${YAYUP_MIRROR_COUNTRY:-United States}"
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    cat <<'EOF'
+usage: yayup [yay args...]
+
+Refresh mirrors, upgrade everything (repo + AUR + devel), then rebuild any AUR
+package that the upgrade left linked against a library that moved.
+
+Any arguments are passed through to `yay -Syu`.
+
+Options:
+  --rebuild-only   Skip the upgrade, just rebuild what is pending.
+  --no-rebuild     Upgrade only, leave the pending list alone.
+
+Environment:
+  YAYUP_MIRROR_COUNTRY   reflector country (default: United States)
+EOF
+    exit 0
+fi
+
+do_upgrade=1
+do_rebuild=1
+case "${1:-}" in
+    --rebuild-only) do_upgrade=0; shift ;;
+    --no-rebuild)   do_rebuild=0; shift ;;
+esac
+
+# Rebuild packages the hook flagged. Returns 1 if anything is still broken
+# afterwards, so a failed rebuild is visible in $? rather than only on screen.
+rebuild_broken() {
+    [[ -s "$PENDING" ]] || return 0
+
+    local -a broken
+    mapfile -t broken < <(grep -v '^[[:space:]]*$' "$PENDING" || true)
+    (( ${#broken[@]} )) || return 0
+
+    echo
+    echo "==> Rebuilding packages this upgrade broke: ${broken[*]}"
+    # Not `set -e` fatal: a build can fail (a dead upstream source URL, say) and
+    # the recheck below is what actually decides success.
+    yay -S --rebuild --noconfirm "${broken[@]}" || true
+
+    # Recompute instead of trusting yay's exit status. A package can build and
+    # install cleanly and still be linked against something that moved.
+    # Ignored packages are filtered out here too, otherwise one of them showing
+    # up would be misread as this rebuild having failed.
+    local still
+    still="$(checkrebuild </dev/null 2>/dev/null | awk '{print $NF}' | sort -u)"
+    if [[ -s "$IGNORE" ]]; then
+        still="$(printf '%s\n' "$still" \
+            | grep -vxFf <(grep -vE '^[[:space:]]*(#|$)' "$IGNORE") || true)"
+    fi
+
+    local -a failed
+    mapfile -t failed < <(comm -12 \
+        <(printf '%s\n' "${broken[@]}" | sort -u) \
+        <(printf '%s\n' "$still" | grep -v '^[[:space:]]*$' || true))
+
+    printf '%s\n' "$still" | sudo tee "$BASELINE" >/dev/null
+
+    if (( ${#failed[@]} )); then
+        # Keep failures pending so the next run retries them. Letting them fall
+        # into the baseline would reclassify real breakage as chronic noise,
+        # which is the exact failure this whole mechanism exists to prevent.
+        printf '%s\n' "${failed[@]}" | sudo tee "$PENDING" >/dev/null
+        echo "==> STILL BROKEN after rebuild: ${failed[*]}" >&2
+        echo "    investigate before trusting these packages" >&2
+        return 1
+    fi
+
+    sudo rm -f "$PENDING"
+    echo "==> Rebuilt OK: ${broken[*]}"
+}
+
+if (( do_upgrade )); then
+    echo "==> Refreshing mirrorlist..."
+    sudo reflector --country "$MIRROR_COUNTRY" --latest 5 --age 2 --fastest 5 \
+        --protocol https --sort rate --save /etc/pacman.d/mirrorlist
+
+    echo "==> Upgrading..."
+    sudo pacman -Sy
+    yay -Syu --devel "$@"
+    yay -Y --devel --gendb
+fi
+
+(( do_rebuild )) && rebuild_broken
