@@ -227,6 +227,9 @@ alias spt='DISPLAY=:0 bgrun spotify'
 alias kspt='pgrep spotify | xargs kill -9'
 alias esd='DISPLAY=:0 bgrun es-de'
 alias kesd='killall es-de'
+{{- if eq .chezmoi.hostname "Glamdring" }}
+alias terminator="terminator --profile=endeavouros"
+{{- end }}
 {{- end }}
 alias ta='tmux attach'
 alias tan='tmux attach -t'
