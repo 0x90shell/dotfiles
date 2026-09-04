@@ -1,0 +1,7 @@
+# Packages checkrebuild flags that rebuilding does not fix.
+# One name per line. Blank lines and # comments ignored.
+#
+# Only add a package after rebuilding it and confirming it is STILL listed.
+# One that clears on rebuild is a true positive and belongs in the normal
+# flow: emulationstation-de breaks on every ffmpeg soname bump and clears
+# every time, which is what yayup is for.

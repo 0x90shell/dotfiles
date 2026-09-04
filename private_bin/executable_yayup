@@ -3,41 +3,32 @@ set -euo pipefail
 
 # yayup — full system upgrade, then rebuild anything the upgrade broke.
 #
-# The rebuild half exists because pacman cannot see a whole class of breakage.
-# onnxruntime, for one, exports a single symbol-version node per release
-# (VERS_x.y.z) with no backward compatibility, while keeping the soname
-# libonnxruntime.so.1. Nothing in the dependency graph changes, so pacman is
-# satisfied, and every AUR package linked against it dies at runtime with
-# "version `VERS_1.28.0' not found" until it is rebuilt.
-#
-# rebuild-detector's checkrebuild does catch this, but it prints every foreign
-# package with a broken link: 14 chronic entries on Excalibur, 19 on Glamdring,
-# mostly bundled-binary packages that always look broken. A real regression is
-# one extra alphabetical line in that list, which is how sherpa-onnx sat broken
-# for a day. So the pacman hook diffs against a baseline and records only what
-# newly broke; this script consumes that list.
-#
-# The split is forced: makepkg refuses to run as root and the hook runs while
-# pacman holds the DB lock, so the hook can only ever notify. Rebuilding
-# happens here, where sudo is already warm and someone is watching.
+# A soname/symbol-version bump leaves the dependency graph unchanged, so pacman
+# sees nothing; only ldd does. checkrebuild reports ~15 permanent false
+# positives here, so the signal is the diff against the previous run.
 
-PENDING=/var/lib/checkrebuild.pending
-BASELINE=/var/lib/checkrebuild.baseline
-IGNORE=/etc/checkrebuild-ignore
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/yayup"
+BASELINE="$STATE_DIR/checkrebuild.baseline"
+IGNORE="${XDG_CONFIG_HOME:-$HOME/.config}/yayup/ignore"
 MIRROR_COUNTRY="${YAYUP_MIRROR_COUNTRY:-United States}"
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-    cat <<'EOF'
+    cat <<EOF
 usage: yayup [yay args...]
 
 Refresh mirrors, upgrade everything (repo + AUR + devel), then rebuild any AUR
-package that the upgrade left linked against a library that moved.
+package the upgrade left linked against a library that moved.
 
-Any arguments are passed through to `yay -Syu`.
+Any arguments are passed through to \`yay -Syu\`.
 
 Options:
-  --rebuild-only   Skip the upgrade, just rebuild what is pending.
-  --no-rebuild     Upgrade only, leave the pending list alone.
+  --rebuild-only    Skip the upgrade, just rebuild what is newly broken.
+  --no-rebuild      Upgrade only, skip the rebuild check.
+  --reset-baseline  Re-record what is currently broken as the new normal.
+
+Files:
+  $BASELINE
+  $IGNORE
 
 Environment:
   YAYUP_MIRROR_COUNTRY   reflector country (default: United States)
@@ -48,56 +39,74 @@ fi
 do_upgrade=1
 do_rebuild=1
 case "${1:-}" in
-    --rebuild-only) do_upgrade=0; shift ;;
-    --no-rebuild)   do_rebuild=0; shift ;;
+    --rebuild-only)   do_upgrade=0; shift ;;
+    --no-rebuild)     do_rebuild=0; shift ;;
+    --reset-baseline) do_upgrade=0; do_rebuild=0; reset_baseline=1; shift ;;
 esac
 
-# Rebuild packages the hook flagged. Returns 1 if anything is still broken
-# afterwards, so a failed rebuild is visible in $? rather than only on screen.
+# Packages checkrebuild flags, minus the ignore list.
+broken_now() {
+    # </dev/null forces a full scan; checkrebuild otherwise reads a scoped
+    # target list from stdin, which cannot be diffed against the baseline.
+    checkrebuild </dev/null 2>/dev/null | awk '{print $NF}' | sort -u \
+      | { if [[ -s "$IGNORE" ]]; then
+              grep -vxFf <(grep -vE '^[[:space:]]*(#|$)' "$IGNORE") || true
+          else cat; fi; } \
+      | grep -v '^[[:space:]]*$' || true
+}
+
+# Returns 1 if anything is still broken afterwards.
 rebuild_broken() {
-    [[ -s "$PENDING" ]] || return 0
+    command -v checkrebuild >/dev/null || return 0
 
-    local -a broken
-    mapfile -t broken < <(grep -v '^[[:space:]]*$' "$PENDING" || true)
-    (( ${#broken[@]} )) || return 0
+    local cur; cur="$(mktemp)"
+    broken_now > "$cur"
 
-    echo
-    echo "==> Rebuilding packages this upgrade broke: ${broken[*]}"
-    # Not `set -e` fatal: a build can fail (a dead upstream source URL, say) and
-    # the recheck below is what actually decides success.
-    yay -S --rebuild --noconfirm "${broken[@]}" || true
-
-    # Recompute instead of trusting yay's exit status. A package can build and
-    # install cleanly and still be linked against something that moved.
-    # Ignored packages are filtered out here too, otherwise one of them showing
-    # up would be misread as this rebuild having failed.
-    local still
-    still="$(checkrebuild </dev/null 2>/dev/null | awk '{print $NF}' | sort -u)"
-    if [[ -s "$IGNORE" ]]; then
-        still="$(printf '%s\n' "$still" \
-            | grep -vxFf <(grep -vE '^[[:space:]]*(#|$)' "$IGNORE") || true)"
+    if [[ ! -f "$BASELINE" ]]; then
+        install -Dm644 "$cur" "$BASELINE"; rm -f "$cur"
+        echo "==> checkrebuild baseline recorded ($(wc -l < "$BASELINE") already flagged)"
+        return 0
     fi
 
-    local -a failed
-    mapfile -t failed < <(comm -12 \
-        <(printf '%s\n' "${broken[@]}" | sort -u) \
-        <(printf '%s\n' "$still" | grep -v '^[[:space:]]*$' || true))
+    local -a newly
+    mapfile -t newly < <(comm -13 "$BASELINE" "$cur")
+    if (( ${#newly[@]} == 0 )); then
+        install -Dm644 "$cur" "$BASELINE"; rm -f "$cur"
+        return 0
+    fi
+    rm -f "$cur"
 
-    printf '%s\n' "$still" | sudo tee "$BASELINE" >/dev/null
+    echo
+    echo "==> Newly broken by this upgrade: ${newly[*]}"
+    # Not fatal: the recheck below decides success, not yay's exit status.
+    yay -S --rebuild --noconfirm "${newly[@]}" || true
+
+    # A package can install cleanly and still link something that moved.
+    local still; still="$(mktemp)"
+    broken_now > "$still"
+
+    local -a failed
+    mapfile -t failed < <(comm -12 <(printf '%s\n' "${newly[@]}" | sort -u) "$still")
 
     if (( ${#failed[@]} )); then
-        # Keep failures pending so the next run retries them. Letting them fall
-        # into the baseline would reclassify real breakage as chronic noise,
-        # which is the exact failure this whole mechanism exists to prevent.
-        printf '%s\n' "${failed[@]}" | sudo tee "$PENDING" >/dev/null
+        # Keep failures out of the baseline so they are reported again.
+        comm -23 "$still" <(printf '%s\n' "${failed[@]}" | sort -u) > "$BASELINE"
+        rm -f "$still"
         echo "==> STILL BROKEN after rebuild: ${failed[*]}" >&2
-        echo "    investigate before trusting these packages" >&2
+        echo "    fix these, or add them to $IGNORE" >&2
         return 1
     fi
 
-    sudo rm -f "$PENDING"
-    echo "==> Rebuilt OK: ${broken[*]}"
+    install -Dm644 "$still" "$BASELINE"; rm -f "$still"
+    echo "==> Rebuilt OK: ${newly[*]}"
 }
+
+if [[ -n "${reset_baseline:-}" ]]; then
+    mkdir -p "$STATE_DIR"
+    broken_now > "$BASELINE"
+    echo "==> Baseline reset: $(wc -l < "$BASELINE") package(s) recorded as normal"
+    exit 0
+fi
 
 if (( do_upgrade )); then
     echo "==> Refreshing mirrorlist..."
