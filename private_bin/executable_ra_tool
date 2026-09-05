@@ -2848,7 +2848,8 @@ def check_dependencies(system_id: Optional[int] = None) -> dict:
     Check availability of required dependencies for archive extraction and conversion.
 
     Args:
-        system_id: Optional system ID to check system-specific deps (e.g., dolphin-tool for GC/Wii)
+        system_id: Optional system ID to check system-specific deps (e.g. dolphin-tool,
+                       from the dolphin-emu-tool package, for GC/Wii RVZ)
 
     Returns:
         dict with dependency availability info
@@ -4769,7 +4770,10 @@ def cmd_setup(args):
         print(f"  RVZ conversion: ✓ dolphin-tool ({deps['dolphin_tool']})")
     else:
         print("  RVZ conversion: ✗ Not available (needed for GC/Wii RVZ files)")
-        print("                  Install: pacman -S dolphin-emu  (includes dolphin-tool)")
+        # dolphin-tool ships in dolphin-emu-tool on Arch, NOT dolphin-emu.
+        # Installing the emulator alone leaves RVZ conversion unavailable.
+        print("                  Install: sudo pacman -S dolphin-emu-tool   # Arch, provides /usr/bin/dolphin-tool")
+        print("                           sudo apt install dolphin-emu-tool # Debian/Ubuntu")
 
 
 def cmd_dedup(args):
