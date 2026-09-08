@@ -10,6 +10,7 @@
 # `cat ~/.ssh/id_ed25519`, not `env`, and not ~/.aws or ~/.netrc.
 set -uo pipefail
 
+# shellcheck source-path=SCRIPTDIR
 # shellcheck source=lib/guard-common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib/guard-common.sh"
 

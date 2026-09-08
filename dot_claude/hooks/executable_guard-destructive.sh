@@ -12,6 +12,7 @@
 # under /tmp. Everything else goes to trash-put.
 set -uo pipefail
 
+# shellcheck source-path=SCRIPTDIR
 # shellcheck source=lib/guard-common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib/guard-common.sh"
 

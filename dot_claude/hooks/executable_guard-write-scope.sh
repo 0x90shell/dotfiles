@@ -11,6 +11,7 @@
 # ordinary shell work is never caught by a guess.
 set -uo pipefail
 
+# shellcheck source-path=SCRIPTDIR
 # shellcheck source=lib/guard-common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib/guard-common.sh"
 
@@ -37,6 +38,11 @@ in_scope() {
     case $r in
         /tmp/* | /var/tmp/* | /dev/null | /dev/stdout | /dev/stderr) return 0 ;;
         "$cwd" | "$cwd"/*) return 0 ;;
+        # The agent's own home. The harness writes plans, memory, todos and
+        # session state here through the Write tool, so blocking it breaks plan
+        # mode and the memory system outright. Skills, hooks, agents and output
+        # styles live here too and are legitimate configuration work.
+        "$HOME"/.claude | "$HOME"/.claude/*) return 0 ;;
     esac
     return 1
 }

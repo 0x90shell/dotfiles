@@ -14,6 +14,11 @@ file=$("$jq" -r '.tool_response.filePath // .tool_input.file_path // ""' <<<"$pa
 [[ -n $file && -f $file ]] || exit 0
 case $file in *.md | *.markdown | *.txt) ;; *) exit 0 ;; esac
 
+# A file that DEFINES this vocabulary has to contain it. Style guides, skills and
+# the banned-word list itself opt out with a marker line, rather than the hook
+# guessing from the path.
+grep -q 'slop-check: ignore' "$file" && exit 0
+
 report=""
 add() { report="${report}  $1"$'\n'; }
 

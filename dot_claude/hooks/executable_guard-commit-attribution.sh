@@ -7,6 +7,7 @@
 # that argument at least once. This makes the user's rule win deterministically.
 set -uo pipefail
 
+# shellcheck source-path=SCRIPTDIR
 # shellcheck source=lib/guard-common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib/guard-common.sh"
 
