@@ -64,13 +64,17 @@ source instead." \
 fi
 
 # Bash: only refuse writes to unambiguous system locations.
+#
+# Checked PER SEGMENT. An earlier version matched across the whole command with
+# .*, so any command containing "cp" plus the string "/opt/" anywhere later (a
+# comment, for instance) was refused. Over-broad guards get switched off, so the
+# match has to be tight.
 if [[ $tool == "Bash" ]]; then
     [[ -n $cmd ]] || guard_allow
     sys='(/etc|/usr|/boot|/bin|/sbin|/lib|/lib64|/opt|/var/lib|/var/log|/sys|/proc)'
-    if [[ $cmd =~ (\>|\>\>)[[:space:]]*${sys}/ ]] ||
-        [[ $cmd =~ (^|[[:space:]])tee[[:space:]]+(-a[[:space:]]+)?${sys}/ ]] ||
-        [[ $cmd =~ (^|[[:space:]])(cp|mv|install|touch|mkdir|ln)[[:space:]].*[[:space:]]${sys}/ ]]; then
-        guard_deny "Refused: that writes into a system directory.
+
+    deny_sys() {
+        guard_deny "Refused: '$1' writes into a system directory.
 
 System configuration on this machine is managed with chezmoi. Edit the chezmoi
 source (~/.local/share/chezmoi) and run 'chezmoi apply', rather than writing to
@@ -78,7 +82,35 @@ the target directly.
 
 If this genuinely has to bypass chezmoi, prefix with CLAUDE_GUARD_OFF=1." \
             "Blocked: write to a system directory"
-    fi
+    }
+
+    while IFS= read -r seg; do
+        seg=${seg#"${seg%%[![:space:]]*}"}
+        seg=$(sed -E 's/^([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*//; s/^(sudo|command|env)[[:space:]]+//' <<<"$seg")
+        [[ -n $seg ]] || continue
+
+        # A redirection into a system path, inside this segment only.
+        if [[ $seg =~ (\>|\>\>)[[:space:]]*\"?${sys}/ ]]; then
+            deny_sys "$seg"
+        fi
+
+        # tee writing to a system path.
+        if [[ $seg =~ ^tee[[:space:]]+(-a[[:space:]]+)?\"?${sys}/ ]]; then
+            deny_sys "$seg"
+        fi
+
+        # A copy/move/link whose DESTINATION (the final argument) is a system
+        # path. Checking only the last word avoids matching a source path or a
+        # path that merely appears somewhere in the line.
+        if [[ $seg =~ ^(cp|mv|install|ln|touch|mkdir)([[:space:]]|$) ]]; then
+            read -r -a w <<<"$seg"
+            dest=${w[-1]}
+            dest=${dest%\"}; dest=${dest#\"}
+            if [[ $dest =~ ^${sys}/ ]]; then
+                deny_sys "$seg"
+            fi
+        fi
+    done < <(guard_segments "$cmd")
 fi
 
 guard_allow
