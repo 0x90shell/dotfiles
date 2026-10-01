@@ -55,7 +55,8 @@ broken_now() {
       | grep -v '^[[:space:]]*$' || true
 }
 
-# Returns 1 if anything is still broken afterwards.
+# Returns 1 if anything is still broken afterwards. Sets rebuilt_any=1 if at
+# least one package was fixed.
 rebuild_broken() {
     command -v checkrebuild >/dev/null || return 0
 
@@ -87,6 +88,7 @@ rebuild_broken() {
 
     local -a failed
     mapfile -t failed < <(comm -12 <(printf '%s\n' "${newly[@]}" | sort -u) "$still")
+    (( ${#failed[@]} < ${#newly[@]} )) && rebuilt_any=1
 
     if (( ${#failed[@]} )); then
         # Keep failures out of the baseline so they are reported again.
@@ -115,8 +117,29 @@ if (( do_upgrade )); then
 
     echo "==> Upgrading..."
     sudo pacman -Sy
-    yay -Syu --devel "$@"
+    # Not fatal: an AUR package can fail to build because an AUR dependency
+    # was broken by this same upgrade, which only the rebuild below repairs.
+    upgrade_ok=1
+    yay -Syu --devel "$@" || upgrade_ok=0
+fi
+
+rebuilt_any=0
+rebuild_ok=1
+if (( do_rebuild )); then
+    rebuild_broken || rebuild_ok=0
+fi
+
+if (( do_upgrade )); then
+    if (( !upgrade_ok && rebuilt_any )); then
+        echo
+        echo "==> Upgrade failed earlier; retrying now that dependencies are rebuilt..."
+        yay -Syu --devel "$@" && upgrade_ok=1
+    fi
+    if (( !upgrade_ok )); then
+        echo "==> Upgrade FAILED, see yay output above" >&2
+        exit 1
+    fi
     yay -Y --devel --gendb
 fi
 
-(( do_rebuild )) && rebuild_broken
+(( rebuild_ok ))
