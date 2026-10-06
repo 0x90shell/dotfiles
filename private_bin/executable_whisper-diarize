@@ -21,6 +21,8 @@ Arguments:
   <input>          Audio/video file (any ffmpeg-supported format)
   [num_speakers]   Number of speakers (positive int), or "auto" / omitted
                    to let the clusterer pick a count via threshold.
+                   Pass the count when you know it: auto mode is much less
+                   accurate on these recordings.
 
 Environment variables:
   WHISPER_MODEL     Whisper GGML model    (default: ~/.local/share/whisper/ggml-large-v3.bin)
@@ -36,6 +38,8 @@ Environment variables:
   MIN_TURN_WORDS    Turns shorter than this get absorbed into the previous
                     turn (default: 2). Single-word flips usually reflect noisy
                     embeddings on a sub-second segment, not a real interjection.
+  AUTO_MAX_SPEAKERS In auto mode, abort if diarization finds more speakers
+                    than this (default: 6). Fails before the whisper pass.
   DIAR_THREADS      Diarization threads   (default: min(8, nproc))
 
 Examples:
@@ -74,6 +78,7 @@ CLUSTER_THRESHOLD="${CLUSTER_THRESHOLD:-0.5}"
 TURN_GAP="${TURN_GAP:-1.0}"
 MAX_TURN_WORDS="${MAX_TURN_WORDS:-40}"
 MIN_TURN_WORDS="${MIN_TURN_WORDS:-2}"
+AUTO_MAX_SPEAKERS="${AUTO_MAX_SPEAKERS:-6}"
 
 for f in "$WHISPER_MODEL" "$VAD_MODEL" "$SEG_MODEL" "$EMB_MODEL"; do
     [[ -f "$f" ]] || { echo "error: missing model: $f" >&2; exit 1; }
@@ -129,19 +134,9 @@ echo "[1/4] Converting to 16kHz mono WAV..."
 ffmpeg -y -i "$INPUT" -ar 16000 -ac 1 -c:a pcm_s16le "$WAV" \
     -hide_banner -loglevel error
 
-echo "[2/4] Transcribing with whisper (large-v3, VAD-gated, word-level SRT)..."
-# -ml 1 -sow gives one word per SRT segment with its own timestamps, so the
-# merger can assign a speaker per word instead of per phrase. This is the
-# single biggest correctness win: whisper segments often straddle actual
-# turn boundaries, and per-segment merging mislabels the trailing words.
-whisper-cli -pp -m "$WHISPER_MODEL" -l en -f "$WAV" \
-    --vad --vad-model "$VAD_MODEL" \
-    -ml 1 -sow \
-    -of "$SRT_BASE" -osrt --max-context 0 --suppress-nst >/dev/null
-
 # Cap at 8: small embedding nets are memory-bandwidth bound past that. Override via env.
 DIAR_THREADS="${DIAR_THREADS:-$(( $(nproc) > 8 ? 8 : $(nproc) ))}"
-echo "[3/4] Diarizing ($CLUSTER_DESC, $DIAR_THREADS threads)..."
+echo "[2/4] Diarizing ($CLUSTER_DESC, $DIAR_THREADS threads)..."
 # stderr goes to a file rather than /dev/null: it is noisy on success (progress
 # chatter) but it is the ONLY description of the failure when things break.
 # Discarding it turns every fault into a bare non-zero exit.
@@ -165,6 +160,25 @@ if [[ ! -s "$WORKDIR/diar.txt" ]]; then
     sed 's/^/  /' "$WORKDIR/diar.err" >&2
     exit 1
 fi
+
+# Diarize before whisper so a fragmented auto run fails fast.
+n_spk="$(awk '$2 == "--" {print $4}' "$WORKDIR/diar.txt" | sort -u | wc -l)"
+echo "      diarization found $n_spk speaker(s)"
+if [[ "$NUM_SPEAKERS" == auto ]] && (( n_spk > AUTO_MAX_SPEAKERS )); then
+    echo "error: auto mode found $n_spk speakers (limit AUTO_MAX_SPEAKERS=$AUTO_MAX_SPEAKERS)." >&2
+    echo "hint: pass the real count, e.g.: whisper-diarize \"$INPUT\" 3" >&2
+    exit 1
+fi
+
+echo "[3/4] Transcribing with whisper (large-v3, VAD-gated, word-level SRT)..."
+# -ml 1 -sow gives one word per SRT segment with its own timestamps, so the
+# merger can assign a speaker per word instead of per phrase. This is the
+# single biggest correctness win: whisper segments often straddle actual
+# turn boundaries, and per-segment merging mislabels the trailing words.
+whisper-cli -pp -m "$WHISPER_MODEL" -l en -f "$WAV" \
+    --vad --vad-model "$VAD_MODEL" \
+    -ml 1 -sow \
+    -of "$SRT_BASE" -osrt --max-context 0 --suppress-nst >/dev/null
 
 echo "[4/4] Merging speaker labels into word-level transcript..."
 # Two-pass merge. Pass 1: assign each whisper word to its best-overlap
