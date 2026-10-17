@@ -35,7 +35,6 @@ android-udev
 antimicrox
 aom
 appstream
-appstream-glib
 arc-gtk-theme-eos
 archivemount
 archlinux-keyring
@@ -74,7 +73,6 @@ bison
 blas
 bleachbit
 blueman
-blueprint-compiler
 bluez
 bluez-hid2hci
 bluez-libs
@@ -107,7 +105,6 @@ calibre
 cameractrls
 cantarell-fonts
 capstone
-cargs
 catch2
 catfish
 cblas
@@ -132,7 +129,6 @@ clutter-gst
 clutter-gtk
 cmake
 cmark
-cmark-gfm
 cogl
 colord
 colord-sane
@@ -173,7 +169,6 @@ dbus-units
 dcmtk
 dconf
 debugedit
-debuginfod
 default-cursors
 deno
 desktop-file-utils
@@ -232,7 +227,6 @@ efivar
 eigen
 electron
 electron39
-electron43
 electron44
 elementary-icon-theme
 elfutils
@@ -277,7 +271,6 @@ faad2
 fakeroot
 fallout1-ce-game
 fallout2-ce-game
-fast_float
 fceux
 fd
 feh
@@ -304,7 +297,6 @@ fltk
 fltk1.3
 fluidsynth
 fmt
-fmt9
 fontconfig
 fontforge
 foomatic-db
@@ -338,7 +330,6 @@ gc
 gcc
 gcc-libs
 gcompris-qt
-gcovr
 gcr
 gcr-4
 gd
@@ -348,7 +339,6 @@ gdbm
 gdk-pixbuf2
 gearboy
 gegl
-gendesk
 geoclue
 gettext
 gexiv2
@@ -357,7 +347,6 @@ gflags
 gfxstream
 ghc-libs
 ghostscript
-gi-docgen
 giflib
 gimp
 git
@@ -369,7 +358,6 @@ glfw
 glib-networking
 glib2
 glib2-devel
-glib2-docs
 glibc
 glibmm
 glibmm-2.68
@@ -430,7 +418,6 @@ gst-plugins-good
 gst-plugins-ugly
 gstreamer
 gtest
-gtk-doc
 gtk-layer-shell
 gtk-update-icon-cache
 gtk-vnc
@@ -441,7 +428,6 @@ gtkhash-nemo
 gtkmm
 gtkmm-4.0
 gtkmm3
-gtksourceview3
 gtksourceview4
 gtksourceview5
 gts
@@ -569,7 +555,6 @@ intel-oneapi-mkl
 intel-oneapi-openmp
 intel-oneapi-tbb
 intel-oneapi-tcm
-intltool
 inxi
 iproute2
 iptables
@@ -824,13 +809,8 @@ lib32-pango
 lib32-pcre2
 lib32-pcsclite
 lib32-pipewire
-lib32-pipewire-jack
 lib32-pixman
 lib32-polkit
-lib32-portaudio
-lib32-rust-libs
-lib32-sdl2-compat
-lib32-sdl3
 lib32-speex
 lib32-spirv-tools
 lib32-sqlite
@@ -1306,7 +1286,6 @@ linux-zen
 linux-zen-headers
 lirc
 litehtml
-litehtml0.9
 live-media
 llama.cpp-vulkan
 lld
@@ -1314,8 +1293,6 @@ llhttp
 llvm
 llvm-libs
 llvm-lit
-llvm21
-llvm21-libs
 llvm22-libs
 lm_sensors
 lmdb
@@ -1459,7 +1436,6 @@ ntfs-3g
 ntp
 ntsync-autoload
 numactl
-nvm
 oath-toolkit
 ocl-icd
 oh-my-zsh-git
@@ -1594,7 +1570,6 @@ pkgfile
 playerctl
 plocate
 pngquant
-pnpm
 podofo
 polkit
 polkit-gnome
@@ -1646,7 +1621,6 @@ python-ast-serialize
 python-asttokens
 python-attrs
 python-autocommand
-python-babelfish
 python-beautifulsoup4
 python-brotli
 python-brotlicffi
@@ -1660,7 +1634,6 @@ python-chardet
 python-charset-normalizer
 python-click
 python-colorama
-python-colorlog
 python-comm
 python-configobj
 python-configparser
@@ -1676,10 +1649,8 @@ python-cycler
 python-darkdetect
 python-dateutil
 python-dbus
-python-decorator
 python-defusedxml
 python-deprecated
-python-distlib
 python-distro
 python-dnspython
 python-entrypoints
@@ -1726,12 +1697,10 @@ python-jsonschema-specifications
 python-jupyter-client
 python-jupyter-core
 python-kiwisolver
-python-lark-parser
 python-librt
 python-llvmlite
 python-lxml
 python-lxml-html-clean
-python-magic
 python-mako
 python-markdown
 python-markdown-it-py
@@ -1764,17 +1733,14 @@ python-pandas
 python-parso
 python-pathspec
 python-pathvalidate
-python-pdftotext
 python-pefile
 python-pexpect
 python-pikepdf
 python-pillow
 python-pip
-python-pipenv
 python-pipx
 python-platformdirs
 python-pluggy
-python-poetry-core
 python-polib
 python-pooch
 python-prettytable
@@ -1812,12 +1778,10 @@ python-pyqt6-sip
 python-pyqt6-webengine
 python-pyserial
 python-pytest
-python-python-discovery
 python-pytorch-rocm
 python-pytz
 python-pyxdg
 python-pyzmq
-python-rebulk
 python-referencing
 python-regex
 python-reportlab
@@ -1833,13 +1797,10 @@ python-semantic-version
 python-send2trash
 python-setproctitle
 python-setuptools
-python-setuptools-reproducible
 python-setuptools-scm
-python-sgmllib3k
 python-shtab
 python-simplejson
 python-six
-python-smartypants
 python-sniffio
 python-sortedcontainers
 python-soupsieve
@@ -1859,10 +1820,8 @@ python-traitlets
 python-triton
 python-trove-classifiers
 python-typeguard
-python-types-pyyaml
 python-typing-inspection
 python-typing_extensions
-python-typogrify
 python-tzdata
 python-tzlocal
 python-unrardll
@@ -1873,8 +1832,6 @@ python-validate-pyproject
 python-validators
 python-vcs-versioning
 python-vdf
-python-virtualenv
-python-virtualenv-clone
 python-wcwidth
 python-webencodings
 python-websockets
@@ -1995,7 +1952,6 @@ quazip-qt5
 quazip-qt6
 radeontop
 rapidjson
-rapidyaml
 raptor
 rasqal
 rav1e
@@ -2101,7 +2057,6 @@ samba
 sameboy
 sane
 sbc
-scdoc
 scour
 scrcpy
 scummvm-git
@@ -2197,9 +2152,7 @@ sunshine
 supertux
 supertuxkart
 svt-av1
-svt-hevc
 swaybg
-swig
 syncthing
 syndication
 syntax-highlighting
@@ -2280,7 +2233,6 @@ tzdata
 uchardet
 udisks2
 unarchiver
-unifdef
 universal-android-debloater
 unixodbc
 unrar
@@ -2295,8 +2247,6 @@ util-linux
 util-linux-libs
 v4l-utils
 vacuumtube
-vala
-valgrind
 vapoursynth
 vapoursynth-plugin-bestsource
 vde2
@@ -2411,7 +2361,6 @@ wargus
 warzone2100
 wavpack
 wayland
-wayland-protocols
 waylandpp
 weasis-bin
 webkit2gtk
